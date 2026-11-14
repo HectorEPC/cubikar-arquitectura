@@ -75,7 +75,7 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js';
+} from '../../core/authService.js?v=20261114_07';
 import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 import {
   isUserAdmin,

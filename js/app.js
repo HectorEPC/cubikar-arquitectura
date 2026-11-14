@@ -72,8 +72,9 @@ import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending } from './core/authService.js';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending } from './core/authService.js?v=20261114_07';
 import { getCurrentUser } from './modules/portal/projectService.js';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261114_07';
 
 import {
   findNodeById,
@@ -447,7 +448,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js';
+} from './modules/portal/portalController.js?v=20261114_07';
 
 import {
   openCubikarAdminModal,
@@ -1230,6 +1231,10 @@ function renderSsoConnectingOverlay() {
     </div>
   `;
 }
+
+try {
+  initAppSwitcher('cubikar-app-switcher-mount', 'arq');
+} catch (_) {}
 
 // Inicialización de la aplicación al cargar el módulo (con soporte fluido de SSO entre subdominios)
 if (hasPendingIncomingSsoSession()) {
