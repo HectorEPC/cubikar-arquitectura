@@ -74,7 +74,7 @@ import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
 import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending } from './core/authService.js?v=20261114_07';
 import { getCurrentUser } from './modules/portal/projectService.js';
-import { initAppSwitcher } from './ui/appSwitcher.js?v=20261114_07';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261114_09';
 
 import {
   findNodeById,
@@ -245,7 +245,7 @@ import {
   closePlatformInfoModal,
   handlePlatformInfoEmpiezaGratis,
   handlePlatformInfoVerPlanes
-} from './ui/modalController.js';
+} from './ui/modalController.js?v=20261114_09';
 
 import {
   openTutorialHubModal,
@@ -253,20 +253,20 @@ import {
   launchTourFromHub,
   launchVideoFromHub,
   resetTourPreferencesFromHub
-} from './ui/tutorialHubModal.js?v=20261114_08';
+} from './ui/tutorialHubModal.js?v=20261114_09';
 
 import {
   startInteractiveTour,
   skipInteractiveTour,
   closeInteractiveTour,
   checkAndResumeTourOnLoad
-} from './ui/interactiveTour.js?v=20261114_08';
+} from './ui/interactiveTour.js?v=20261114_09';
 
 import {
   openVideoSimulatorModal,
   closeVideoSimulatorModal,
   toggleVoiceNarration
-} from './ui/videoSimulatorModal.js?v=20261114_08';
+} from './ui/videoSimulatorModal.js?v=20261114_09';
 
 import {
   openFirmasResponsablesModal,

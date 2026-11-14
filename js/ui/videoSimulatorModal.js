@@ -4,7 +4,7 @@
 // cursor virtual animado con clic ripple, tipografía de texto en tiempo real,
 // barra de tiempo deslizable (scrubber), selector de velocidad y subtítulos sincronizados.
 
-import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261113_23';
+import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261114_09';
 
 let isVideoModalOpen = false;
 let currentModuleId = 1;
