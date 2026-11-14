@@ -2995,7 +2995,7 @@ export async function deleteCurrentUserAccountAction() {
 }
 
 export async function logoutUser() {
-  if (!confirm('¿Deseas cerrar sesión para cambiar de usuario o crear uno nuevo? Tus proyectos se conservarán intactos.')) return;
+  if (!confirm('¿Deseas cerrar sesión? Tus proyectos se conservarán intactos.')) return;
   const activeUser = getCurrentUser();
   if (activeUser?.email) {
     markSessionClosed(activeUser.email);
@@ -3014,11 +3014,14 @@ export async function logoutUser() {
   updatePortalHeaderUserArea(null);
   renderSidebarNotificationsUI();
   showToast('Has cerrado sesión exitosamente.');
-  if (window.location.search) {
-    window.location.href = window.location.pathname;
-  } else {
-    showPortalView('login');
-  }
+
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.protocol === 'file:'
+  );
+  const portalUrl = isLocalhost ? '../Cubikar/index.html?logout=1' : 'https://cubikar.app?logout=1';
+  window.location.href = portalUrl;
 }
 
 // Eliminar permanentemente la cuenta del usuario actual y todos sus datos/archivos locales
