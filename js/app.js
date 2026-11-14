@@ -448,7 +448,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261114_07';
+} from './modules/portal/portalController.js?v=20261114_08';
 
 import {
   openCubikarAdminModal,

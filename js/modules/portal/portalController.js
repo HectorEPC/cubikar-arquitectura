@@ -75,7 +75,8 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261114_07';
+} from '../../core/authService.js?v=20261114_08';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261114_08';
 import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 import {
   isUserAdmin,
@@ -3028,6 +3029,30 @@ export async function deleteUserAccount() {
 // ==========================================
 // USUARIO EN LA BARRA SUPERIOR DEL PORTAL
 // ==========================================
+export function navigateToEcosystemApp(app) {
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.protocol === 'file:'
+  );
+  const targetMap = {
+    const: isLocalhost ? '../ADM_CONST/index.html' : 'https://const.cubikar.app',
+    arq: isLocalhost ? '../ADM_ARQ/index.html' : 'https://arq.cubikar.app',
+    portal: isLocalhost ? '../Cubikar/index.html' : 'https://cubikar.app'
+  };
+  const targetUrl = targetMap[app] || targetMap.portal;
+  let dest = targetUrl;
+  try {
+    dest = appendSsoToUrlFromStorage(targetUrl);
+  } catch (_) {}
+  if (typeof window !== 'undefined') {
+    window.location.href = dest;
+  }
+}
+if (typeof window !== 'undefined') {
+  window.navigateToEcosystemApp = navigateToEcosystemApp;
+}
+
 export function updatePortalHeaderUserArea(user) {
   const container = document.getElementById('portal-header-user-area');
   const notifWrapper = document.getElementById('portal-notifications-wrapper');
@@ -3057,6 +3082,14 @@ export function updatePortalHeaderUserArea(user) {
   }
 
   if (!container) return;
+
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.protocol === 'file:'
+  );
+  const constUrl = isLocalhost ? '../ADM_CONST/index.html' : 'https://const.cubikar.app';
+  const portalUrl = isLocalhost ? '../Cubikar/index.html' : 'https://cubikar.app';
 
   const displayName = resolveUserDisplayName({ authUser: user, existingUser: user });
   const displayRoleLabel = resolveUserRoleLabel({
@@ -3098,11 +3131,11 @@ export function updatePortalHeaderUserArea(user) {
         </div>
 
         <div class="p-1.5 space-y-1 text-xs font-semibold">
-                    ${isUserAdmin(user?.email) ? `
+          ${isUserAdmin(user?.email) ? `
             <button type="button" onclick="closePortalUserDropdown(); openCubikarAdminModal()" 
                     class="w-full text-left px-3 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 font-bold border border-amber-500/35 flex items-center gap-2 transition cursor-pointer">
               <i class="fa-solid fa-shield-halved text-amber-400 text-xs"></i>
-              <span>Panel de AdministraciÃ³n</span>
+              <span>Panel de Administración</span>
             </button>
           ` : ''}
           <button type="button" onclick="closePortalUserDropdown(); openProfileModal()" 
@@ -3120,7 +3153,8 @@ export function updatePortalHeaderUserArea(user) {
           </button>
           <div class="h-px bg-slate-800 my-1"></div>
           <div class="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ecosistema Cubikar</div>
-          <a href="${typeof window !== 'undefined' && window.location.hostname.includes('cubikar.com') ? 'https://const.cubikar.com' : '../ADM_CONST/index.html'}" 
+          <a href="${constUrl}" 
+             onclick="navigateToEcosystemApp('const'); return false;"
              class="w-full text-left px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-semibold flex items-center justify-between gap-2 transition cursor-pointer border border-amber-500/20">
             <span class="flex items-center gap-2">
               <i class="fa-solid fa-helmet-safety text-amber-400 text-xs"></i>
@@ -3128,11 +3162,12 @@ export function updatePortalHeaderUserArea(user) {
             </span>
             <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-amber-400"></i>
           </a>
-          <a href="${typeof window !== 'undefined' && window.location.hostname.includes('cubikar.com') ? 'https://cubikar.com' : '../Cubukar/index.html'}" 
+          <a href="${portalUrl}" 
+             onclick="navigateToEcosystemApp('portal'); return false;"
              class="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white flex items-center justify-between gap-2 transition cursor-pointer">
             <span class="flex items-center gap-2">
               <i class="fa-solid fa-globe text-slate-400 text-xs"></i>
-              <span>Portal Central (cubikar.com)</span>
+              <span>Portal Central (cubikar.app)</span>
             </span>
             <i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-slate-500"></i>
           </a>
