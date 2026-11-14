@@ -1,23 +1,24 @@
 @echo off
-title Subir Cubikar a GitHub
+title Subir Cubikar Arquitectura a GitHub
 cls
 echo ====================================================
-echo           SUBIENDO CUBIKAR A GITHUB
+echo      SUBIENDO CUBIKAR ARQUITECTURA A GITHUB
 echo ====================================================
 echo.
-echo Conectando con https://github.com/HectorEPC/cubikar ...
+echo Conectando con https://github.com/HectorEPC/cubikar-arquitectura ...
 echo.
 git push -u origin main
 if %ERRORLEVEL% equ 0 (
     echo.
     echo ====================================================
-    echo    EXITO: El proyecto se subio correctamente.
+    echo    EXITO: Cubikar Arquitectura se subio correctamente.
     echo ====================================================
-    echo Vercel actualizara https://cubikar-jj8j.vercel.app/
+    echo Vercel actualizara la aplicacion automaticamente.
 ) else (
     echo.
     echo ====================================================
-    echo    Hubo un problema al subir. Revisa tu conexion.
+    echo    Hubo un problema al subir. Revisa tu conexion
+    echo    o verifica que el repositorio en GitHub exista.
     echo ====================================================
 )
 echo.
