@@ -71,7 +71,10 @@ import {
   signInWithPassword,
   mountGoogleSignInButton,
   signOut,
-  resetPasswordForEmail
+  resetPasswordForEmail,
+  clearLocalSupabaseTokens,
+  resolveUserDisplayName,
+  resolveUserRoleLabel
 } from '../../core/authService.js';
 import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 import {
@@ -363,6 +366,13 @@ export function renderPortalAuth(initialTab = 'login', returnProjectId = null) {
             </div>
           </div>
 
+          <div class="flex items-center justify-between pt-0.5">
+            <label class="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+              <input type="checkbox" id="login-remember-me" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer">
+              <span>Mantener sesión iniciada en esta computadora</span>
+            </label>
+          </div>
+
           <button type="submit" id="btn-login-submit" class="w-full bg-slate-900 hover:bg-blue-600 text-white font-bold text-xs py-2.5 rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer">
             <i class="fa-solid fa-right-to-bracket text-xs"></i>
             <span>Iniciar sesión</span>
@@ -620,6 +630,8 @@ export async function handleRegisterSubmit(e, returnProjectId = '') {
     sexo,
     dob,
     avatar,
+    role: 'Admin General',
+    roleLabel: 'Administrador',
     registeredAt: new Date().toISOString()
   };
   saveRegisteredUserAccount(localAccount);
@@ -711,9 +723,11 @@ export async function handleRegisterSubmit(e, returnProjectId = '') {
     sexo,
     dob,
     avatar,
+    role: 'Admin General',
+    roleLabel: 'Administrador',
     registeredAt: new Date().toISOString()
   };
-  saveCurrentUser(newUser);
+  saveCurrentUser(newUser, true);
   showToast(`¡Bienvenido, ${name}! Tu perfil ha sido creado.`);
 
   if (returnProjectId) {
@@ -745,19 +759,23 @@ export async function handleLoginSubmit(e, returnProjectId = '') {
     }
 
     try {
-      const { user, perfil } = await signInWithPassword({ email, password });
-      const displayName = perfil?.nombre_completo || user?.user_metadata?.full_name || email;
+      const remember = document.getElementById('login-remember-me')?.checked ?? false;
+      const { user, perfil } = await signInWithPassword({ email, password, remember });
+      const resolvedRole = perfil?.rol || 'Admin General';
+      const displayName = resolveUserDisplayName({ perfil, authUser: user }) || email;
       const loggedUser = {
         id: user.id,
         empresaId: perfil?.empresa_id || null,
         name: displayName,
         email: email,
-        avatar: perfil?.avatar_url || (AVATARS_BY_SEX && AVATARS_BY_SEX[perfil?.sexo]) || (AVATARS_BY_SEX && AVATARS_BY_SEX['Masculino']) || 'assets/branding/cubikar_icon_transparent.png',
+        avatar: perfil?.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || (AVATARS_BY_SEX && AVATARS_BY_SEX[perfil?.sexo]) || (AVATARS_BY_SEX && AVATARS_BY_SEX['Masculino']) || 'assets/branding/cubikar_icon_transparent.png',
         sexo: perfil?.sexo || 'Masculino',
-        role: 'Admin General',
+        role: resolvedRole,
+        roleLabel: resolveUserRoleLabel({ role: resolvedRole, isAuthenticated: true }),
+        user_metadata: user?.user_metadata ? { ...user.user_metadata } : {},
         lastLogin: new Date().toISOString()
       };
-      saveCurrentUser(loggedUser);
+      saveCurrentUser(loggedUser, remember);
       updateSubscriptionBadgesUI();
       updatePortalHeaderUserArea(loggedUser);
       updateWorkspaceHeaderUser(loggedUser);
@@ -2975,17 +2993,26 @@ export async function deleteCurrentUserAccountAction() {
   }
 }
 
-export function logoutUser() {
-  if (!confirm('Â¿Deseas cerrar sesiÃ³n para cambiar de usuario o crear uno nuevo? Tus proyectos se conservarÃ¡n intactos.')) return;
+export async function logoutUser() {
+  if (!confirm('¿Deseas cerrar sesión para cambiar de usuario o crear uno nuevo? Tus proyectos se conservarán intactos.')) return;
+  const activeUser = getCurrentUser();
+  if (activeUser?.email) {
+    markSessionClosed(activeUser.email);
+  }
+  clearLocalSupabaseTokens();
   saveCurrentUser(null);
+  try {
+    await signOut();
+  } catch (_) {}
   try {
     localStorage.removeItem(STORAGE_KEY_ACTIVE_WORKSPACE);
     localStorage.removeItem('control_obra_active_workspace_v1');
+    localStorage.setItem('cubikar_remember_device', 'false');
   } catch (_) {}
   currentScopeFilter = 'owned';
   updatePortalHeaderUserArea(null);
   renderSidebarNotificationsUI();
-  showToast('Has cerrado sesiÃ³n exitosamente.');
+  showToast('Has cerrado sesión exitosamente.');
   if (window.location.search) {
     window.location.href = window.location.pathname;
   } else {
@@ -3031,18 +3058,27 @@ export function updatePortalHeaderUserArea(user) {
 
   if (!container) return;
 
-  const initials = (user.name || 'Hepc 90').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'H9';
+  const displayName = resolveUserDisplayName({ authUser: user, existingUser: user });
+  const displayRoleLabel = resolveUserRoleLabel({
+    roleLabel: user.roleLabel,
+    role: user.role,
+    isAuthenticated: !!(user.email || user.id)
+  });
+  const initials = displayName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
+  const rawAvatarCandidate = user.avatar || user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
+  const safeAvatar = (typeof rawAvatarCandidate === 'string' && rawAvatarCandidate.trim() && rawAvatarCandidate !== 'undefined' && rawAvatarCandidate !== 'null') ? rawAvatarCandidate.trim() : '';
+  const escHtml = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   container.innerHTML = `
     <!-- User Profile Pill (Compact, Unificado) -->
     <div class="relative" id="portal-user-menu-wrapper">
       <div onclick="togglePortalUserDropdown(event)" class="flex items-center gap-3 pl-2 py-1 pr-3 bg-slate-900 border border-slate-800 rounded-full hover:border-slate-700 transition cursor-pointer group select-none" title="Opciones de perfil de usuario">
         <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 font-bold text-xs flex items-center justify-center ring-2 ring-amber-400/30 overflow-hidden shrink-0">
-          ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover" alt="Perfil">` : initials}
+          ${safeAvatar ? `<img src="${escHtml(safeAvatar)}" class="w-full h-full object-cover" alt="Perfil">` : escHtml(initials)}
         </div>
         <div class="text-left hidden sm:block">
-          <div class="text-xs font-semibold text-slate-200 leading-tight max-w-[130px] truncate">${user.name || 'Hepc 90'}</div>
-          <div class="text-[11px] text-slate-400 leading-tight max-w-[130px] truncate">${user.roleLabel || 'Admin General'}</div>
+          <div class="text-xs font-semibold text-slate-200 leading-tight max-w-[130px] truncate">${escHtml(displayName)}</div>
+          <div class="text-[11px] text-slate-400 leading-tight max-w-[130px] truncate">${escHtml(displayRoleLabel)}</div>
         </div>
         <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -3053,11 +3089,11 @@ export function updatePortalHeaderUserArea(user) {
       <div id="portal-user-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl py-2 z-50 text-slate-200 animate-in fade-in zoom-in-95 duration-100">
         <div class="px-3.5 py-2.5 border-b border-slate-800 flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-full overflow-hidden border border-amber-400/60 bg-slate-800 shrink-0">
-            ${user.avatar ? `<img src="${user.avatar}" class="w-full h-full object-cover" alt="Avatar">` : `<div class="w-full h-full bg-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center">${initials}</div>`}
+            ${safeAvatar ? `<img src="${escHtml(safeAvatar)}" class="w-full h-full object-cover" alt="Avatar">` : `<div class="w-full h-full bg-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center">${escHtml(initials)}</div>`}
           </div>
           <div class="min-w-0 flex-1">
-            <span class="font-bold text-xs text-white block truncate">${user.name || 'Hepc 90'}</span>
-            <span class="text-[10px] text-slate-400 font-mono block truncate">${user.email || 'admin@obra.com'}</span>
+            <span class="font-bold text-xs text-white block truncate">${escHtml(displayName)}</span>
+            <span class="text-[10px] text-slate-400 font-mono block truncate">${escHtml(user.email || '')}</span>
           </div>
         </div>
 
@@ -3171,12 +3207,14 @@ document.addEventListener('click', (e) => {
 
 export function updateWorkspaceHeaderUser(user) {
   let u = user || getCurrentUser();
+  const isAuthenticated = !!u;
   if (!u) {
     u = {
-      name: 'Hepc 90',
-      email: 'admin.general@constructora.com',
+      name: 'Usuario Invitado',
+      email: '',
       avatar: '',
-      role: 'Admin General'
+      role: 'Invitado',
+      roleLabel: 'Invitado'
     };
   }
   const nameEl = document.getElementById('workspace-user-name');
@@ -3188,21 +3226,28 @@ export function updateWorkspaceHeaderUser(user) {
   const dropAvatarEl = document.getElementById('dropdown-user-avatar');
   const dropInitialsEl = document.getElementById('dropdown-user-initials');
 
-  const initials = (u.name || 'Hepc 90').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'H9';
+  const displayName = isAuthenticated ? resolveUserDisplayName({ authUser: u, existingUser: u }) : (u.name || 'Usuario Invitado');
+  const displayEmail = u.email || '';
+  const displayRole = isAuthenticated
+    ? resolveUserRoleLabel({ roleLabel: u.roleLabel, role: u.role, isAuthenticated: !!(u.email || u.id) })
+    : (u.roleLabel || u.role || 'Invitado');
+  const initials = displayName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
-  if (nameEl) nameEl.innerText = u.name;
-  if (dropNameEl) dropNameEl.innerText = u.name;
-  if (dropEmailEl) dropEmailEl.innerText = u.email;
+  if (nameEl) nameEl.innerText = displayName;
+  if (dropNameEl) dropNameEl.innerText = displayName;
+  if (dropEmailEl) dropEmailEl.innerText = displayEmail;
   if (initialsEl) initialsEl.innerText = initials;
   if (dropInitialsEl) dropInitialsEl.innerText = initials;
-  if (btnEl) btnEl.title = `${u.name} (${u.roleLabel || u.role || 'Admin General'}) - Clic para ver opciones`;
+  if (btnEl) btnEl.title = `${displayName} (${displayRole}) - Clic para ver opciones`;
   updateSubscriptionBadgesUI();
 
-  const hasPhoto = u.avatar && (u.avatar.startsWith('http') || u.avatar.startsWith('data:image/png') || u.avatar.startsWith('data:image/jpeg') || u.avatar.startsWith('data:image/webp'));
+  const rawAvatar = u.avatar || u.user_metadata?.avatar_url || u.user_metadata?.picture || '';
+  const safeAvatar = (typeof rawAvatar === 'string' && rawAvatar.trim() && rawAvatar !== 'undefined' && rawAvatar !== 'null') ? rawAvatar.trim() : '';
+  const hasPhoto = !!(safeAvatar && (safeAvatar.startsWith('http') || safeAvatar.startsWith('data:image/') || safeAvatar.startsWith('assets/')));
 
   if (avatarEl) {
     if (hasPhoto) {
-      avatarEl.src = u.avatar;
+      avatarEl.src = safeAvatar;
       avatarEl.classList.remove('hidden');
       if (initialsEl) initialsEl.classList.add('hidden');
     } else {
@@ -3213,7 +3258,7 @@ export function updateWorkspaceHeaderUser(user) {
 
   if (dropAvatarEl) {
     if (hasPhoto) {
-      dropAvatarEl.src = u.avatar;
+      dropAvatarEl.src = safeAvatar;
       dropAvatarEl.classList.remove('hidden');
       if (dropInitialsEl) dropInitialsEl.classList.add('hidden');
     } else {

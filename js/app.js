@@ -73,6 +73,7 @@ import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
 import { initAuthListener } from './core/authService.js';
+import { getCurrentUser } from './modules/portal/projectService.js';
 
 import {
   findNodeById,
@@ -1144,19 +1145,40 @@ window.addEventListener('storage', (e) => {
 initThemeMode();
 try {
   initAuthListener((event, session, perfil) => {
-    if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
-      const workspaceContainer = document.getElementById('workspace-container');
-      const isWorkspaceVisible = workspaceContainer && !workspaceContainer.classList.contains('hidden') && workspaceContainer.style.display !== 'none';
-      if (!isWorkspaceVisible) {
-        showPortalView('dashboard');
-      } else {
-        try { updateWorkspaceHeaderUser(perfil || session.user); } catch (_) {}
+    if (session?.user) {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        if (!document.getElementById('login-email')) {
+          showPortalView('login');
+        }
+        return;
       }
-      try { renderSidebarNotificationsUI(); } catch (_) {}
-      try { initGlobalRealtimeSync(); requestPeerSync(); } catch (_) {}
 
-      if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery'))) {
-        window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+        const workspaceContainer = document.getElementById('workspace-container');
+        const isWorkspaceVisible = workspaceContainer && !workspaceContainer.classList.contains('hidden') && workspaceContainer.style.display !== 'none';
+        if (!isWorkspaceVisible) {
+          const projectsGridExists = !!document.getElementById('projects-grid');
+          const menuWrapper = document.getElementById('portal-user-menu-wrapper');
+          if (projectsGridExists && menuWrapper && (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+            try { updatePortalHeaderUserArea(currentUser); } catch (_) {}
+          } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || !projectsGridExists) {
+            showPortalView('dashboard');
+          }
+        } else {
+          try { updateWorkspaceHeaderUser(currentUser); } catch (_) {}
+        }
+        try { renderSidebarNotificationsUI(); } catch (_) {}
+        try { initGlobalRealtimeSync(); requestPeerSync(); } catch (_) {}
+
+        if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery'))) {
+          window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+        }
+      }
+    } else if (event === 'SIGNED_OUT') {
+      updatePortalHeaderUserArea(null);
+      if (!document.getElementById('login-email')) {
+        showPortalView('login');
       }
     }
   });

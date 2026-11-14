@@ -1,14 +1,113 @@
 // js/core/authService.js
 // Servicio de Autenticación integrado con Supabase Auth y tabla public.perfiles
 
+import { STORAGE_KEY_USER } from '../config/constants.js';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, saveRegisteredUserAccount } from '../modules/portal/projectService.js';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount } from '../modules/portal/projectService.js';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
 let googleGsiLoadPromise = null;
 let activeGoogleNoncePair = null;
+let explicitAuthDepth = 0;
+let explicitAuthRemember = null;
+
+const PLACEHOLDER_USER_NAMES = new Set(['', 'usuario', 'usuario invitado', 'invitado', 'hepc 90']);
+
+function resolveRememberPreference(remember = null) {
+  if (remember !== null && remember !== undefined) return !!remember;
+  if (typeof document !== 'undefined') {
+    const el = document.getElementById('login-remember-me');
+    if (el) return !!el.checked;
+  }
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('cubikar_remember_device') === 'true') {
+    return true;
+  }
+  return false;
+}
+
+export function clearLocalSupabaseTokens() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith('sb-') || k.includes('auth-token'))) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+}
+
+function hasValidLocalSessionForEmail(email) {
+  const current = getCurrentUser();
+  if (!current) return false;
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const currentEmail = (current.email || '').toLowerCase().trim();
+  if (cleanEmail && currentEmail && cleanEmail !== currentEmail) {
+    return false;
+  }
+  const isDeviceRemembered = typeof localStorage !== 'undefined' && localStorage.getItem('cubikar_remember_device') === 'true';
+  const hasTabSession = typeof sessionStorage !== 'undefined' && !!sessionStorage.getItem(STORAGE_KEY_USER);
+  const hasPersistedUser = typeof localStorage !== 'undefined' && !!localStorage.getItem(STORAGE_KEY_USER) && isDeviceRemembered;
+  return hasTabSession || hasPersistedUser;
+}
+
+export function isPlaceholderUserName(name) {
+  return typeof name !== 'string' || PLACEHOLDER_USER_NAMES.has(name.trim().toLowerCase());
+}
+
+export function resolveUserDisplayName({ perfil = null, authUser = null, existingUser = null } = {}) {
+  const candidates = [
+    perfil?.nombre_completo,
+    authUser?.user_metadata?.full_name,
+    authUser?.user_metadata?.name,
+    existingUser?.name,
+    authUser?.email,
+    existingUser?.email
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() && !isPlaceholderUserName(candidate)) {
+      return candidate.trim();
+    }
+  }
+  return 'Usuario';
+}
+
+export function resolveUserRoleLabel({ roleLabel = '', role = '', isAuthenticated = false } = {}) {
+  const trimmedLabel = typeof roleLabel === 'string' ? roleLabel.trim() : '';
+  if (trimmedLabel && trimmedLabel.toLowerCase() !== 'invitado') {
+    return trimmedLabel;
+  }
+  const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+  const roleMap = {
+    admin: 'Administrador',
+    'admin general': 'Admin General',
+    administrador: 'Administrador',
+    owner: 'Administrador',
+    propietario: 'Propietario',
+    editar: 'Editar',
+    escribir: 'Escribir',
+    leer: 'Leer',
+    invitado: 'Invitado',
+    guest: 'Invitado'
+  };
+  if (normalizedRole && roleMap[normalizedRole]) {
+    return roleMap[normalizedRole];
+  }
+  if (normalizedRole) {
+    return role.trim();
+  }
+  return isAuthenticated ? 'Administrador' : (trimmedLabel || 'Invitado');
+}
+
+export function buildFallbackAvatarSvg(displayName, email = '') {
+  const source = (!isPlaceholderUserName(displayName) ? displayName : email) || 'U';
+  const initial = encodeURIComponent(source.trim().charAt(0).toUpperCase() || 'U');
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%230284c7'/%3E%3Ctext x='50' y='64' font-size='42' font-family='Arial,sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E${initial}%3C/text%3E%3C/svg%3E`;
+}
 
 function bytesToHex(bytes) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -80,40 +179,57 @@ export async function signUp({ email, password, fullName }) {
     throw new Error('Supabase no está disponible en este momento.');
   }
 
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName
+  explicitAuthDepth += 1;
+  explicitAuthRemember = true;
+  if (email) markSessionOpen(email);
+  try {
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName
+        }
       }
-    }
-  });
+    });
 
-  if (error) throw error;
-  return data;
+    if (error) throw error;
+    return data;
+  } finally {
+    explicitAuthDepth = Math.max(0, explicitAuthDepth - 1);
+    if (explicitAuthDepth === 0) explicitAuthRemember = null;
+  }
 }
 
 /**
  * Inicio de sesión con Correo Electrónico y Contraseña
  */
-export async function signInWithPassword({ email, password }) {
+export async function signInWithPassword({ email, password, remember = null }) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
     throw new Error('Supabase no está disponible en este momento.');
   }
 
-  const { data, error } = await sb.auth.signInWithPassword({
-    email,
-    password
-  });
+  const effectiveRemember = resolveRememberPreference(remember);
+  explicitAuthDepth += 1;
+  explicitAuthRemember = effectiveRemember;
+  if (email) markSessionOpen(email);
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({
+      email,
+      password
+    });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const perfil = await fetchUserProfile(data.user.id);
-  syncLocalUserSession(data.user, perfil, true);
+    const perfil = await fetchUserProfile(data.user.id);
+    syncLocalUserSession(data.user, perfil, true, effectiveRemember);
 
-  return { session: data.session, user: data.user, perfil };
+    return { session: data.session, user: data.user, perfil };
+  } finally {
+    explicitAuthDepth = Math.max(0, explicitAuthDepth - 1);
+    if (explicitAuthDepth === 0) explicitAuthRemember = null;
+  }
 }
 
 /**
@@ -147,7 +263,7 @@ export async function signInWithGoogle() {
 /**
  * Autenticación directa con ID Token de Google (evita redirect /auth/v1/callback)
  */
-export async function signInWithGoogleIdToken({ idToken, rawNonce }) {
+export async function signInWithGoogleIdToken({ idToken, rawNonce, remember = null }) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
     throw new Error('Supabase no está configurado para iniciar sesión con Google.');
@@ -164,23 +280,32 @@ export async function signInWithGoogleIdToken({ idToken, rawNonce }) {
     payload.nonce = rawNonce;
   }
 
-  const { data, error } = await sb.auth.signInWithIdToken(payload);
-  if (error) throw error;
+  const effectiveRemember = resolveRememberPreference(remember);
+  explicitAuthDepth += 1;
+  explicitAuthRemember = effectiveRemember;
+  try {
+    const { data, error } = await sb.auth.signInWithIdToken(payload);
+    if (error) throw error;
 
-  let perfil = null;
-  if (data?.user?.id) {
-    try {
-      perfil = await fetchUserProfile(data.user.id);
-    } catch (_) {}
-    await syncLocalUserSession(data.user, perfil, true);
+    let perfil = null;
+    if (data?.user?.id) {
+      markSessionOpen(data.user.email || data.user);
+      try {
+        perfil = await fetchUserProfile(data.user.id);
+      } catch (_) {}
+      await syncLocalUserSession(data.user, perfil, true, effectiveRemember);
+    }
+
+    return {
+      user: data?.user || null,
+      session: data?.session || null,
+      perfil,
+      localUser: getCurrentUser()
+    };
+  } finally {
+    explicitAuthDepth = Math.max(0, explicitAuthDepth - 1);
+    if (explicitAuthDepth === 0) explicitAuthRemember = null;
   }
-
-  return {
-    user: data?.user || null,
-    session: data?.session || null,
-    perfil,
-    localUser: getCurrentUser()
-  };
 }
 
 /**
@@ -276,18 +401,23 @@ export async function mountGoogleSignInButton({
  */
 export async function signOut() {
   activeGoogleNoncePair = null;
+  const current = getCurrentUser();
+  if (current?.email) {
+    markSessionClosed(current.email);
+  }
   try {
     if (typeof window !== 'undefined' && window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect();
     }
   } catch (_) {}
+  clearLocalSupabaseTokens();
+  saveCurrentUser(null);
   const sb = getSupabaseClient();
   if (sb) {
     try {
-      await sb.auth.signOut();
+      await sb.auth.signOut({ scope: 'local' });
     } catch (_) {}
   }
-  saveCurrentUser(null);
 }
 
 /**
@@ -349,18 +479,20 @@ export async function fetchUserProfile(userId) {
 /**
  * Sincroniza la sesión con el estado local del portal
  */
-export function syncLocalUserSession(user, perfil, force = false) {
+export function syncLocalUserSession(user, perfil, force = false, remember = null) {
   if (!user) return;
   const current = getCurrentUser();
-  if (!force && current && current.email && user.email && current.email.toLowerCase().trim() !== user.email.toLowerCase().trim()) {
+  const cleanEmail = (user.email || '').toLowerCase().trim();
+  const sameEmail = !!(current?.email && cleanEmail && current.email.toLowerCase().trim() === cleanEmail);
+  if (!force && current && current.email && user.email && !sameEmail) {
     console.info('[Supabase Auth] Sesión remota difiere del usuario activo local, respetando usuario activo actual.');
     return;
   }
-  const rawAvatar = perfil?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
-  const initial = (perfil?.nombre_completo || user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'U').charAt(0).toUpperCase();
-  const fallbackAvatar = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%230284c7'/%3E%3Ctext x='50' y='64' font-size='42' font-family='Arial,sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3E${initial}%3C/text%3E%3C/svg%3E`;
+  const existingSameUser = sameEmail ? current : null;
+  const resolvedName = resolveUserDisplayName({ perfil, authUser: user, existingUser: existingSameUser });
+  const rawAvatar = perfil?.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || existingSameUser?.avatar || '';
+  const fallbackAvatar = buildFallbackAvatarSvg(resolvedName, user.email);
 
-  const cleanEmail = (user.email || '').toLowerCase().trim();
   let userSub = null;
   const userSubRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(`adm_const_subscription_${cleanEmail}`) : null;
   if (userSubRaw) {
@@ -372,18 +504,21 @@ export function syncLocalUserSession(user, perfil, force = false) {
     userSub = { planId: 'free', billingCycle: 'monthly', updatedAt: null };
   }
 
+  const resolvedRole = perfil?.rol || existingSameUser?.role || 'admin';
   const localUser = {
     subscription: userSub,
     id: user.id,
-    name: perfil?.nombre_completo || user.user_metadata?.full_name || user.user_metadata?.name || user.email,
+    name: resolvedName,
     email: user.email,
     avatar: rawAvatar || fallbackAvatar,
-    role: perfil?.rol || 'admin',
-    empresaId: perfil?.empresa_id || null,
-    plan: perfil?.empresas?.plan || 'free',
-    estadoSuscripcion: perfil?.empresas?.estado_suscripcion || 'trialing'
+    role: resolvedRole,
+    roleLabel: resolveUserRoleLabel({ roleLabel: existingSameUser?.roleLabel, role: resolvedRole, isAuthenticated: true }),
+    empresaId: perfil?.empresa_id || existingSameUser?.empresaId || null,
+    plan: userSub?.planId || perfil?.empresas?.plan || 'free',
+    estadoSuscripcion: perfil?.empresas?.estado_suscripcion || 'trialing',
+    user_metadata: user.user_metadata ? { ...user.user_metadata } : (existingSameUser?.user_metadata || {})
   };
-  saveCurrentUser(localUser);
+  saveCurrentUser(localUser, remember);
   try {
     saveRegisteredUserAccount(localUser);
     markSessionOpen(localUser.email || localUser);
@@ -401,9 +536,35 @@ export function initAuthListener(onAuthChangeCallback) {
   sb.auth.onAuthStateChange(async (event, session) => {
     console.info(`[Supabase Auth] Evento: ${event}`);
     if (session?.user) {
-      const isExplicitLogin = (event === 'SIGNED_IN' || event === 'USER_UPDATED');
+      const email = (session.user.email || '').toLowerCase().trim();
+      const current = getCurrentUser();
+      const closedList = getClosedSessionsList();
+      const isClosed = closedList.includes(email);
+      const isOAuthRedirect = typeof window !== 'undefined' && (
+        window.location.hash.includes('access_token') ||
+        window.location.hash.includes('refresh_token') ||
+        window.location.search.includes('code=')
+      );
+      const isExplicitInteractive = explicitAuthDepth > 0 || isOAuthRedirect;
+      const hasActiveLocal = hasValidLocalSessionForEmail(email);
+
+      if (isExplicitInteractive) {
+        markSessionOpen(email);
+      } else if (isClosed || !hasActiveLocal) {
+        console.info(`[Supabase Auth] Bloqueando auto-sesión pasiva (${event}) por sesión cerrada o sin persistencia en este equipo.`);
+        clearLocalSupabaseTokens();
+        saveCurrentUser(null);
+        try {
+          sb.auth.signOut({ scope: 'local' }).catch(() => {});
+        } catch (_) {}
+        if (current && onAuthChangeCallback) onAuthChangeCallback('SIGNED_OUT', null, null);
+        return;
+      }
+
+      const isExplicitLogin = (event === 'SIGNED_IN' || event === 'USER_UPDATED' || isOAuthRedirect);
+      const rememberPref = isExplicitInteractive ? explicitAuthRemember : null;
       const perfil = await fetchUserProfile(session.user.id);
-      syncLocalUserSession(session.user, perfil, isExplicitLogin);
+      syncLocalUserSession(session.user, perfil, isExplicitLogin, rememberPref);
       if (onAuthChangeCallback) onAuthChangeCallback(event, session, perfil);
     } else {
       if (onAuthChangeCallback) onAuthChangeCallback(event, null, null);

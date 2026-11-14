@@ -454,7 +454,16 @@ export function deleteUserAccountAndData(email) {
 // ==========================================
 export function getCurrentUser() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_USER);
+    let raw = null;
+    if (typeof sessionStorage !== 'undefined') {
+      raw = sessionStorage.getItem(STORAGE_KEY_USER);
+    }
+    if (!raw && typeof localStorage !== 'undefined') {
+      const remembered = localStorage.getItem('cubikar_remember_device') !== 'false';
+      if (remembered) {
+        raw = localStorage.getItem(STORAGE_KEY_USER);
+      }
+    }
     if (raw) {
       const u = JSON.parse(raw);
       const cleanEmail = (u?.email || '').toLowerCase().trim();
@@ -517,10 +526,11 @@ export function getLastKnownUser() {
   if (saved) return saved;
 
   const fallback = {
-    name: 'Hepc 90',
+    name: 'Usuario',
     email: 'admin.general@constructora.com',
     avatar: '',
     role: 'Admin General',
+    roleLabel: 'Administrador',
     sexo: 'Masculino'
   };
   try {
@@ -531,10 +541,15 @@ export function getLastKnownUser() {
   return fallback;
 }
 
-export function saveCurrentUser(user) {
+export function saveCurrentUser(user, remember = null) {
   try {
     if (!user) {
-      localStorage.removeItem(STORAGE_KEY_USER);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(STORAGE_KEY_USER);
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(STORAGE_KEY_USER);
+      }
     } else {
       try {
         localStorage.removeItem('control_obra_user_profile_dismissed');
@@ -570,10 +585,30 @@ export function saveCurrentUser(user) {
       if (!user.subscription) {
         user.subscription = { planId: 'free', billingCycle: 'monthly', updatedAt: null };
       }
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
-      try {
-        localStorage.setItem(STORAGE_KEY_USER + '_last', JSON.stringify(user));
-      } catch (e) {}
+
+      const shouldRemember = remember !== null
+        ? !!remember
+        : (typeof localStorage !== 'undefined' && localStorage.getItem('cubikar_remember_device') !== 'false');
+
+      if (shouldRemember) {
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+        try {
+          localStorage.setItem(STORAGE_KEY_USER + '_last', JSON.stringify(user));
+          localStorage.setItem('cubikar_remember_device', 'true');
+        } catch (e) {}
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem(STORAGE_KEY_USER);
+        }
+      } else {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+        }
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(STORAGE_KEY_USER);
+          localStorage.removeItem(STORAGE_KEY_USER + '_last');
+          localStorage.setItem('cubikar_remember_device', 'false');
+        }
+      }
     }
   } catch (e) {
     console.error('Error guardando usuario:', e);
