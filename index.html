@@ -48,6 +48,21 @@
 
         <!-- Navigation & Action Links -->
         <div class="flex items-center space-x-3">
+          <!-- Botón de Tutoriales & Guías (Video e Interactivo) -->
+          <button type="button" id="btn-portal-tutorial-hub" onclick="openTutorialHubModal()"
+                  class="relative px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-white border border-slate-800 hover:border-amber-400/50 rounded-xl transition cursor-pointer group flex items-center gap-1.5 shadow-xs"
+                  title="Centro de Tutoriales: Video-Simulador y Tour Guiado en Vivo">
+            <i class="fa-solid fa-graduation-cap text-sm text-amber-400 group-hover:scale-110 transition"></i>
+            <span class="text-xs font-bold hidden sm:inline text-slate-200 group-hover:text-white">Tutoriales</span>
+          </button>
+
+          <!-- Botón de Información de la Plataforma (a la izquierda de la campana) -->
+          <button type="button" id="btn-portal-info" onclick="openPlatformInfoModal()"
+                  class="relative p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition cursor-pointer group"
+                  title="Conoce cubikar Arquitectura: Funciones estrella, alcances, cotizaciones y ventajas">
+            <i class="fa-solid fa-circle-info text-lg group-hover:text-blue-400 transition"></i>
+          </button>
+
           <!-- Quick Notifications (Menciones del Chat de Obra en todos los proyectos) -->
           <div class="relative flex items-center" id="portal-notifications-wrapper">
             <button type="button" id="btn-portal-notifications" onclick="toggleMentionNotificationsPopover(event)"
@@ -62,6 +77,9 @@
               <!-- Renderizado dinámicamente por projectChat.js -->
             </div>
           </div>
+
+          <!-- App Switcher 9-dots (Ecosistema Cubikar) -->
+          <div id="cubikar-app-switcher-mount" class="flex items-center mr-1"></div>
 
           <!-- User Profile Pill (Compact, Unificado) -->
           <div id="portal-header-user-area" class="flex items-center">
@@ -126,6 +144,13 @@
             <span id="sidebar-chat-badge" class="hidden absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-blue-600 text-white text-[10px] font-extrabold rounded-full flex items-center justify-center ring-2 ring-slate-950 shadow-sm">0</span>
           </button>
         </div>
+
+        <!-- 3.2 TUTORIALES & GUÍAS (VIDEO E INTERACTIVO) -->
+        <button type="button" id="btn-sidebar-tutorial-hub" onclick="openTutorialHubModal()"
+                class="w-11 h-11 rounded-xl flex items-center justify-center bg-slate-900/80 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 border border-slate-800 hover:border-amber-400/50 transition active:scale-95 cursor-pointer group relative shadow-2xs"
+                title="Centro de Tutoriales: Video-Simulador y Tour Guiado en Vivo">
+          <i class="fa-solid fa-graduation-cap text-base group-hover:scale-110 transition"></i>
+        </button>
 
         <!-- 4. CAMBIAR VISTA: MODO DÍA / MODO NOCTURNO -->
         <button type="button" id="btn-theme-toggle" onclick="toggleThemeMode()"
@@ -4112,7 +4137,283 @@
   </div>
 
 
+  <!-- ======================================================= -->
+  <!-- MODAL DE INFORMACIÓN DE CUBIKAR ARQUITECTURA -->
+  <!-- ======================================================= -->
+  <div id="modal-platform-info" onclick="if (event.target === this) closePlatformInfoModal()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[9999] hidden items-center justify-center p-3 sm:p-5">
+    <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Modal Header (Compacto con gradiente oscuro e icono institucional) -->
+      <div class="bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 text-white px-5 sm:px-6 py-4 flex justify-between items-center shrink-0 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/40 flex items-center justify-center text-blue-400 text-lg shadow-inner">
+            <i class="fa-solid fa-circle-info"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-black text-base text-white tracking-tight">cubikar<span class="text-rose-500">.</span> Arquitectura</span>
+
+
+              <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                Proyectos Ejecutivos y Presupuestos
+              </span>
+            </div>
+            <p class="text-xs text-slate-300">Conoce todas las capacidades y herramientas para la gestión de proyectos de arquitectura, alcances y cotizaciones</p>
+          </div>
+        </div>
+        <button type="button" onclick="closePlatformInfoModal()" class="text-slate-400 hover:text-white cursor-pointer p-2 rounded-xl hover:bg-white/10 transition" title="Cerrar ventana">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body con Scroll -->
+      <div class="overflow-y-auto flex-1 p-5 sm:p-7 space-y-8 bg-slate-50 text-slate-800">
+        
+        <!-- 1. Encabezado Principal (Hero Section) -->
+        <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white p-6 sm:p-8 md:p-10 shadow-xl border border-slate-800">
+          <div class="relative z-10 max-w-3xl">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold mb-4">
+              <i class="fa-solid fa-cloud"></i>
+              <span>100% en la nube • Sin instalaciones</span>
+            </div>
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              Gestiona alcances, proyectos ejecutivos y honorarios profesionales directamente en la nube.
+            </h2>
+            <p class="mt-4 text-sm sm:text-base text-slate-300 leading-relaxed font-normal">
+              La plataforma integral de tabla de alcances por especialidad, cotizaciones de proveedores, matrices APU, estimaciones por hitos y control de honorarios diseñada para la arquitectura moderna. Trabaja en tiempo real con hasta 20 colaboradores desde cualquier lugar, sin instalaciones ni licencias costosas.
+            </p>
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+              <button type="button" onclick="handlePlatformInfoEmpiezaGratis()"
+                      class="px-5 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 transition transform hover:-translate-y-0.5 active:scale-95 cursor-pointer flex items-center gap-2">
+                <i class="fa-solid fa-rocket"></i>
+                <span>Empieza Gratis Hoy</span>
+              </button>
+              <button type="button" onclick="handlePlatformInfoVerPlanes()"
+                      class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs sm:text-sm border border-slate-700 transition transform hover:-translate-y-0.5 active:scale-95 cursor-pointer flex items-center gap-2">
+                <i class="fa-solid fa-crown text-amber-400"></i>
+                <span>Ver Planes y Precios</span>
+              </button>
+            </div>
+          </div>
+          <!-- Adorno decorativo de fondo -->
+          <div class="absolute -right-12 -bottom-12 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div class="absolute right-12 top-6 opacity-10 hidden md:block pointer-events-none">
+            <i class="fa-solid fa-cubes text-9xl text-white"></i>
+          </div>
+        </section>
+
+        <!-- 2. Las 6 Funciones Estrella (Resumen en Tarjetas) -->
+        <section class="space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                <span class="text-blue-600">★</span> Las 6 Funciones Estrella
+              </h3>
+              <p class="text-xs sm:text-sm text-slate-500">Módulos especializados interconectados para cada etapa constructiva</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            <!-- Tarjeta 1 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>🧠</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  1. Presupuestos y Matrices APU con Inteligencia Artificial
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  Olvídate de capturar cientos de insumos manualmente. Genera análisis de precios unitarios completos en segundos con nuestro motor inteligente, desglosa materiales, cuadrillas (con FASAR) y equipo, e incluso cotiza insumos con precios de mercado en tiempo real.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-violet-600">
+                <i class="fa-solid fa-sparkles text-xs"></i>
+                <span>Generación instantánea APU</span>
+              </div>
+            </div>
+
+            <!-- Tarjeta 2 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>📅</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  2. Calendario de Obra, Ruta Crítica y Curva "S"
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  Transforma tu presupuesto en un cronograma de ejecución dinámico. Visualiza el diagrama de Gantt interactivo, detecta automáticamente la ruta crítica de tu proyecto y controla el flujo financiero programado semana a semana.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-blue-600">
+                <i class="fa-solid fa-chart-gantt text-xs"></i>
+                <span>Cronograma y Curva S</span>
+              </div>
+            </div>
+
+            <!-- Tarjeta 3 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>📋</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  3. Estimaciones de Obra y Generadores
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  Controla los avances físicos y cobros al cliente con precisión. Administra volúmenes acumulados, estimaciones actuales, saldos por ejecutar, anticipos, amortizaciones y genera reportes ejecutivos listos para autorización.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+                <i class="fa-solid fa-file-invoice-dollar text-xs"></i>
+                <span>Avance físico y financiero</span>
+              </div>
+            </div>
+
+            <!-- Tarjeta 4 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>💳</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  4. Control de Compras, Gastos y Dashboard Financiero
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  ¿Vas ganando o perdiendo dinero en la obra? Compara en tiempo real lo presupuestado contra lo realmente gastado insumo por insumo. Emite órdenes de compra, registra rayas de mano de obra, sube facturas y recibe alertas de sobrecosto al instante.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-amber-600">
+                <i class="fa-solid fa-chart-line text-xs"></i>
+                <span>Presupuestado vs Real</span>
+              </div>
+            </div>
+
+            <!-- Tarjeta 5 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>✍️</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  5. Bitácora y Seguimiento de Alcances por Especialidad
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  Registra el día a día de la obra con evidencias fotográficas y ubicación en ejes. Al asentar y firmar cada nota, el documento queda bloqueado e inmutable (sin edición ni borrado) y genera automáticamente un PDF oficial foliado para supervisión o auditoría.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-rose-600">
+                <i class="fa-solid fa-stamp text-xs"></i>
+                <span>Foliado inmutable y firma digital</span>
+              </div>
+            </div>
+
+            <!-- Tarjeta 6 -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
+              <div>
+                <div class="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-lg mb-3 shadow-inner group-hover:scale-105 transition">
+                  <span>☁️</span>
+                </div>
+                <h4 class="font-extrabold text-sm text-slate-900 mb-2 leading-snug">
+                  6. Colaboración en Tiempo Real y Migración Total
+                </h4>
+                <p class="text-xs text-slate-600 leading-relaxed">
+                  Tu oficina y tus residentes en campo trabajando sobre el mismo proyecto al mismo tiempo. Importa tus catálogos existentes desde Excel, CSV, JSON, Opus y Neodata, imprime reportes profesionales con tu propio logotipo y disfruta de vistas en Modo Día y Modo Nocturno.
+                </p>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[11px] font-semibold text-sky-600">
+                <i class="fa-solid fa-users text-xs"></i>
+                <span>Multi-usuario y formatos estándar</span>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- 3. Bloque Comparativo Rápido (¿Por qué elegirnos?) -->
+        <section class="bg-slate-900 rounded-3xl p-6 sm:p-8 text-white border border-slate-800 shadow-lg">
+          <div class="max-w-3xl">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold mb-3">
+              <i class="fa-solid fa-check-double"></i>
+              <span>Ventajas Competitivas</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white mb-2">
+              ¿Por qué elegirnos?
+            </h3>
+            <p class="text-xs sm:text-sm text-slate-300 mb-6">
+              Diseñado específicamente para contratistas, ingenieros, arquitectos y constructoras que buscan agilidad y ahorro real.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            <div class="bg-slate-800/80 rounded-2xl p-4 border border-slate-700/80">
+              <div class="flex items-center gap-2.5 mb-2">
+                <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-laptop-mobile"></i>
+                </div>
+                <h5 class="text-xs sm:text-sm font-extrabold text-white">100% Web y Multiplataforma</h5>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Funciona en PC, Mac, tablet o celular en obra sin instalar programas pesados ni usar candados USB.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/80 rounded-2xl p-4 border border-slate-700/80">
+              <div class="flex items-center gap-2.5 mb-2">
+                <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-user-group"></i>
+                </div>
+                <h5 class="text-xs sm:text-sm font-extrabold text-white">Equipo Conectado Sin Costo Extra</h5>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Invita desde 3 hasta 30 colaboradores bajo la misma cuenta para trabajar en vivo.
+              </p>
+            </div>
+
+            <div class="bg-slate-800/80 rounded-2xl p-4 border border-slate-700/80">
+              <div class="flex items-center gap-2.5 mb-2">
+                <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-piggy-bank"></i>
+                </div>
+                <h5 class="text-xs sm:text-sm font-extrabold text-white">Ahorro del 90% en Licencias</h5>
+              </div>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                Planes desde $0 (Gratis para estudiantes y obras pequeñas) hasta $350 MXN/mes para contratistas y $950 MXN/mes para constructoras.
+              </p>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="bg-slate-100 border-t border-slate-200 px-5 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <span class="text-xs text-slate-600 flex items-center gap-1.5">
+          <i class="fa-solid fa-shield-check text-emerald-600"></i>
+          <span>Información actualizada del sistema cubikar</span>
+        </span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closePlatformInfoModal(); openSubscriptionModal();"
+                  class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition shadow cursor-pointer flex items-center gap-1.5">
+            <i class="fa-solid fa-crown text-amber-300 text-[11px]"></i>
+            <span>Ver Suscripción y Planes</span>
+          </button>
+          <button type="button" onclick="closePlatformInfoModal()"
+                  class="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition cursor-pointer">
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
   <!-- Entrada Modular Principal ES6 -->
-  <script type="module" src="js/app.js?v=20261114_08"></script>
+  <script type="module" src="js/app.js?v=20261114_09"></script>
 </body>
 </html>

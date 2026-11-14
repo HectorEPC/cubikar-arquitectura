@@ -805,7 +805,49 @@ export function closeComparisonModal() {
   }
 }
 
+// Modal de Información de la Plataforma (Hero, Funciones Estrella y Comparativo)
+export function openPlatformInfoModal() {
+  const modal = document.getElementById('modal-platform-info');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+}
+
+export function closePlatformInfoModal() {
+  const modal = document.getElementById('modal-platform-info');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+export function handlePlatformInfoEmpiezaGratis() {
+  closePlatformInfoModal();
+  const user = (typeof window.getCurrentUser === 'function') ? window.getCurrentUser() : null;
+  if (!user) {
+    if (typeof window.renderPortalAuth === 'function') {
+      window.renderPortalAuth('register');
+    }
+  } else {
+    if (typeof window.openNuevoProyectoModal === 'function') {
+      window.openNuevoProyectoModal();
+    } else if (typeof window.renderPortalDashboard === 'function') {
+      window.renderPortalDashboard();
+    }
+  }
+}
+
+export function handlePlatformInfoVerPlanes() {
+  closePlatformInfoModal();
+  if (typeof window.openSubscriptionModal === 'function') {
+    window.openSubscriptionModal();
+  }
+}
+
 export const MODAL_CLOSE_MAP = {
+  'modal-platform-info': () => closePlatformInfoModal(),
+  'cubikar-tutorial-hub-modal': () => (typeof window.closeTutorialHubModal === 'function' ? window.closeTutorialHubModal() : null),
   'settings-modal': () => (typeof window.closeSettingsModal === 'function' ? window.closeSettingsModal() : null),
   'logo-adjuster-modal': () => (typeof window.closeLogoAdjusterModal === 'function' ? window.closeLogoAdjusterModal() : null),
   'universal-import-modal': () => (typeof window.closeImportModal === 'function' ? window.closeImportModal() : null),
@@ -948,6 +990,10 @@ initUniversalModalBackdrop();
 if (typeof window !== 'undefined') {
   window.closeAdminDualLoginModal = closeAdminDualLoginModal;
   window.closeComparisonModal = closeComparisonModal;
+  window.openPlatformInfoModal = openPlatformInfoModal;
+  window.closePlatformInfoModal = closePlatformInfoModal;
+  window.handlePlatformInfoEmpiezaGratis = handlePlatformInfoEmpiezaGratis;
+  window.handlePlatformInfoVerPlanes = handlePlatformInfoVerPlanes;
   window.MODAL_CLOSE_MAP = MODAL_CLOSE_MAP;
   window.closeModalElement = closeModalElement;
   window.initUniversalModalBackdrop = initUniversalModalBackdrop;

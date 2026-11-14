@@ -240,8 +240,33 @@ import {
   switchTab,
   closeAdminDualLoginModal,
   closeComparisonModal,
-  initUniversalModalBackdrop
+  initUniversalModalBackdrop,
+  openPlatformInfoModal,
+  closePlatformInfoModal,
+  handlePlatformInfoEmpiezaGratis,
+  handlePlatformInfoVerPlanes
 } from './ui/modalController.js';
+
+import {
+  openTutorialHubModal,
+  closeTutorialHubModal,
+  launchTourFromHub,
+  launchVideoFromHub,
+  resetTourPreferencesFromHub
+} from './ui/tutorialHubModal.js?v=20261114_08';
+
+import {
+  startInteractiveTour,
+  skipInteractiveTour,
+  closeInteractiveTour,
+  checkAndResumeTourOnLoad
+} from './ui/interactiveTour.js?v=20261114_08';
+
+import {
+  openVideoSimulatorModal,
+  closeVideoSimulatorModal,
+  toggleVoiceNarration
+} from './ui/videoSimulatorModal.js?v=20261114_08';
 
 import {
   openFirmasResponsablesModal,
@@ -960,8 +985,46 @@ Object.assign(window, {
   resetFilters,
   subscribeToProjectRealtime,
   unsubscribeFromProjectRealtime,
-  exportProjectToExcelAction
+  exportProjectToExcelAction,
+
+  // Información de la Plataforma
+  openPlatformInfoModal,
+  closePlatformInfoModal,
+  handlePlatformInfoEmpiezaGratis,
+  handlePlatformInfoVerPlanes,
+
+  // Centro de Tutoriales & Tours
+  openTutorialHubModal,
+  closeTutorialHubModal,
+  launchTourFromHub,
+  launchVideoFromHub,
+  resetTourPreferencesFromHub,
+  startInteractiveTour,
+  skipInteractiveTour,
+  closeInteractiveTour,
+  checkAndResumeTourOnLoad,
+  openVideoSimulatorModal,
+  closeVideoSimulatorModal,
+  toggleVoiceNarration
 });
+
+// Asignaciones globales explícitas en window
+window.openPlatformInfoModal = openPlatformInfoModal;
+window.closePlatformInfoModal = closePlatformInfoModal;
+window.handlePlatformInfoEmpiezaGratis = handlePlatformInfoEmpiezaGratis;
+window.handlePlatformInfoVerPlanes = handlePlatformInfoVerPlanes;
+window.openTutorialHubModal = openTutorialHubModal;
+window.closeTutorialHubModal = closeTutorialHubModal;
+window.launchTourFromHub = launchTourFromHub;
+window.launchVideoFromHub = launchVideoFromHub;
+window.resetTourPreferencesFromHub = resetTourPreferencesFromHub;
+window.startInteractiveTour = startInteractiveTour;
+window.skipInteractiveTour = skipInteractiveTour;
+window.closeInteractiveTour = closeInteractiveTour;
+window.checkAndResumeTourOnLoad = checkAndResumeTourOnLoad;
+window.openVideoSimulatorModal = openVideoSimulatorModal;
+window.closeVideoSimulatorModal = closeVideoSimulatorModal;
+window.toggleVoiceNarration = toggleVoiceNarration;
 
 // Atajos de teclado:
 // - Alt + Flecha Arriba / Abajo para mover la fila seleccionada
@@ -1259,8 +1322,11 @@ if (hasPendingIncomingSsoSession()) {
   }
 }
 
-// Asegurar renderizado de colaboradores en el encabezado de proyecto
+// Asegurar renderizado de colaboradores en el encabezado de proyecto y app switcher
 if (typeof document !== 'undefined') {
+  try {
+    initAppSwitcher('cubikar-app-switcher-mount', 'arq');
+  } catch (_) {}
   renderHeaderCollaborators();
   renderAllTabAssignedMembers();
   updateNavigationTabsAccess();
