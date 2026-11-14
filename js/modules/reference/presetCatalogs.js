@@ -1,5 +1,5 @@
 // js/modules/reference/presetCatalogs.js
-// Gestor de Catálogos Pre-cargados (BIMSA 2018 y Gobierno)
+// Gestor de Catálogos Pre-cargados del Sistema (Oficiales y Gobierno)
 
 import { showToast } from '../../ui/notifications.js';
 import { saveReferenceCatalog, listReferenceCatalogs } from './referenceDb.js';
@@ -74,7 +74,7 @@ export async function installPresetCatalog(presetId) {
   }
 }
 
-// Cargar TODOS los catálogos BIMSA y Gobierno de una sola vez
+// Cargar TODOS los catálogos oficiales y de Gobierno de una sola vez
 export async function installAllPresets() {
   const manifest = await getPresetCatalogManifest();
   if (!manifest || manifest.length === 0) {

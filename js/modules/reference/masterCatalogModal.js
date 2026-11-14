@@ -118,7 +118,7 @@ function renderCatalogsManageList(catalogs, stats = null) {
       <div class="p-6 text-center text-slate-400 bg-slate-50 border border-dashed border-slate-300 rounded-xl">
         <i class="fa-solid fa-folder-open text-3xl mb-2 text-slate-300"></i>
         <p class="font-medium text-xs text-slate-600">No hay catálogos maestros cargados ${ownerNameTxt}.</p>
-        <p class="text-[11px] text-slate-400 mt-1">Usa el botón "Importar Archivo" para agregar tus archivos de BIMSA, Gobierno, Excel, CSV u Opus.</p>
+        <p class="text-[11px] text-slate-400 mt-1">Usa el botón "Importar Archivo" para agregar tus archivos de Opus, Neodata, Gobierno, Excel o CSV.</p>
       </div>
     `;
     return;
