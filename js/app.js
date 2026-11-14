@@ -72,7 +72,7 @@ import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
-import { initAuthListener } from './core/authService.js';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending } from './core/authService.js';
 import { getCurrentUser } from './modules/portal/projectService.js';
 
 import {
@@ -1160,9 +1160,11 @@ try {
         if (!isWorkspaceVisible) {
           const projectsGridExists = !!document.getElementById('projects-grid');
           const menuWrapper = document.getElementById('portal-user-menu-wrapper');
-          if (projectsGridExists && menuWrapper && (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+          const currentMenuEmail = menuWrapper?.dataset?.userEmail || '';
+          const incomingEmail = (session.user.email || '').toLowerCase().trim();
+          if (projectsGridExists && menuWrapper && (!currentMenuEmail || currentMenuEmail === incomingEmail) && (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED')) {
             try { updatePortalHeaderUserArea(currentUser); } catch (_) {}
-          } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || !projectsGridExists) {
+          } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || !projectsGridExists || currentMenuEmail !== incomingEmail) {
             showPortalView('dashboard');
           }
         } else {
@@ -1177,16 +1179,18 @@ try {
       }
     } else if (event === 'SIGNED_OUT') {
       updatePortalHeaderUserArea(null);
-      if (!document.getElementById('login-email')) {
+      if (!document.getElementById('login-email') && !isSsoHydrationPending()) {
         showPortalView('login');
       }
     }
   });
 } catch (_) {}
 
-// Inicialización de la aplicación al cargar el módulo
-const isWorkspaceActive = initPortal();
-if (isWorkspaceActive) {
+let workspaceModulesBooted = false;
+
+function bootWorkspaceModules() {
+  if (workspaceModulesBooted) return;
+  workspaceModulesBooted = true;
   initStore();
   getProjectPresupuestoConfig();
   initBranding();
@@ -1209,6 +1213,44 @@ if (isWorkspaceActive) {
     initGlobalRealtimeSync();
   } catch (e) {
     console.warn('[Realtime] Aviso inicializando sincronización global:', e);
+  }
+}
+
+function renderSsoConnectingOverlay() {
+  if (typeof document === 'undefined') return;
+  const main = document.getElementById('portal-main-container');
+  if (!main) return;
+  main.innerHTML = `
+    <div class="max-w-md mx-auto w-full my-16 p-8 rounded-3xl bg-slate-900/90 border border-slate-800 text-center text-white shadow-2xl">
+      <div class="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto mb-4">
+        <i class="fa-solid fa-spinner fa-spin text-xl"></i>
+      </div>
+      <h2 class="text-lg font-extrabold tracking-tight">Conectando tu sesión Cubikar...</h2>
+      <p class="text-xs text-slate-400 mt-2">Cargando tus proyectos sin volver a iniciar sesión.</p>
+    </div>
+  `;
+}
+
+// Inicialización de la aplicación al cargar el módulo (con soporte fluido de SSO entre subdominios)
+if (hasPendingIncomingSsoSession()) {
+  renderSsoConnectingOverlay();
+  Promise.race([
+    hydrateIncomingSsoSession(),
+    new Promise((resolve) => setTimeout(() => resolve({ hydrated: false }), 6000))
+  ]).finally(() => {
+    try {
+      const hasProjectParam = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('project');
+      const alreadyRenderedDashboard = !hasProjectParam && getCurrentUser() && !!document.getElementById('projects-grid');
+      if (!alreadyRenderedDashboard) {
+        const isWorkspaceActive = initPortal();
+        if (isWorkspaceActive) bootWorkspaceModules();
+      }
+    } catch (_) {}
+  });
+} else {
+  const isWorkspaceActive = initPortal();
+  if (isWorkspaceActive) {
+    bootWorkspaceModules();
   }
 }
 
