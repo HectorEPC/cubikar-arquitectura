@@ -72,7 +72,7 @@ import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending } from './core/authService.js?v=20261114_07';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261114_11';
 import { getCurrentUser } from './modules/portal/projectService.js';
 import { initAppSwitcher } from './ui/appSwitcher.js?v=20261114_09';
 
@@ -1210,7 +1210,10 @@ initThemeMode();
 try {
   initAuthListener((event, session, perfil) => {
     if (session?.user) {
-      const currentUser = getCurrentUser();
+      let currentUser = getCurrentUser();
+      if (!currentUser) {
+        currentUser = syncLocalUserSession(session.user, perfil, true);
+      }
       if (!currentUser) {
         if (!document.getElementById('login-email')) {
           showPortalView('login');
