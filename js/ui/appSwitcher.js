@@ -1,7 +1,7 @@
 // js/ui/appSwitcher.js
 // Selector Unificado de Aplicaciones del Ecosistema Cubikar (Estilo Google Workspace Waffle 9-puntos)
 
-import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261115_05';
+import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261115_v10';
 import { getCurrentUser } from '../modules/portal/projectService.js';
 
 export function initAppSwitcher(containerId = 'cubikar-app-switcher-mount', currentApp = 'portal', activeUser = null) {
@@ -16,9 +16,9 @@ export function initAppSwitcher(containerId = 'cubikar-app-switcher-mount', curr
 
   // URLs de destino según entorno
   const urls = {
-    portal: isLocalhost ? (currentApp === 'portal' ? '#' : '../Cubikar/index.html') : 'https://cubikar.app',
-    const: isLocalhost ? (currentApp === 'const' ? '#' : '../ADM_CONST/index.html') : 'https://const.cubikar.app',
-    arq: isLocalhost ? (currentApp === 'arq' ? '#' : '../ADM_ARQ/index.html') : 'https://arq.cubikar.app'
+    portal: isLocalhost ? (currentApp === 'portal' ? '#' : '../Cubikar/index.html') : 'https://cubikar.app/',
+    const: isLocalhost ? (currentApp === 'const' ? '#' : '../ADM_CONST/index.html') : 'https://const.cubikar.app/',
+    arq: isLocalhost ? (currentApp === 'arq' ? '#' : '../ADM_ARQ/index.html') : 'https://arq.cubikar.app/'
   };
 
   mount.innerHTML = `

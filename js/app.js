@@ -72,9 +72,9 @@ import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261114_11';
-import { getCurrentUser } from './modules/portal/projectService.js';
-import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_05';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261115_v10';
+import { getCurrentUser } from './modules/portal/projectService.js?v=20261115_v10';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_v10';
 
 import {
   findNodeById,
