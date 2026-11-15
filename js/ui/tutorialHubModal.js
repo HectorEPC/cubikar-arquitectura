@@ -1,10 +1,9 @@
 // js/ui/tutorialHubModal.js
-// Modal centralizado "Centro de Tutoriales y Aprendizaje" para Cubikar
-// Permite al usuario elegir entre el Tour Guiado en Vivo (Alternativa 3) con botón de Saltar,
-// o el Reproductor Web de Video-Simulación Animada (Alternativa 1).
+// Modal centralizado "Centro de Tutoriales y Aprendizaje" para cubikar Arquitectura
+// Permite al usuario elegir entre el Tour Guiado en Vivo interactivo o el Reproductor Web de Video-Simulación Animada.
 
-import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261114_09';
-import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261114_09';
+import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261115_cubikar_arq_v4';
+import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261115_cubikar_arq_v4';
 
 let isTutorialHubOpen = false;
 
@@ -35,7 +34,7 @@ export function closeTutorialHubModal() {
 
 /**
  * Inicia el Tour Guiado interactivo cerrando el Hub
- * @param {string} preferredTourId - 'master' (15 módulos recorriendo todas las pestañas) | 'contextual' (pantalla actual)
+ * @param {string} preferredTourId - 'master' (17 módulos recorriendo todas las pestañas) | 'contextual' (pantalla actual)
  */
 export function launchTourFromHub(preferredTourId = 'master') {
   closeTutorialHubModal();
@@ -43,20 +42,22 @@ export function launchTourFromHub(preferredTourId = 'master') {
   let tourId = preferredTourId || 'master';
 
   if (preferredTourId === 'contextual') {
-    // Detectar en qué pantalla está el usuario para tour breve de esa pantalla
     const viewPortal = document.getElementById('view-portal');
     tourId = 'portal';
 
     if (!viewPortal || viewPortal.classList.contains('hidden')) {
-      const viewCompras = document.getElementById('view-compras');
+      const viewSeguimiento = document.getElementById('view-seguimiento') || document.getElementById('view-compras');
       const viewBitacora = document.getElementById('view-bitacora');
+      const viewAlcances = document.getElementById('view-alcances');
 
-      if (viewCompras && !viewCompras.classList.contains('hidden')) {
+      if (viewSeguimiento && !viewSeguimiento.classList.contains('hidden')) {
         tourId = 'compras';
       } else if (viewBitacora && !viewBitacora.classList.contains('hidden')) {
         tourId = 'bitacora';
+      } else if (viewAlcances && !viewAlcances.classList.contains('hidden')) {
+        tourId = 'master';
       } else {
-        tourId = 'workspace';
+        tourId = 'master';
       }
     }
   }
@@ -89,8 +90,8 @@ export function resetTourPreferencesFromHub() {
 function injectTutorialHubDom() {
   const existing = document.getElementById('cubikar-tutorial-hub-modal');
   if (existing) {
-    if (!existing.innerHTML.includes('Con Voz y Efectos')) {
-      existing.remove(); // Elimina la versión antigua en memoria para re-inyectar la nueva
+    if (existing.getAttribute('data-version') !== '20261115_cubikar_arq_v4') {
+      existing.remove();
     } else {
       return;
     }
@@ -98,6 +99,7 @@ function injectTutorialHubDom() {
 
   const modal = document.createElement('div');
   modal.id = 'cubikar-tutorial-hub-modal';
+  modal.setAttribute('data-version', '20261115_cubikar_arq_v4');
   modal.className = 'fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[99997] hidden items-center justify-center p-3 sm:p-5 animate-in fade-in zoom-in-95 duration-150 select-none';
   modal.innerHTML = `
     <div class="bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden text-slate-100">
@@ -110,13 +112,13 @@ function injectTutorialHubDom() {
           </div>
           <div>
             <h2 class="font-extrabold text-base sm:text-lg text-white tracking-tight flex items-center gap-2">
-              Centro de Tutoriales y Aprendizaje
+              <span>Centro de Tutoriales • cubikar<span class="text-rose-500">.</span> Arquitectura</span>
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                100% de la App
+                ${VIDEO_MODULES.length} Módulos
               </span>
             </h2>
             <p class="text-xs text-slate-300">
-              Elige cómo deseas aprender a utilizar Cubikar: Tour en vivo interactivo o Video-Simulador
+              Tabla de Alcances • Cotizaciones • Presupuestos: Tour guiado en vivo interactivo o Video-Simulador con voz en español fluida
             </p>
           </div>
         </div>
@@ -131,16 +133,16 @@ function injectTutorialHubDom() {
       <!-- Contenido de las 2 Alternativas -->
       <div class="p-4 sm:p-6 overflow-y-auto custom-scroll space-y-6 flex-1 text-xs">
         
-        <!-- Tarjetas Principales de Selección (Alternativa 1 vs Alternativa 3) -->
+        <!-- Tarjetas Principales de Selección -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           
-          <!-- TARJETA 1: TOUR EN VIVO INTERACTIVO (Alternativa 3) -->
+          <!-- TARJETA 1: TOUR EN VIVO INTERACTIVO -->
           <div class="p-5 rounded-2xl bg-gradient-to-b from-slate-800/80 to-slate-850 border border-slate-700/80 hover:border-blue-500/60 transition flex flex-col justify-between group shadow-lg">
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-600/30 text-blue-300 border border-blue-400/40 flex items-center gap-1.5">
                   <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
-                  ALTERNATIVA 3
+                  TOUR GUIADO EN VIVO
                 </span>
                 <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                   <i class="fa-solid fa-forward-step text-[9px]"></i> Con botón de Saltar
@@ -149,10 +151,10 @@ function injectTutorialHubDom() {
 
               <div>
                 <h3 class="font-extrabold text-base text-white group-hover:text-blue-300 transition">
-                  Tour Guiado en Vivo
+                  Tour Guiado Paso a Paso
                 </h3>
                 <p class="text-slate-300 text-xs mt-1 leading-relaxed">
-                  Aprende directamente sobre la interfaz real. La pantalla se atenúa y un <strong>foco de luz</strong> te indica dónde hacer clic, qué llenar y para qué sirve cada botón.
+                  Aprende directamente sobre la interfaz real de cubikar Arquitectura. Un foco de luz te señala dónde hacer clic, qué datos capturar y cómo estructurar tus proyectos.
                 </p>
               </div>
 
@@ -167,7 +169,7 @@ function injectTutorialHubDom() {
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-blue-400 text-xs"></i>
-                  <span>No vuelve a molestar si decides omitirlo.</span>
+                  <span>Cubre Alcances, Presupuesto, APU, Gantt, Estimaciones y ERP.</span>
                 </div>
               </div>
             </div>
@@ -176,26 +178,21 @@ function injectTutorialHubDom() {
               <button type="button" onclick="window.launchTourFromHubAction('master')"
                       class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-600/30 transition cursor-pointer">
                 <i class="fa-solid fa-person-walking-arrow-right text-sm"></i>
-                <span>Iniciar Tour Maestro (${VIDEO_MODULES.length} Módulos en Todas las Pestañas)</span>
-              </button>
-              <button type="button" onclick="window.launchTourFromHubAction('contextual')"
-                      class="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-98 text-slate-300 hover:text-white font-medium text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer">
-                <i class="fa-solid fa-crosshairs text-[10px]"></i>
-                <span>O ver solo el tour de esta pantalla actual</span>
+                <span>Iniciar Tour Maestro (${VIDEO_MODULES.length} Módulos)</span>
               </button>
             </div>
           </div>
 
-          <!-- TARJETA 2: REPRODUCTOR DE VIDEO-SIMULACIÓN (Alternativa 1) -->
+          <!-- TARJETA 2: REPRODUCTOR DE VIDEO-SIMULACIÓN -->
           <div class="p-5 rounded-2xl bg-gradient-to-b from-slate-800/80 to-slate-850 border border-slate-700/80 hover:border-amber-500/60 transition flex flex-col justify-between group shadow-lg">
             <div class="space-y-3">
               <div class="flex items-center justify-between">
                 <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/40 flex items-center gap-1.5">
                   <i class="fa-solid fa-circle-play text-[9px]"></i>
-                  ALTERNATIVA 1
+                  VIDEO-SIMULADOR WEB
                 </span>
                 <span class="text-[10px] text-amber-300 font-bold flex items-center gap-1">
-                  <i class="fa-solid fa-volume-high text-[9px]"></i> Con Voz y Efectos
+                  <i class="fa-solid fa-volume-high text-[9px]"></i> Voz Clara y Fluida
                 </span>
               </div>
 
@@ -204,22 +201,22 @@ function injectTutorialHubDom() {
                   Video-Simulador Interactivo
                 </h3>
                 <p class="text-slate-300 text-xs mt-1 leading-relaxed">
-                  Visualiza cómo se utiliza Cubikar con <strong>narración por voz en español</strong>, un <strong>cursor animado</strong> que recorre la pantalla, clics con sonido, llenado de campos y subtítulos sincronizados.
+                  Visualiza cómo se utiliza cubikar Arquitectura con <strong>narración por voz completa en español</strong>, un <strong>cursor animado</strong> que recorre la pantalla, clics con sonido y subtítulos sincronizados.
                 </p>
               </div>
 
               <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700/50 space-y-1.5 text-[11px] text-slate-300">
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
-                  <span><strong>Voz guiada en español</strong> describiendo cada acción en tiempo real.</span>
+                  <span><strong>Voz guiada completa</strong> que no se corta y dice cada palabra clara.</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
-                  <span>Efectos de sonido (SFX) táctiles en clics y tecleo.</span>
+                  <span>Pantallas fotorrealistas sin símbolos ni letras encimadas.</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
-                  <span>Controles Play, Pausa, barra de tiempo, velocidad y silenciador.</span>
+                  <span>Controles Play, Pausa, barra de tiempo deslizable y velocidad.</span>
                 </div>
               </div>
             </div>
@@ -233,14 +230,14 @@ function injectTutorialHubDom() {
 
         </div>
 
-        <!-- Acceso Directo por Módulo (Los 15 Temas de Cubikar) -->
+        <!-- Acceso Directo por Módulo -->
         <div class="space-y-3 pt-2">
           <div class="flex items-center justify-between pb-1 border-b border-slate-800">
             <h4 class="font-bold text-xs text-slate-200 flex items-center gap-2">
               <i class="fa-solid fa-film text-blue-400"></i>
               <span>Acceso Directo a los ${VIDEO_MODULES.length} Módulos en Video</span>
             </h4>
-            <span class="text-[10px] text-slate-400">Haz clic en cualquier módulo para reproducir</span>
+            <span class="text-[10px] text-slate-400">Haz clic en cualquier tema para reproducir</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">

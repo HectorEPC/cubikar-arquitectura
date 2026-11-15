@@ -64,10 +64,10 @@ export function checkAndResumeTourOnLoad() {
 // =========================================================================
 
 export const TOUR_DEFINITIONS = {
-  // TOUR MAESTRO: RECORRIDO EN CADENA POR TODAS LAS PESTAÑAS (16 MÓDULOS)
+  // TOUR MAESTRO: RECORRIDO EN CADENA POR TODAS LAS PESTAÑAS (17 MÓDULOS DE CUBIKAR ARQUITECTURA)
   'master': {
     id: 'master',
-    title: 'Tour Maestro • Los 16 Módulos de Cubikar',
+    title: 'Tour Maestro • Los 17 Módulos de cubikar Arquitectura',
     steps: [
       // VENTANA 1: PORTAL DE INICIO (MIS PROYECTOS)
       {
@@ -75,8 +75,8 @@ export const TOUR_DEFINITIONS = {
         target: '#btn-portal-nuevo-proyecto',
         fallbackTarget: '#projectScopeModeSelect',
         moduleBadge: 'Módulo 1 • Inicio',
-        title: '1. Creación de Proyectos e Identidad',
-        content: 'Desde aquí inicias el <strong>Asistente en 2 Pasos</strong>: asignas tu empresa, subes tu logotipo institucional con recorte 1:1 y configuras tu factor de sobrecosto (Indirectos y Utilidad).',
+        title: '1. Creación de Proyectos e Identidad del Despacho',
+        content: 'Desde aquí inicias el <strong>Asistente en 2 Pasos</strong>: asignas tu despacho o empresa, subes tu logotipo institucional con recorte cuadrado 1:1 y configuras tu factor de sobrecosto.',
         position: 'bottom'
       },
       {
@@ -84,7 +84,7 @@ export const TOUR_DEFINITIONS = {
         target: '#projectScopeModeSelect',
         fallbackTarget: '#btn-workspace-plan-invite',
         moduleBadge: 'Módulo 2 • Modo de Trabajo',
-        title: '2. Modo de Trabajo: Propias vs. Invitaciones',
+        title: '2. Proyectos Propios vs. Colaboraciones',
         content: 'Alterna con un clic entre <strong>Mis proyectos</strong> (obras bajo tu suscripción) y proyectos compartidos donde colaboras como invitado con permisos asignados por otros despachos.',
         position: 'bottom'
       },
@@ -93,49 +93,56 @@ export const TOUR_DEFINITIONS = {
         target: '#btn-workspace-plan-invite',
         fallbackTarget: '#projectScopeModeSelect',
         moduleBadge: 'Módulo 3 • Equipo',
-        title: '3. Invitaciones y Permisos Granulares',
+        title: '3. Invitaciones y Permisos de Despacho',
         content: 'Invita a tu equipo asignando roles de <strong>Editar</strong> (control total), <strong>Escribir</strong> (captura) o <strong>Leer</strong> (solo consulta). Puedes autorizar o restringir pestañas individualmente.',
         position: 'bottom'
       },
 
-      // VENTANA 2: PESTAÑA 1: PRESUPUESTO Y APU
+      // VENTANA 2: PESTAÑA 1: TABLA DE ALCANCES ARQUITECTÓNICOS
+      {
+        tab: 'alcances',
+        target: '#tab-btn-alcances',
+        fallbackTarget: '#tb1-container',
+        moduleBadge: 'Módulo 4 • Alcances',
+        title: '4. Tabla de Alcances de Proyecto Arquitectónico',
+        content: 'Estructura los entregables ejecutivos del proyecto: <strong>Estudios preliminares, planos arquitectónicos, ingenierías, memorias de cálculo y renders 3D</strong>, asignando responsables.',
+        position: 'bottom'
+      },
+
+      // VENTANA 3: PESTAÑA 2: PRESUPUESTO Y APU
       {
         tab: 'presupuesto',
-        subtab: 'cat',
-        target: '#subtab-btn-cat',
+        target: '#tab-btn-presupuesto',
         fallbackTarget: '#header-project-name',
-        moduleBadge: 'Módulo 4 • Presupuesto',
-        title: '4. Catálogo de Conceptos y Presupuesto Base',
+        moduleBadge: 'Módulo 5 • Presupuesto',
+        title: '5. Catálogo de Conceptos y Presupuesto Base',
         content: 'Estructura partidas y conceptos con renumeración automática (1, 1.1). Edita directamente en celda y usa el atajo <strong>Alt + Flecha Arriba/Abajo</strong> para mover filas.',
         position: 'bottom'
       },
       {
         tab: 'presupuesto',
-        subtab: 'cat',
         target: '#badge-sobrecosto',
         fallbackTarget: '#header-factor-display',
-        moduleBadge: 'Módulo 5 • Matrices',
-        title: '5. Análisis de Precios Unitarios (APU)',
+        moduleBadge: 'Módulo 6 • Matrices',
+        title: '6. Análisis de Precios Unitarios (APU)',
         content: 'Cada concepto cuenta con su matriz APU desglosada en 4 rubros: <strong>Materiales, Mano de Obra con FASAR, Maquinaria y Subcontratos</strong>, calculando el precio de venta final.',
         position: 'right'
       },
       {
         tab: 'presupuesto',
-        subtab: 'cat',
         target: '#toolbar-ai-split-wrapper',
         fallbackTarget: '#btn-toolbar-google-ia',
-        moduleBadge: 'Módulo 6 • IA Gemini',
-        title: '6. Inteligencia Artificial y Google Search Grounding',
+        moduleBadge: 'Módulo 7 • IA Gemini',
+        title: '7. Inteligencia Artificial y Google Search Grounding',
         content: 'Consulta precios vigentes de mercado en tiempo real o describe un trabajo en lenguaje común para que la IA formule la matriz APU con cuadrillas y rendimientos.',
         position: 'bottom'
       },
       {
         tab: 'presupuesto',
-        subtab: 'cat',
         target: '#btn-sidebar-master-catalog',
         fallbackTarget: '#workspace-sidebar',
-        moduleBadge: 'Módulo 7 • Referencia',
-        title: '7. Catálogos Maestros y de Referencia',
+        moduleBadge: 'Módulo 8 • Referencia',
+        title: '8. Catálogos Maestros y Tabuladores de Referencia',
         content: 'Explora miles de conceptos precargados y Tabuladores oficiales con matrices APU completas listas para insertar en tu presupuesto.',
         position: 'right'
       },
@@ -144,91 +151,88 @@ export const TOUR_DEFINITIONS = {
         subtab: 'insumos',
         target: '#subtab-btn-insumos',
         fallbackTarget: '#view-insumos',
-        moduleBadge: 'Módulo 8 • Insumos',
-        title: '8. Explosión y Consolidado de Insumos',
-        content: 'Visualiza la suma global de todos los materiales, cuadrillas y maquinaria de la obra. Al modificar el precio de un insumo aquí, todas las matrices del presupuesto se actualizan en cascada.',
+        moduleBadge: 'Módulo 9 • Insumos',
+        title: '9. Explosión y Consolidado de Insumos',
+        content: 'Visualiza la suma global de todos los materiales, cuadrillas y maquinaria. Al modificar el precio de un insumo aquí, todas las matrices del presupuesto se actualizan en cascada.',
         position: 'bottom'
       },
       {
         tab: 'presupuesto',
-        subtab: 'cat',
-        target: '#btn-print-presupuesto',
-        fallbackTarget: '#btn-export-excel',
-        moduleBadge: 'Módulo 9 • Reportes',
-        title: '9. Reportes e Impresión Oficial en PDF',
-        content: 'Configura las firmas responsables (Elaboró, Revisó, Autorizó) y descarga el <strong>Presupuesto Base, Matrices APU o Explosión de Insumos</strong> en formato PDF vectorial o Excel.',
+        target: '#btn-open-catalog-print-modal',
+        fallbackTarget: '#btn-print-presupuesto',
+        moduleBadge: 'Módulo 10 • Reportes',
+        title: '10. Reportes e Impresión Oficial en PDF',
+        content: 'Configura las firmas responsables (Elaboró, Revisó, Autorizó) y descarga la <strong>Tabla de Alcances, Presupuesto Base, Matrices APU o Insumos</strong> en formato PDF vectorial.',
         position: 'bottom'
       },
 
-      // VENTANA 3: PESTAÑA 2: CALENDARIO DE OBRA Y GANTT
+      // VENTANA 4: PESTAÑA 3: CALENDARIO DE OBRA Y GANTT
       {
         tab: 'calendario',
         target: '#tab-btn-calendario',
         fallbackTarget: '#view-calendario',
-        moduleBadge: 'Módulo 10 • Tiempos',
-        title: '10. Calendario de Obra y Diagrama de Gantt',
+        moduleBadge: 'Módulo 11 • Tiempos',
+        title: '11. Calendario de Obra y Diagrama de Gantt',
         content: 'Cronograma visual ligado al presupuesto: ajusta duraciones, activa la <strong>Ruta Crítica</strong> para vigilar tareas clave y consulta el calendario financiero de cobros.',
         position: 'bottom'
       },
 
-      // VENTANA 4: PESTAÑA 3: ESTIMACIONES Y COBRO
+      // VENTANA 5: PESTAÑA 4: ESTIMACIONES Y COBRO
       {
         tab: 'estimaciones',
         target: '#tab-btn-estimaciones',
         fallbackTarget: '#view-estimaciones',
-        moduleBadge: 'Módulo 11 • Cobros',
-        title: '11. Estimaciones y Números Generadores',
-        content: 'Genera cortes periódicos de cobro, captura volúmenes ejecutados, aplica amortización de anticipos y descarga la carátula oficial de estimación en PDF.',
+        moduleBadge: 'Módulo 12 • Cobros',
+        title: '12. Estimaciones y Números Generadores',
+        content: 'Genera cortes periódicos de cobro de honorarios o avance de obra, captura volúmenes ejecutados, aplica amortización de anticipos y descarga la carátula oficial de estimación en PDF.',
         position: 'bottom'
       },
 
-      // VENTANA 5: PESTAÑA 4: COMPRAS Y ERP
+      // VENTANA 6: PESTAÑA 5: SEGUIMIENTO, COMPRAS Y ERP
       {
-        tab: 'compras',
-        target: '#tab-btn-compras',
-        fallbackTarget: '#view-compras',
-        moduleBadge: 'Módulo 12 • Egresos',
-        title: '12. Compras, Gastos y ERP Financiero',
+        tab: 'seguimiento',
+        target: '#tab-btn-seguimiento',
+        fallbackTarget: '#view-seguimiento',
+        moduleBadge: 'Módulo 13 • Egresos',
+        title: '13. Seguimiento Financiero, Compras y ERP',
         content: 'Dashboard con Presupuesto vs Gasto Real en vivo, registro de facturas con PDF, órdenes de compra oficiales con folio y semáforos de alerta de sobrecosto.',
         position: 'bottom'
       },
 
-      // VENTANA 6: PESTAÑA 5: BITÁCORA DE OBRA
+      // VENTANA 7: BITÁCORA Y COMUNICACIÓN
       {
-        tab: 'bitacora',
-        target: '#tab-btn-bitacora',
-        fallbackTarget: '#view-bitacora',
-        moduleBadge: 'Módulo 13 • Bitácora',
-        title: '13. Bitácora Electrónica y Legal (LOPSRM / BESOP)',
-        content: 'Folios inalterables (#001, #002), registro de clima, firmas táctiles manuscritas y <strong>sellado criptográfico SHA</strong> para compilar el Libro Completo de Bitácora en PDF.',
-        position: 'bottom'
-      },
-
-      // VENTANA 7: HERRAMIENTAS GLOBALES Y SEGURIDAD
-      {
-        tab: 'presupuesto',
+        tab: 'alcances',
         target: '#btn-sidebar-project-chat',
         fallbackTarget: '#sidebar-chat-icon',
-        moduleBadge: 'Módulo 14 • Comunicación',
-        title: '14. Chat del Proyecto y Bitácora Contextual',
+        moduleBadge: 'Módulo 14 • Bitácora',
+        title: '14. Bitácora Electrónica y Legal de Proyecto',
+        content: 'Folios inalterables (#001, #002), registro de clima, firmas táctiles manuscritas y <strong>sellado criptográfico SHA</strong> para compilar el Libro Completo de Bitácora en PDF.',
+        position: 'right'
+      },
+      {
+        tab: 'alcances',
+        target: '#sidebar-project-chat-wrapper',
+        fallbackTarget: '#btn-sidebar-project-chat',
+        moduleBadge: 'Módulo 15 • Comunicación',
+        title: '15. Chat del Proyecto y Canales Técnicos',
         content: 'Comunícate con tu equipo en canales separados: <strong>Sección Técnica</strong> y <strong>Sección Financiera</strong>. Puedes mencionar a compañeros (@) y ligar notas a partidas de obra.',
         position: 'right'
       },
       {
-        tab: 'presupuesto',
+        tab: 'alcances',
         target: '#btn-sidebar-import-modal',
         fallbackTarget: '#workspace-sidebar',
-        moduleBadge: 'Módulo 15 • Importar/Exportar',
-        title: '15. Importación Universal (Excel, Opus, Neodata)',
+        moduleBadge: 'Módulo 16 • Importación',
+        title: '16. Importación Universal (Excel, Opus, Neodata)',
         content: 'Carga archivos de Excel (.xlsx, .xls), CSV o respaldos de Opus y Neodata con mapeo automático de columnas y procesamiento 100% offline.',
         position: 'right'
       },
       {
-        tab: 'presupuesto',
-        target: '#btn-lock-cat',
-        fallbackTarget: '#workspace-user-btn',
-        moduleBadge: 'Módulo 16 • Seguridad',
-        title: '16. Seguridad, Tab Lock y Respaldos',
+        tab: 'alcances',
+        target: '#btn-lock-alcances',
+        fallbackTarget: '#btn-theme-toggle',
+        moduleBadge: 'Módulo 17 • Seguridad',
+        title: '17. Seguridad, Candado Tab Lock y Respaldos',
         content: 'Protege tu obra con el candado <strong>Tab Lock</strong> para impedir cambios involuntarios, descarga respaldos locales .JSON y personaliza tu perfil profesional.',
         position: 'bottom'
       }
