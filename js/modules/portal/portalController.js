@@ -77,6 +77,7 @@ import {
   resolveUserRoleLabel
 } from '../../core/authService.js?v=20261114_08';
 import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261114_08';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261115_05';
 import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 import {
   isUserAdmin,
@@ -3010,6 +3011,7 @@ export function updatePortalHeaderUserArea(user) {
     if (appSwitcherMount) {
       appSwitcherMount.classList.add('hidden');
       appSwitcherMount.classList.remove('flex');
+      appSwitcherMount.style.display = 'none';
     }
     if (notifWrapper) {
       notifWrapper.classList.add('hidden');
@@ -3033,6 +3035,10 @@ export function updatePortalHeaderUserArea(user) {
   if (appSwitcherMount) {
     appSwitcherMount.classList.remove('hidden');
     appSwitcherMount.classList.add('flex');
+    appSwitcherMount.style.display = '';
+    try {
+      initAppSwitcher('cubikar-app-switcher-mount', 'arq', user);
+    } catch (_) {}
   }
 
   if (notifWrapper) {

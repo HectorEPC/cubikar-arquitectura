@@ -74,7 +74,7 @@ import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './
 import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
 import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261114_11';
 import { getCurrentUser } from './modules/portal/projectService.js';
-import { initAppSwitcher } from './ui/appSwitcher.js?v=20261114_09';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_05';
 
 import {
   findNodeById,
@@ -473,7 +473,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261114_12';
+} from './modules/portal/portalController.js?v=20261115_05';
 
 import {
   openCubikarAdminModal,

@@ -1,13 +1,18 @@
 // js/ui/appSwitcher.js
 // Selector Unificado de Aplicaciones del Ecosistema Cubikar (Estilo Google Workspace Waffle 9-puntos)
 
-import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261114_07';
+import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261115_05';
+import { getCurrentUser } from '../modules/portal/projectService.js';
 
-export function initAppSwitcher(containerId = 'cubikar-app-switcher-mount', currentApp = 'portal') {
+export function initAppSwitcher(containerId = 'cubikar-app-switcher-mount', currentApp = 'portal', activeUser = null) {
   const mount = document.getElementById(containerId);
   if (!mount) return;
 
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' ||
+    window.location.protocol === 'file:'
+  );
 
   // URLs de destino según entorno
   const urls = {
@@ -141,10 +146,25 @@ export function initAppSwitcher(containerId = 'cubikar-app-switcher-mount', curr
       });
     });
 
-    document.addEventListener('click', (e) => {
-      if (!menu.contains(e.target) && !btn.contains(e.target)) {
-        menu.classList.add('hidden');
-      }
-    });
+    if (!window._cubikarAppSwitcherDocListenerAttached) {
+      window._cubikarAppSwitcherDocListenerAttached = true;
+      document.addEventListener('click', (e) => {
+        const curMenu = document.getElementById('cubikar-app-switcher-menu');
+        const curBtn = document.getElementById('cubikar-app-switcher-btn');
+        if (curMenu && curBtn && !curMenu.contains(e.target) && !curBtn.contains(e.target)) {
+          curMenu.classList.add('hidden');
+        }
+      });
+    }
   }
+
+  // Si se detecta un usuario activo, garantizar que el mount sea visible
+  try {
+    const user = activeUser || getCurrentUser();
+    if (user) {
+      mount.classList.remove('hidden');
+      mount.classList.add('flex');
+      mount.style.display = '';
+    }
+  } catch (_) {}
 }
