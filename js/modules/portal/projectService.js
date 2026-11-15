@@ -2265,6 +2265,26 @@ export function getUserRoleInProject(projectId, user = null) {
   return null;
 }
 
+// Determinar si el usuario actual tiene permisos de edición (escritura/eliminación) en el proyecto
+export function canCurrentUserEditProject(projectId = null, user = null) {
+  const u = user || getCurrentUser();
+  if (!u || !u.email) return true; // Operación local segura por defecto
+
+  const uEmail = (u.email || '').toLowerCase().trim();
+  if (u.role === 'Admin General' || uEmail === 'admin.general@constructora.com' || uEmail === 'admin.general@arquitectura.com') {
+    return true;
+  }
+
+  const pId = projectId || (typeof getActiveProjectId === 'function' ? getActiveProjectId() : null);
+  if (!pId) return true;
+
+  const role = getUserRoleInProject(pId, u);
+  if (!role || role === 'owner') return true;
+  if (role === 'editar' || role === 'escribir') return true;
+  if (role === 'leer') return false;
+  return true;
+}
+
 // ==========================================
 // GESTIÓN DE INVITACIONES AL PLAN DE SUSCRIPCIÓN
 // ==========================================
@@ -2572,7 +2592,7 @@ export function updatePlanCollaboratorRole(collaboratorEmail, newRole, user = nu
 // ==========================================
 // UTILIDADES DE CÁLCULO PARA EL RESUMEN
 // ==========================================
-function calculateTreeTotal(nodes) {
+export function calculateTreeTotal(nodes) {
   if (!Array.isArray(nodes)) return 0;
   return nodes.reduce((sum, n) => sum + calculateNodeTotal(n), 0);
 }
@@ -2591,7 +2611,7 @@ function calculateNodeTotal(node) {
   return node.children.reduce((acc, c) => acc + calculateNodeTotal(c), 0);
 }
 
-function countTreeConcepts(nodes) {
+export function countTreeConcepts(nodes) {
   if (!Array.isArray(nodes)) return 0;
   let count = 0;
   function traverse(list) {
@@ -2604,7 +2624,7 @@ function countTreeConcepts(nodes) {
   return count;
 }
 
-function countTreePartidas(nodes) {
+export function countTreePartidas(nodes) {
   if (!Array.isArray(nodes)) return 0;
   let count = 0;
   function traverse(list) {

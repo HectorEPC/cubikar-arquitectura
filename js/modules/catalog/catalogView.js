@@ -6,6 +6,7 @@ import { findNodeById } from './treeService.js';
 import { APU_WIDTH_KEY } from '../../config/constants.js';
 import { clampApuWidth } from '../../ui/resizer.js';
 import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
 import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js';
 import { switchSidePanelTab } from '../proveedores/proveedoresView.js';
 import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js';
@@ -154,7 +155,7 @@ export function renderTAB1() {
   const tbody = document.getElementById('tb1-body');
   if (!tbody) return;
 
-  const isCatLocked = isTabLocked('cat');
+  const isCatLocked = isTabLocked('cat') || !canCurrentUserEditProject();
   applyTabLocksToDOM();
 
   const apuPanelEl = document.getElementById('apu-panel');
