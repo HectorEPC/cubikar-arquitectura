@@ -253,14 +253,14 @@ import {
   launchTourFromHub,
   launchVideoFromHub,
   resetTourPreferencesFromHub
-} from './ui/tutorialHubModal.js?v=20261114_09';
+} from './ui/tutorialHubModal.js?v=20261115_cubikar_arq_v4';
 
 import {
   startInteractiveTour,
   skipInteractiveTour,
   closeInteractiveTour,
   checkAndResumeTourOnLoad
-} from './ui/interactiveTour.js?v=20261114_09';
+} from './ui/interactiveTour.js?v=20261115_cubikar_arq_v4';
 
 import {
   openVideoSimulatorModal,
@@ -1340,6 +1340,16 @@ if (typeof document !== 'undefined') {
     initGlobalRealtimeSync();
     requestPeerSync();
   } catch (e) {}
+
+  try {
+    const urlTab = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab');
+    if (urlTab && typeof switchTab === 'function') {
+      switchTab(urlTab);
+      setTimeout(() => switchTab(urlTab), 100);
+      setTimeout(() => switchTab(urlTab), 350);
+      setTimeout(() => switchTab(urlTab), 800);
+    }
+  } catch (_) {}
 }
 
 window.handleAcceptInvitationAction = handleAcceptInvitationAction;
@@ -1417,3 +1427,12 @@ setProjectChatRefreshCallback(() => {
     renderEstimacionesView();
   }
 });
+
+// Auto-activación inmediata de pestaña por parámetro de URL (ej. ?tab=seguimiento)
+try {
+  const pUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const reqTab = pUrl ? pUrl.get('tab') : null;
+  if (reqTab && typeof switchTab === 'function') {
+    switchTab(reqTab);
+  }
+} catch (_) {}

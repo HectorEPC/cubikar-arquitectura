@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Sembrar datos de Seguimiento Operativo</title>
+</head>
+<body style="font-family: sans-serif; padding: 20px; background: #0f172a; color: #f8fafc;">
+  <h2>Sembrando datos de Seguimiento Operativo...</h2>
+  <div id="status">Procesando...</div>
+
+  <script type="module">
+    import { defaultTreeData, defaultSettings } from './js/config/defaultData.js';
+
+    try {
+      // 1. Sesión y Autenticación
+      localStorage.setItem('cubikar_auth_session_version', 'v2_global_revoke_20261113');
+      localStorage.setItem('cubikar_remember_device', 'true');
+      localStorage.setItem('adm_const_theme_mode', 'day');
+      localStorage.setItem('adm_const_subscription', JSON.stringify({
+        plan: 'pro',
+        billingCycle: 'annual',
+        active: true
+      }));
+
+      const currentUser = {
+        id: 'user-alejandro-ruiz',
+        name: 'Alejandro Ruiz',
+        email: 'alejandro.ruiz@tallerarq.com',
+        role: 'Admin General',
+        avatar: '',
+        sexo: 'Masculino'
+      };
+      localStorage.setItem('control_obra_user_profile_v1', JSON.stringify(currentUser));
+      sessionStorage.setItem('control_obra_user_profile_v1', JSON.stringify(currentUser));
+
+      const projId = 'proj-default-01';
+      localStorage.setItem('control_obra_active_workspace_v1', projId);
+
+      // 2. Colaboradores con fotos reales de Unsplash y roles
+      const projectMembers = [
+        {
+          id: 'mem-alejandro',
+          name: 'Arq. Alejandro Ruiz',
+          email: 'alejandro.ruiz@tallerarq.com',
+          avatar: '',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-carlos',
+          name: 'Arq. Carlos Alberto Gómez',
+          email: 'carlos.gomez.arq@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-sofia',
+          name: 'Lic. Sofía Valenzuela Rios',
+          email: 'sofia.valenzuela.admin@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-roberto',
+          name: 'Arq. Roberto Méndez Silva',
+          email: 'roberto.mendez.obras@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-mariana',
+          name: 'Ing. Mariana Torres Morales',
+          email: 'mariana.torres.costos@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        }
+      ];
+
+      // 3. Configuración del Proyecto
+      const settingsData = Object.assign({}, defaultSettings, {
+        companyName: 'TALLER ARQUITECTURA',
+        companyLogo: '',
+        projectName: 'Proyecto Arquitectónico Residencia',
+        projectLocation: 'Valle de Bravo, Edo. Méx.',
+        currency: 'MXN',
+        currencySymbol: '$',
+        applySobrecosto: true,
+        pctIndirectos: 12.00,
+        pctFinanciamiento: 1.50,
+        pctUtilidad: 10.00,
+        pctAdicionales: 0.50,
+        createdAt: '2026-10-15'
+      });
+
+      localStorage.setItem('control_obra_settings_v4', JSON.stringify(settingsData));
+      localStorage.setItem(`control_obra_settings_${projId}`, JSON.stringify(settingsData));
+
+      // 4. Lista de Proyectos en el Portal
+      const projectsList = [
+        {
+          id: projId,
+          companyName: 'TALLER ARQUITECTURA',
+          projectName: 'Proyecto Arquitectónico Residencia',
+          projectLocation: 'Valle de Bravo, Edo. Méx.',
+          tipoObra: 'Vivienda',
+          currency: 'MXN',
+          currencySymbol: '$',
+          members: projectMembers,
+          createdAt: '2026-10-15'
+        }
+      ];
+      localStorage.setItem('control_obra_projects_list_v1', JSON.stringify(projectsList));
+
+      // 5. Preparar Árbol de Entregables
+      const tree = JSON.parse(JSON.stringify(defaultTreeData));
+
+      // Función recursiva para buscar y actualizar nodos
+      function updateNode(nodes, id, data) {
+        for (const n of nodes) {
+          if (n.id === id || String(n.clave) === String(id)) {
+            Object.assign(n, data);
+            return true;
+          }
+          if (Array.isArray(n.children) && n.children.length > 0) {
+            if (updateNode(n.children, id, data)) return true;
+          }
+        }
+        return false;
+      }
+
+      // 1.1 Diseño conceptual
+      updateNode(tree, '1.1.2', {
+        descripcion: 'Análisis del sitio y topografía',
+        responsableEmails: ['carlos.gomez.arq@gmail.com'],
+        estatus: 'aprobado',
+        avancePorcentaje: 100,
+        archivoLink: 'https://drive.google.com/file/d/analisis-sitio-topografia.pdf',
+        costoSubcontrato: 14500,
+        horasHombre: 28
+      });
+
+      updateNode(tree, '1.1.3', {
+        descripcion: 'Normatividad urbana y uso de suelo',
+        responsableEmails: ['sofia.valenzuela.admin@gmail.com'],
+        estatus: 'aprobado',
+        avancePorcentaje: 100,
+        archivoLink: 'https://sedatu.gob.mx/normativa-desarrollo-urbano.pdf',
+        costoSubcontrato: 9500,
+        horasHombre: 18
+      });
+
+      updateNode(tree, '1.1.4', {
+        descripcion: 'Programa arquitectónico y requerimientos',
+        responsableEmails: ['carlos.gomez.arq@gmail.com', 'sofia.valenzuela.admin@gmail.com'],
+        estatus: 'en_revision',
+        avancePorcentaje: 85,
+        archivoLink: 'https://drive.google.com/file/d/programa-areas-requerimientos.xlsx',
+        costoSubcontrato: 16000,
+        horasHombre: 34
+      });
+
+      updateNode(tree, '1.1.5', {
+        descripcion: 'Bocetos y esquemas funcionales',
+        responsableEmails: ['roberto.mendez.obras@gmail.com'],
+        estatus: 'en_proceso',
+        avancePorcentaje: 60,
+        archivoLink: 'https://figma.com/design/bocetos-conceptuales-residencia',
+        costoSubcontrato: 18000,
+        horasHombre: 42
+      });
+
+      // 1.2 Ante proyecto
+      updateNode(tree, '1.2.1', {
+        descripcion: 'Plantas arquitectónicas preliminares',
+        responsableEmails: ['carlos.gomez.arq@gmail.com'],
+        estatus: 'en_proceso',
+        avancePorcentaje: 75,
+        archivoLink: 'https://autodesk360.com/shares/plantas-preliminares.dwg',
+        costoSubcontrato: 26000,
+        horasHombre: 50
+      });
+
+      updateNode(tree, '1.2.2', {
+        descripcion: 'Maqueta volumétrica 3D y asoleamiento',
+        responsableEmails: ['mariana.torres.costos@gmail.com'],
+        estatus: 'en_revision',
+        avancePorcentaje: 50,
+        archivoLink: 'https://sketchup.com/viewer/maqueta-volumetrica-3d',
+        costoSubcontrato: 17500,
+        horasHombre: 38
+      });
+
+      updateNode(tree, '1.2.3', {
+        descripcion: 'Renders exteriores fotorrealistas',
+        responsableEmails: ['roberto.mendez.obras@gmail.com'],
+        estatus: 'detenido',
+        avancePorcentaje: 30,
+        archivoLink: 'https://drive.google.com/drive/folders/renders-fotorrealistas',
+        costoSubcontrato: 15000,
+        horasHombre: 32
+      });
+
+      // 1.3 Proyecto Ejecutivo Arquitectonico
+      updateNode(tree, '1.3.1', {
+        descripcion: 'Plantas arquitectónicas definitivas',
+        responsableEmails: ['carlos.gomez.arq@gmail.com'],
+        estatus: 'en_proceso',
+        avancePorcentaje: 40,
+        archivoLink: 'https://autodesk360.com/shares/plantas-definitivas.dwg',
+        costoSubcontrato: 30000,
+        horasHombre: 60
+      });
+
+      updateNode(tree, '1.3.2', {
+        descripcion: 'Fachadas arquitectónicas acotadas',
+        responsableEmails: ['roberto.mendez.obras@gmail.com'],
+        estatus: 'en_proceso',
+        avancePorcentaje: 35,
+        archivoLink: 'https://autodesk360.com/shares/fachadas-cortes.dwg',
+        costoSubcontrato: 22000,
+        horasHombre: 45
+      });
+
+      updateNode(tree, '1.3.3', {
+        descripcion: 'Cortes generales y constructivos',
+        responsableEmails: ['mariana.torres.costos@gmail.com'],
+        estatus: 'pendiente',
+        avancePorcentaje: 15,
+        archivoLink: '',
+        costoSubcontrato: 19000,
+        horasHombre: 40
+      });
+
+      // Distribuir avances realistas en otros conceptos para que los KPIs reflejen actividad viva
+      let leafIndex = 0;
+      function seedRestOfTree(nodes) {
+        nodes.forEach(n => {
+          if (Array.isArray(n.children) && n.children.length > 0) {
+            seedRestOfTree(n.children);
+          } else {
+            // Si ya fue asignado en 1.1 o 1.2 o 1.3, saltar
+            if (n.responsableEmails && n.responsableEmails.length > 0) return;
+            leafIndex++;
+            if (leafIndex % 5 === 0) {
+              n.estatus = 'aprobado';
+              n.avancePorcentaje = 100;
+              n.responsableEmails = ['carlos.gomez.arq@gmail.com'];
+              n.costoSubcontrato = 12000;
+              n.horasHombre = 25;
+            } else if (leafIndex % 5 === 1) {
+              n.estatus = 'en_revision';
+              n.avancePorcentaje = 80;
+              n.responsableEmails = ['sofia.valenzuela.admin@gmail.com'];
+              n.costoSubcontrato = 10000;
+              n.horasHombre = 20;
+            } else if (leafIndex % 5 === 2) {
+              n.estatus = 'en_proceso';
+              n.avancePorcentaje = 55;
+              n.responsableEmails = ['roberto.mendez.obras@gmail.com'];
+              n.costoSubcontrato = 15000;
+              n.horasHombre = 30;
+            } else if (leafIndex % 5 === 3) {
+              n.estatus = 'pendiente';
+              n.avancePorcentaje = 0;
+              n.responsableEmails = ['mariana.torres.costos@gmail.com'];
+              n.costoSubcontrato = 8000;
+              n.horasHombre = 15;
+            } else {
+              n.estatus = 'pendiente';
+              n.avancePorcentaje = 0;
+            }
+          }
+        });
+      }
+      seedRestOfTree(tree);
+
+      localStorage.setItem('control_obra_treeData_v4', JSON.stringify(tree));
+      localStorage.setItem(`control_obra_treeData_${projId}`, JSON.stringify(tree));
+
+      document.getElementById('status').innerHTML = '<span style="color:#22c55e; font-weight:bold;">¡ÉXITO! Datos de seguimiento guardados correctamente en localStorage.</span>';
+      console.log('Seed exitoso');
+    } catch (err) {
+      document.getElementById('status').innerHTML = '<span style="color:#ef4444; font-weight:bold;">Error: ' + err.message + '</span>';
+      console.error(err);
+    }
+  </script>
+</body>
+</html>

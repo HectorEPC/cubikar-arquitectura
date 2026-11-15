@@ -27,8 +27,8 @@ export const AVATARS_BY_SEX = {
 // Cuentas de demostración de Google con foto real
 export const GOOGLE_PRESET_ACCOUNTS = [
   {
-    name: "Hepc 90",
-    email: "admin.general@constructora.com",
+    name: "Arq. Alejandro Ruiz",
+    email: "alejandro.ruiz@tallerarq.com",
     avatar: "",
     sexo: "Masculino",
     dob: "1990-01-01"
