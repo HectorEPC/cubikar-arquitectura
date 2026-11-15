@@ -10,6 +10,7 @@ export const STORAGE_KEY_SUBSCRIPTION = 'adm_const_subscription';
 export const STORAGE_KEY_WORKSPACE_INVITES = 'control_obra_workspace_invites_v1';
 export const STORAGE_KEY_INVITATIONS = 'control_obra_invitations_v1';
 export const STORAGE_KEY_PLAN_INVITATIONS = 'control_obra_plan_invitations_v1';
+export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 
 let activeProjectId = null;
 
