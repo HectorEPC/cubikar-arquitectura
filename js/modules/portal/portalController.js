@@ -32,6 +32,7 @@ import {
   rejectProjectInvitation,
   getPendingInvitationsForUser,
   getWorkspaceInviters,
+  resolveCleanHostName,
   getPlanLimits,
   getUserPlanId,
   canUserInviteToPlan,
@@ -221,7 +222,7 @@ function showWorkspaceView(user, project) {
   }
   if (project && project.ownerEmail) {
     const hostEmail = (project.ownerEmail || '').toLowerCase().trim();
-    const hostName = project.companyName || hostEmail;
+    const hostName = resolveCleanHostName(hostEmail, project.ownerName, project);
     setActiveWorkspaceData(hostEmail, hostName);
   }
   updateWorkspaceHeaderUser(user);

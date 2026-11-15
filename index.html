@@ -4437,7 +4437,7 @@
           var opt = sel.options[i];
           var val = (opt.value || '').toLowerCase();
           var txt = (opt.textContent || '').toLowerCase();
-          if (val === 'all' || txt.includes('todos los proyectos') || txt.includes('sistema de control de obra') || txt.includes('sistema de arquitectura')) {
+          if (val === 'all' || txt.includes('todos los proyectos') || txt.includes('sistema de control de obra') || txt.includes('sistema de arquitectura') || txt === 'dsad' || txt === 'asdasd') {
             sel.remove(i);
           }
         }
@@ -4450,6 +4450,6 @@
       setInterval(purgeInvalidScopeOptions, 300);
     })();
   </script>
-  <script type="module" src="js/app.js?v=20261115_cubikar_arq_v15"></script>
+  <script type="module" src="js/app.js?v=20261115_cubikar_arq_v16"></script>
 </body>
 </html>
