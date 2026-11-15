@@ -5,7 +5,7 @@ import {
   setActiveProjectId,
   getActiveProjectId,
   getSettingsKey
-} from '../../config/constants.js?v=20261115_cubikar_arq_v14';
+} from '../../config/constants.js?v=20261115_cubikar_arq_v16';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -58,7 +58,7 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261115_cubikar_arq_v14';
+} from './projectService.js?v=20261115_cubikar_arq_v16';
 import { showToast } from '../../ui/notifications.js';
 import { persistLocalData, state, initStore } from '../../state/store.js';
 import { renderBrandingUI } from '../../ui/brandingController.js';
