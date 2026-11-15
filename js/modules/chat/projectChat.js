@@ -23,6 +23,7 @@ import { showToast } from '../../ui/notifications.js';
 import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js';
 import { openSubscriptionModal } from '../portal/subscriptionModal.js';
 import { openPrintWindow } from '../io/printService.js';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js';
 
 export const CHAT_DIVISIONS = [
   {
@@ -2607,7 +2608,7 @@ export function sendProjectChatMessage() {
   }, 0);
   const nextFolioNumber = maxFolio + 1;
 
-  messages.push({
+  const newMsg = {
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     folioNumber: nextFolioNumber,
     folio: formatBitacoraFolio(nextFolioNumber),
@@ -2618,6 +2619,8 @@ export function sendProjectChatMessage() {
     authorHandle: authorObj.handle,
     authorRole: authorObj.roleLabel,
     authorInitials: authorObj.initials,
+    authorEmail: currentUser?.email || '',
+    authorAvatar: authorObj.avatar || '',
     time: `${dateStr} • ${timeStr}`,
     partidaId: pendingComposerTags.partidaId || activePartidaFilterId || null,
     mentions: mergedMentions,
@@ -2625,9 +2628,11 @@ export function sendProjectChatMessage() {
     reportes: [...pendingComposerTags.reportes],
     readBy: [],
     text
-  });
+  };
+  messages.push(newMsg);
 
   saveProjectChatMessages(messages);
+  broadcastChatMessage(getActiveProjectId(), newMsg);
   inp.value = '';
   pendingComposerEntryType = 'nota';
   pendingComposerTags = {
@@ -2652,6 +2657,7 @@ export function deleteProjectChatMessage(msgId) {
   const messages = loadProjectChatMessages();
   const next = messages.filter(m => m.id !== msgId);
   saveProjectChatMessages(next);
+  broadcastChatDelete(getActiveProjectId(), msgId);
   if (moveMenuMessageId === msgId) moveMenuMessageId = null;
   renderProjectChatDock();
   triggerExternalChatRefresh();
