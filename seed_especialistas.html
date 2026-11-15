@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Sembrar datos de Pagos a Especialistas</title>
+</head>
+<body style="font-family: sans-serif; padding: 20px; background: #0f172a; color: #f8fafc;">
+  <h2>Sembrando datos de Pagos a Especialistas...</h2>
+  <div id="status">Procesando...</div>
+
+  <script type="module">
+    import { defaultTreeData, defaultSettings } from './js/config/defaultData.js';
+
+    try {
+      // 1. Sesión y Autenticación
+      localStorage.setItem('cubikar_auth_session_version', 'v2_global_revoke_20261113');
+      localStorage.setItem('cubikar_remember_device', 'true');
+      localStorage.setItem('adm_const_theme_mode', 'day');
+      localStorage.setItem('adm_const_subscription', JSON.stringify({
+        plan: 'pro',
+        billingCycle: 'annual',
+        active: true
+      }));
+
+      const currentUser = {
+        id: 'user-alejandro-ruiz',
+        name: 'Alejandro Ruiz',
+        email: 'alejandro.ruiz@tallerarq.com',
+        role: 'Admin General',
+        avatar: '',
+        sexo: 'Masculino'
+      };
+      localStorage.setItem('control_obra_user_profile_v1', JSON.stringify(currentUser));
+      sessionStorage.setItem('control_obra_user_profile_v1', JSON.stringify(currentUser));
+
+      const projId = 'proj-default-01';
+      localStorage.setItem('control_obra_active_workspace_v1', projId);
+
+      // 2. Colaboradores
+      const projectMembers = [
+        {
+          id: 'mem-alejandro',
+          name: 'Arq. Alejandro Ruiz',
+          email: 'alejandro.ruiz@tallerarq.com',
+          avatar: '',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-carlos',
+          name: 'Arq. Carlos Alberto Gómez',
+          email: 'carlos.gomez.arq@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-sofia',
+          name: 'Lic. Sofía Valenzuela Rios',
+          email: 'sofia.valenzuela.admin@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-roberto',
+          name: 'Arq. Roberto Méndez Silva',
+          email: 'roberto.mendez.obras@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        },
+        {
+          id: 'mem-mariana',
+          name: 'Ing. Mariana Torres Morales',
+          email: 'mariana.torres.costos@gmail.com',
+          avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
+          role: 'editar',
+          status: 'active',
+          allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
+        }
+      ];
+
+      // 3. Configuración del Proyecto
+      const settingsData = Object.assign({}, defaultSettings, {
+        companyName: 'TALLER ARQUITECTURA',
+        companyLogo: '',
+        projectName: 'Proyecto Arquitectónico Residencia',
+        projectLocation: 'Valle de Bravo, Edo. Méx.',
+        currency: 'MXN',
+        currencySymbol: '$',
+        applySobrecosto: true,
+        pctIndirectos: 12.00,
+        pctFinanciamiento: 1.50,
+        pctUtilidad: 10.00,
+        pctAdicionales: 0.50,
+        createdAt: '2026-10-15'
+      });
+
+      localStorage.setItem('control_obra_settings_v4', JSON.stringify(settingsData));
+      localStorage.setItem(`control_obra_settings_${projId}`, JSON.stringify(settingsData));
+
+      // 4. Lista de Proyectos en el Portal
+      const projectsList = [
+        {
+          id: projId,
+          companyName: 'TALLER ARQUITECTURA',
+          projectName: 'Proyecto Arquitectónico Residencia',
+          projectLocation: 'Valle de Bravo, Edo. Méx.',
+          tipoObra: 'Vivienda',
+          currency: 'MXN',
+          currencySymbol: '$',
+          members: projectMembers,
+          createdAt: '2026-10-15'
+        }
+      ];
+      localStorage.setItem('control_obra_projects_list_v1', JSON.stringify(projectsList));
+
+      // 5. Preparar Cotizaciones y Contratos de Especialistas en el Árbol
+      const tree = JSON.parse(JSON.stringify(defaultTreeData));
+
+      function updateNode(nodes, id, data) {
+        for (const n of nodes) {
+          if (n.id === id || String(n.clave) === String(id)) {
+            Object.assign(n, data);
+            return true;
+          }
+          if (Array.isArray(n.children) && n.children.length > 0) {
+            if (updateNode(n.children, id, data)) return true;
+          }
+        }
+        return false;
+      }
+
+      // Cotizaciones para Especialistas (Partida 2 Estudios y Partida 3 Ingenierías)
+      const specialistsDefinitions = [
+        {
+          id: '2.1',
+          descripcion: 'Topografía',
+          proveedor: 'Topografía & Geodesia Integral del Centro',
+          monto: 28500,
+          cotizaciones: [
+            { id: 'cot-top-1', proveedor: 'Topografía & Geodesia Integral del Centro', monto: 28500, isGanador: true, seleccionada: true, fecha: '2026-10-05', contacto: 'Ing. Fernando Castro', telefono: '55 4123 9876' },
+            { id: 'cot-top-2', proveedor: 'Geomática Satelital S.A.', monto: 32000, isGanador: false, seleccionada: false, fecha: '2026-10-06' }
+          ],
+          pagos: [
+            { id: 'pago_top_1', monto: 18000, fecha: '2026-10-12', concepto: 'Anticipo 60% entrega de curvas y poligonal', metodo: 'Transferencia SPEI', referencia: 'SPEI-849201', createdAt: 1728700000000 },
+            { id: 'pago_top_2', monto: 10500, fecha: '2026-10-28', concepto: 'Finiquito entrega de planos en DWG y ortofoto', metodo: 'Transferencia SPEI', referencia: 'SPEI-851940', createdAt: 1730100000000 }
+          ]
+        },
+        {
+          id: '2.2',
+          descripcion: 'Mecánica de suelos',
+          proveedor: 'Laboratorio Geotécnico & Suelos del Valle',
+          monto: 36000,
+          cotizaciones: [
+            { id: 'cot-sue-1', proveedor: 'Laboratorio Geotécnico & Suelos del Valle', monto: 36000, isGanador: true, seleccionada: true, fecha: '2026-10-07' },
+            { id: 'cot-sue-2', proveedor: 'Ingeniería de Cimentaciones SC', monto: 39500, isGanador: false, seleccionada: false, fecha: '2026-10-08' }
+          ],
+          pagos: [
+            { id: 'pago_sue_1', monto: 20000, fecha: '2026-10-15', concepto: 'Anticipo sondeos de pozo a cielo abierto y SPT', metodo: 'Transferencia SPEI', referencia: 'SPEI-849780', createdAt: 1728950000000 },
+            { id: 'pago_sue_2', monto: 16000, fecha: '2026-11-02', concepto: 'Finiquito entrega de memoria de capacidad de carga', metodo: 'Transferencia SPEI', referencia: 'SPEI-853410', createdAt: 1730500000000 }
+          ]
+        },
+        {
+          id: '2.3',
+          descripcion: 'Hidrología',
+          proveedor: 'Consultoría Hidráulica & Drenaje Pluvial',
+          monto: 24000,
+          cotizaciones: [
+            { id: 'cot-hid-1', proveedor: 'Consultoría Hidráulica & Drenaje Pluvial', monto: 24000, isGanador: true, seleccionada: true, fecha: '2026-10-10' },
+            { id: 'cot-hid-2', proveedor: 'Estudios de Cuenca Hidrológica', monto: 26800, isGanador: false, seleccionada: false, fecha: '2026-10-11' }
+          ],
+          pagos: [
+            { id: 'pago_hid_1', monto: 15000, fecha: '2026-10-20', concepto: 'Anticipo análisis de cuenca y gasto pluvial', metodo: 'Transferencia SPEI', referencia: 'SPEI-850412', createdAt: 1729400000000 }
+          ]
+        },
+        {
+          id: '2.4',
+          descripcion: 'Impacto ambiental',
+          proveedor: 'Biosfera & Gestión Ambiental Sustentable',
+          monto: 21500,
+          cotizaciones: [
+            { id: 'cot-amb-1', proveedor: 'Biosfera & Gestión Ambiental Sustentable', monto: 21500, isGanador: true, seleccionada: true, fecha: '2026-10-12' },
+            { id: 'cot-amb-2', proveedor: 'Ecolaboratorio & Impacto Territorial', monto: 24000, isGanador: false, seleccionada: false, fecha: '2026-10-13' }
+          ],
+          pagos: [
+            { id: 'pago_amb_1', monto: 21500, fecha: '2026-10-22', concepto: 'Pago único por Manifiesto de Impacto Ambiental', metodo: 'Transferencia SPEI', referencia: 'SPEI-850980', createdAt: 1729600000000 }
+          ]
+        },
+        {
+          id: '2.5',
+          descripcion: 'Impacto ecológico',
+          proveedor: 'Ecología Territorial & Paisaje SC',
+          monto: 18000,
+          cotizaciones: [
+            { id: 'cot-eco-1', proveedor: 'Ecología Territorial & Paisaje SC', monto: 18000, isGanador: true, seleccionada: true, fecha: '2026-10-15' },
+            { id: 'cot-eco-2', proveedor: 'Consultores Ambientales Metrópoli', monto: 19500, isGanador: false, seleccionada: false, fecha: '2026-10-16' }
+          ],
+          pagos: [
+            { id: 'pago_eco_1', monto: 10000, fecha: '2026-10-25', concepto: 'Anticipo levantamiento de flora y arbolado', metodo: 'Transferencia SPEI', referencia: 'SPEI-851450', createdAt: 1729800000000 }
+          ]
+        },
+        {
+          id: '2.6',
+          descripcion: 'Movilidad',
+          proveedor: 'Ingeniería Vial & Sistemas de Movilidad',
+          monto: 26000,
+          cotizaciones: [
+            { id: 'cot-mov-1', proveedor: 'Ingeniería Vial & Sistemas de Movilidad', monto: 26000, isGanador: true, seleccionada: true, fecha: '2026-10-18' },
+            { id: 'cot-mov-2', proveedor: 'Tránsito Urbano Especializado', monto: 29000, isGanador: false, seleccionada: false, fecha: '2026-10-19' }
+          ],
+          pagos: [
+            { id: 'pago_mov_1', monto: 13000, fecha: '2026-10-28', concepto: 'Anticipo 50% estudio de aforos vehiculares', metodo: 'Transferencia SPEI', referencia: 'SPEI-851990', createdAt: 1730100000000 }
+          ]
+        },
+        {
+          id: '3.1',
+          descripcion: 'Ingeniería Estructural',
+          proveedor: 'Cálculo Estructural & Dinámica Sísmica SC',
+          monto: 95000,
+          cotizaciones: [
+            { id: 'cot-est-1', proveedor: 'Cálculo Estructural & Dinámica Sísmica SC', monto: 95000, isGanador: true, seleccionada: true, fecha: '2026-10-08' },
+            { id: 'cot-est-2', proveedor: 'Ingeniería Estructural Avanzada', monto: 105000, isGanador: false, seleccionada: false, fecha: '2026-10-09' }
+          ],
+          pagos: [
+            { id: 'pago_est_1', monto: 40000, fecha: '2026-10-14', concepto: 'Anticipo modelado estructural en ETABS', metodo: 'Transferencia SPEI', referencia: 'SPEI-849610', createdAt: 1728900000000 },
+            { id: 'pago_est_2', monto: 25000, fecha: '2026-11-04', concepto: 'Avance entrega de planos de cimentación y columnas', metodo: 'Transferencia SPEI', referencia: 'SPEI-853900', createdAt: 1730700000000 }
+          ]
+        },
+        {
+          id: '3.2',
+          descripcion: 'Ingeniería Hidrosanitaria',
+          proveedor: 'Instalaciones Hidráulicas & Sanitarias del Centro',
+          monto: 48000,
+          cotizaciones: [
+            { id: 'cot-hidro-1', proveedor: 'Instalaciones Hidráulicas & Sanitarias del Centro', monto: 48000, isGanador: true, seleccionada: true, fecha: '2026-10-10' },
+            { id: 'cot-hidro-2', proveedor: 'Sistemas Hidrosanitarios Especializados', monto: 52000, isGanador: false, seleccionada: false, fecha: '2026-10-11' }
+          ],
+          pagos: [
+            { id: 'pago_hidro_1', monto: 24000, fecha: '2026-10-18', concepto: 'Anticipo 50% cálculo de pérdidas y memorias', metodo: 'Transferencia SPEI', referencia: 'SPEI-850120', createdAt: 1729250000000 }
+          ]
+        },
+        {
+          id: '3.3',
+          descripcion: 'Instalación Eléctrica',
+          proveedor: 'Proyectos Eléctricos de Fuerza e Iluminación S.A.',
+          monto: 42000,
+          cotizaciones: [
+            { id: 'cot-elec-1', proveedor: 'Proyectos Eléctricos de Fuerza e Iluminación S.A.', monto: 42000, isGanador: true, seleccionada: true, fecha: '2026-10-12' },
+            { id: 'cot-elec-2', proveedor: 'Ingeniería Electromecánica Integral', monto: 46500, isGanador: false, seleccionada: false, fecha: '2026-10-13' }
+          ],
+          pagos: [
+            { id: 'pago_elec_1', monto: 20000, fecha: '2026-10-20', concepto: 'Anticipo cuadros de carga y diagrama unifilar', metodo: 'Transferencia SPEI', referencia: 'SPEI-850490', createdAt: 1729420000000 },
+            { id: 'pago_elec_2', monto: 10000, fecha: '2026-11-06', concepto: 'Avance canalizaciones y alimentadores', metodo: 'Transferencia SPEI', referencia: 'SPEI-854200', createdAt: 1730880000000 }
+          ]
+        }
+      ];
+
+      const specialistsStore = {};
+
+      // Asignar importes y precios a conceptos de diseño y proyecto ejecutivo
+      const architecturalConcepts = [
+        { id: '1.1.2', pu: 45000 },
+        { id: '1.1.3', pu: 32000 },
+        { id: '1.1.4', pu: 55000 },
+        { id: '1.1.5', pu: 65000 },
+        { id: '1.2.1', pu: 120000 },
+        { id: '1.2.2', pu: 85000 },
+        { id: '1.2.3', pu: 45000 },
+        { id: '1.3.1', pu: 140000 },
+        { id: '1.3.2', pu: 95000 },
+        { id: '1.3.3', pu: 75000 }
+      ];
+      architecturalConcepts.forEach(c => {
+        updateNode(tree, c.id, {
+          precioUnitario: c.pu,
+          costoDirecto: c.pu,
+          importe_calculado: c.pu
+        });
+      });
+
+      specialistsDefinitions.forEach(spec => {
+        updateNode(tree, spec.id, {
+          costoSubcontrato: spec.monto,
+          precioUnitario: spec.monto,
+          costoDirecto: spec.monto,
+          importe_calculado: spec.monto,
+          proveedorElegidoNombre: spec.proveedor,
+          cotizaciones: spec.cotizaciones
+        });
+
+        specialistsStore[spec.id] = {
+          proveedorName: spec.proveedor,
+          totalContratadoOverride: spec.monto,
+          notas: `Especialidad contratada con ${spec.proveedor}`,
+          pagos: spec.pagos
+        };
+      });
+
+      localStorage.setItem('control_obra_treeData_v4', JSON.stringify(tree));
+      localStorage.setItem(`control_obra_treeData_${projId}`, JSON.stringify(tree));
+
+      // 6. Preparar Datos de Estimaciones (Cobranza y Especialistas)
+      const estimacionesData = {
+        activeSubView: 'especialistas', // Inicia directamente en Sub-Vista 2
+        activeEstimacionId: 'est_2',
+        anticipoPct: 30,
+        ivaPct: 16,
+        specialists: specialistsStore,
+        estimaciones: [
+          {
+            id: 'est_1',
+            numero: 1,
+            semanaNo: 1,
+            nombre: 'Estimación No. 1 (Autorizada)',
+            locked: true,
+            status: 'autorizada',
+            fechaInicio: '2026-10-01',
+            fechaFin: '2026-10-15',
+            fechaCorte: '2026-10-15',
+            partidaNombre: 'PROYECTO EJECUTIVO',
+            razonSocial: 'TALLER ARQUITECTURA',
+            direccion: 'Valle de Bravo, Edo. Méx.',
+            contacto: 'Arq. Alejandro Ruiz',
+            telefono: '55 1234 5678',
+            notas: 'Cobro de anticipo y entrega de estudios preliminares',
+            conceptos: {
+              '1.1.2': 100,
+              '1.1.3': 100,
+              '1.1.4': 85,
+              '1.1.5': 60,
+              '2.1': 100,
+              '2.2': 100,
+              '2.4': 100
+            },
+            fotos: {}
+          },
+          {
+            id: 'est_2',
+            numero: 2,
+            semanaNo: 2,
+            nombre: 'Estimación No. 2 (En Proceso)',
+            locked: false,
+            status: 'borrador',
+            fechaInicio: '2026-10-16',
+            fechaFin: '2026-10-31',
+            fechaCorte: '2026-10-31',
+            partidaNombre: 'PROYECTO EJECUTIVO',
+            razonSocial: 'TALLER ARQUITECTURA',
+            direccion: 'Valle de Bravo, Edo. Méx.',
+            contacto: 'Arq. Alejandro Ruiz',
+            telefono: '55 1234 5678',
+            notas: 'Avance de ingenierías, anteproyecto y proyecto ejecutivo',
+            conceptos: {
+              '1.1.2': 100,
+              '1.1.3': 100,
+              '1.1.4': 85,
+              '1.1.5': 60,
+              '1.2.1': 75,
+              '1.2.2': 50,
+              '1.2.3': 40,
+              '1.3.1': 40,
+              '1.3.2': 35,
+              '2.1': 100,
+              '2.2': 100,
+              '2.3': 62,
+              '2.4': 100,
+              '2.5': 55,
+              '2.6': 50,
+              '3.1': 68,
+              '3.2': 50,
+              '3.3': 71
+            },
+            fotos: {}
+          }
+        ]
+      };
+
+      const storageKey = `estimaciones_data_${projId}`;
+      localStorage.setItem(storageKey, JSON.stringify(estimacionesData));
+      localStorage.setItem('estimaciones_data_null', JSON.stringify(estimacionesData));
+      localStorage.setItem('estimaciones_data_v1', JSON.stringify(estimacionesData));
+
+      document.getElementById('status').innerHTML = '<span style="color:#22c55e; font-weight:bold;">¡ÉXITO! Cotizaciones y pagos de especialistas guardados correctamente en localStorage.</span>';
+      console.log('Seed Especialistas exitoso');
+    } catch (err) {
+      document.getElementById('status').innerHTML = '<span style="color:#ef4444; font-weight:bold;">Error: ' + err.message + '</span>';
+      console.error(err);
+    }
+  </script>
+</body>
+</html>

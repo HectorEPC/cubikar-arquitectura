@@ -15,7 +15,7 @@ import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../
 import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js';
 import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js';
 import { renderCalendarioObra } from '../modules/calendario/calendarioView.js';
-import { renderEstimacionesView } from '../modules/estimaciones/estimacionesView.js';
+import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js';
 import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js';
 import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js';
 import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js';
@@ -718,6 +718,11 @@ export function switchTab(tab) {
   // Mapear compatibilidad de nombres
   if (tab === 'cat') tab = 'alcances';
   if (tab === 'insumos') tab = 'presupuesto';
+  let requestedSubView = null;
+  if (tab === 'especialistas') {
+    tab = 'estimaciones';
+    requestedSubView = 'especialistas';
+  }
 
   if (typeof canCurrentUserAccessTab === 'function' && !canCurrentUserAccessTab(tab)) {
     const tabNames = {
@@ -771,6 +776,9 @@ export function switchTab(tab) {
     renderCalendarioObra();
   } else if (tab === 'estimaciones') {
     renderEstimacionesView();
+    if (requestedSubView) {
+      try { switchEstimacionesSubView(requestedSubView); } catch (_) {}
+    }
   }
 
   updateUndoRedoButtons();
