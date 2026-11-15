@@ -3004,8 +3004,13 @@ if (typeof window !== 'undefined') {
 export function updatePortalHeaderUserArea(user) {
   const container = document.getElementById('portal-header-user-area');
   const notifWrapper = document.getElementById('portal-notifications-wrapper');
+  const appSwitcherMount = document.getElementById('cubikar-app-switcher-mount');
 
   if (!user) {
+    if (appSwitcherMount) {
+      appSwitcherMount.classList.add('hidden');
+      appSwitcherMount.classList.remove('flex');
+    }
     if (notifWrapper) {
       notifWrapper.classList.add('hidden');
     }
@@ -3023,6 +3028,11 @@ export function updatePortalHeaderUserArea(user) {
       `;
     }
     return;
+  }
+
+  if (appSwitcherMount) {
+    appSwitcherMount.classList.remove('hidden');
+    appSwitcherMount.classList.add('flex');
   }
 
   if (notifWrapper) {
