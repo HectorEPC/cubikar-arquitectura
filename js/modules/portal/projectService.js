@@ -7,14 +7,15 @@ import {
   STORAGE_KEY_INVITATIONS,
   STORAGE_KEY_PLAN_INVITATIONS,
   STORAGE_KEY_ACTIVE_WORKSPACE,
-  STORAGE_KEY_DELETED_PROJECTS,
   setActiveProjectId,
   getActiveProjectId,
   getStorageKey,
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js';
+} from '../../config/constants.js?v=20261115_v12';
+
+export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 import { defaultTreeData, defaultSettings } from '../../config/defaultData.js';
 import { cleanMojibake } from '../../core/textSanitizer.js';
 import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js';
