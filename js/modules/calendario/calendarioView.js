@@ -1,5 +1,5 @@
 import { printCalendarioObraFormat } from '../io/printService.js';
-import { renderTabAssignedAvatars } from '../portal/portalController.js';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
 // js/modules/calendario/calendarioView.js
 // Renderizador y controlador de la pestaña CALENDARIO DE OBRA
 // Diseño ejecutivo de alta fidelidad, interactivo y sincronizado 100% con Catálogo Base

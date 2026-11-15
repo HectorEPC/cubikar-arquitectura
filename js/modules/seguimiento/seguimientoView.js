@@ -14,7 +14,7 @@ import {
   getStoredInvitations,
   getStoredPlanInvitations
 } from '../portal/projectService.js';
-import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js';
+import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
 import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js';
 
 export const ESTATUS_OPTIONS = [

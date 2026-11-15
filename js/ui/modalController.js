@@ -20,7 +20,7 @@ import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoM
 import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js';
 import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js';
 import { renderBrandingUI } from './brandingController.js';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261115_cubikar_arq_v14';
 import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js';
 
 // Modo de destino del modal Google IA: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)

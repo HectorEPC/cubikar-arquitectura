@@ -6,7 +6,7 @@ import { findNodeById } from '../catalog/treeService.js';
 import { formatMoney, getCurrencyCode } from '../../core/formatters.js';
 import { showToast } from '../../ui/notifications.js';
 import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
 
 import {
   getProjectPresupuestoConfig,
