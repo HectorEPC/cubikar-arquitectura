@@ -1,14 +1,14 @@
 // js/modules/io/printService.js
 // Servicio de Impresión de Formatos Profesionales para TAB1-CAT-BASE y MATRIZ / INSUMOS UNITARIOS
 
-import { state } from '../../state/store.js?v=20261116_cf8';
-import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261116_cf8';
-import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261116_cf8';
-import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261116_cf8';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf8';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf8';
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf8';
-import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261116_cf8';
+import { state } from '../../state/store.js?v=20261116_cf9';
+import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261116_cf9';
+import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261116_cf9';
+import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261116_cf9';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf9';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf9';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf9';
+import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261116_cf9';
 import {
   extractScheduleItems,
   getScheduleSettings,
@@ -23,9 +23,9 @@ import {
   getGanttTodayDate,
   getWorkdaysSettings,
   getDateWorkdayInfo
-} from '../calendario/calendarioModel.js?v=20261116_cf8';
-import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261116_cf8';
-import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261116_cf8';
+} from '../calendario/calendarioModel.js?v=20261116_cf9';
+import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261116_cf9';
+import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261116_cf9';
 
 // Escapar caracteres especiales en texto HTML
 function escapeHtml(str) {
