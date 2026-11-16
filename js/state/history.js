@@ -1,7 +1,7 @@
-import { state, persistLocalData } from './store.js?v=20261116_cf9';
-import { showToast } from '../ui/notifications.js?v=20261116_cf9';
-import { isTabLocked, guardTabUnlocked } from '../ui/tabLockController.js?v=20261116_cf9';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf9';
+import { state, persistLocalData } from './store.js?v=20261116_cf10';
+import { showToast } from '../ui/notifications.js?v=20261116_cf10';
+import { isTabLocked, guardTabUnlocked } from '../ui/tabLockController.js?v=20261116_cf10';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf10';
 
 export let undoStack = [];
 export let redoStack = [];

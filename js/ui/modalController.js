@@ -1,28 +1,28 @@
-import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261116_cf9';
-import { defaultTreeData } from '../config/defaultData.js?v=20261116_cf9';
-import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261116_cf9';
-import { showToast } from './notifications.js?v=20261116_cf9';
-import { formatQty, round2, round5 } from '../core/formatters.js?v=20261116_cf9';
+import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261116_cf10';
+import { defaultTreeData } from '../config/defaultData.js?v=20261116_cf10';
+import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261116_cf10';
+import { showToast } from './notifications.js?v=20261116_cf10';
+import { formatQty, round2, round5 } from '../core/formatters.js?v=20261116_cf10';
 import {
   getDespachoGastosBreakdown,
   getNominaOficinaBreakdown,
   getUtilidadDespachoPct,
   getEjecutivoCostPlusFactor,
   updateSobrecostoBadge
-} from '../core/calculations.js?v=20261116_cf9';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261116_cf9';
-import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261116_cf9';
-import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261116_cf9';
-import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261116_cf9';
-import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261116_cf9';
-import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261116_cf9';
-import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261116_cf9';
-import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261116_cf9';
-import { renderBrandingUI } from './brandingController.js?v=20261116_cf9';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261116_cf9';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf9';
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf9';
-import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261116_cf9';
+} from '../core/calculations.js?v=20261116_cf10';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261116_cf10';
+import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261116_cf10';
+import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261116_cf10';
+import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261116_cf10';
+import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261116_cf10';
+import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261116_cf10';
+import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261116_cf10';
+import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261116_cf10';
+import { renderBrandingUI } from './brandingController.js?v=20261116_cf10';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261116_cf10';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf10';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf10';
+import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261116_cf10';
 
 // Modo de destino del modal Google IA: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)
 export let aiModalTargetMode = 'single';

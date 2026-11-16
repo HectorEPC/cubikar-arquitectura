@@ -11,10 +11,10 @@ import {
   addFeaturedProfile,
   getActiveWorkspaceData,
   getUserPlanId
-} from './projectService.js?v=20261116_cf9';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf9';
-import { isNightMode } from '../../ui/themeController.js?v=20261116_cf9';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf9';
+} from './projectService.js?v=20261116_cf10';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf10';
+import { isNightMode } from '../../ui/themeController.js?v=20261116_cf10';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf10';
 
 export const STORAGE_KEY_SUBSCRIPTION = 'adm_arq_subscription';
 

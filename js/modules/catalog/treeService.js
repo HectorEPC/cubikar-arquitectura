@@ -1,14 +1,14 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf9';
-import { saveState } from '../../state/history.js?v=20261116_cf9';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf9';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf9';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf9';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf9';
-import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf9';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf9';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf9';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf9';
-import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf9';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf10';
+import { saveState } from '../../state/history.js?v=20261116_cf10';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf10';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf10';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf10';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf10';
+import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf10';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf10';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf10';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf10';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf10';
 
 function createNodeUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

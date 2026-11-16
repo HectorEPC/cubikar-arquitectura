@@ -1,15 +1,15 @@
-import { state } from '../../state/store.js?v=20261116_cf9';
-import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261116_cf9';
-import { getHierarchyColor } from '../../core/colors.js?v=20261116_cf9';
-import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261116_cf9';
-import { findNodeById } from './treeService.js?v=20261116_cf9';
-import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261116_cf9';
-import { clampApuWidth } from '../../ui/resizer.js?v=20261116_cf9';
-import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261116_cf9';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf9';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261116_cf9';
-import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261116_cf9';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf9';
+import { state } from '../../state/store.js?v=20261116_cf10';
+import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261116_cf10';
+import { getHierarchyColor } from '../../core/colors.js?v=20261116_cf10';
+import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261116_cf10';
+import { findNodeById } from './treeService.js?v=20261116_cf10';
+import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261116_cf10';
+import { clampApuWidth } from '../../ui/resizer.js?v=20261116_cf10';
+import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261116_cf10';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf10';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261116_cf10';
+import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261116_cf10';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf10';
 
 const SIDEPANEL_BTN_BASE_CLASS = 'sidepanel-row-btn px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0';
 const SIDEPANEL_BTN_ACTIVE_CLASS = `${SIDEPANEL_BTN_BASE_CLASS} bg-blue-600 text-white shadow-xs`;
