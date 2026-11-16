@@ -1356,6 +1356,13 @@ export function removeProjectMember(projectId, memberId) {
       );
       saveStoredInvitations(invs);
     } catch (e) {}
+
+    // Eliminar en Supabase PostgreSQL (public.proyecto_colaboradores)
+    try {
+      if (typeof window !== 'undefined' && typeof window.removeCollaboratorFromCloud === 'function') {
+        window.removeCollaboratorFromCloud(projectId, targetMember.email);
+      }
+    } catch (_) {}
   }
 
   return true;
@@ -1681,6 +1688,13 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
     status: 'pending'
   });
 
+  // Sincronizar colaborador directamente a Supabase PostgreSQL (public.proyecto_colaboradores)
+  try {
+    if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+      window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending');
+    }
+  } catch (_) {}
+
   // Emitir broadcast en tiempo real vía WebSockets a otros usuarios conectados
   try {
     if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewInvitation === 'function') {
@@ -1815,6 +1829,13 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
       saveProjectsList(list);
     }
 
+    // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
+    try {
+      if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        window.addCollaboratorToCloud(targetProjectId, userEmail, targetInv.role || 'editar', 'accepted');
+      }
+    } catch (_) {}
+
     // Si también existía invitación de plan con este anfitrión, marcarla como aceptada
     if (targetInv.ownerEmail) {
       const hostEmail = (targetInv.ownerEmail || '').toLowerCase().trim();
@@ -1878,6 +1899,13 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
     if (hostProjects.length > 0) {
       saveProjectsList(list);
     }
+
+    // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
+    try {
+      if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        window.addCollaboratorToCloud(targetProjectId, userEmail, targetInv.role || 'editar', 'accepted');
+      }
+    } catch (_) {}
 
     // Marcar como aceptadas las invitaciones correspondientes en getStoredInvitations()
     invs.forEach(i => {
