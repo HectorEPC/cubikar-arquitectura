@@ -71,9 +71,9 @@ import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback
 import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
-import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261115_cubikar_arq_v20_live_fix';
+import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261116_cubikar_arq_v24_sync_fix';
 import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261115_v10';
-import { getCurrentUser } from './modules/portal/projectService.js?v=20261115_cubikar_arq_v20_live_fix';
+import { getCurrentUser } from './modules/portal/projectService.js?v=20261116_cubikar_arq_v24_sync_fix';
 import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_v10';
 
 import {
@@ -473,7 +473,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261115_cubikar_arq_v20_live_fix';
+} from './modules/portal/portalController.js?v=20261116_cubikar_arq_v24_sync_fix';
 
 import {
   openCubikarAdminModal,
@@ -1223,9 +1223,10 @@ try {
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
         const workspaceContainer = document.getElementById('workspace-container');
-        const isWorkspaceVisible = workspaceContainer && !workspaceContainer.classList.contains('hidden') && workspaceContainer.style.display !== 'none';
+        const activePId = getActiveProjectId() || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('project'));
+        const isWorkspaceVisible = (workspaceContainer && !workspaceContainer.classList.contains('hidden') && workspaceContainer.style.display !== 'none') || !!activePId;
         if (!isWorkspaceVisible) {
-          const projectsGridExists = !!document.getElementById('projects-grid');
+          const projectsGridExists = !!(document.getElementById('projectsGrid') || document.getElementById('projects-grid'));
           const menuWrapper = document.getElementById('portal-user-menu-wrapper');
           const currentMenuEmail = menuWrapper?.dataset?.userEmail || '';
           const incomingEmail = (session.user.email || '').toLowerCase().trim();
