@@ -836,50 +836,7 @@ function getAssignedProjectUsers(projectId = null) {
     : [];
 
   if (rawMembers.length === 0) {
-    rawMembers = [
-      {
-        id: 'mem-owner',
-        name: (currentUser && currentUser.name) || 'Arq. Director',
-        email: (currentUser && currentUser.email) || 'admin@constructora.com',
-        avatar: (currentUser && currentUser.avatar) || AVATARS_BY_SEX['Masculino'],
-        role: 'editar'
-      },
-      {
-        id: 'mem-mariana',
-        name: 'Ing. Mariana Torres Morales',
-        email: 'mariana.torres.costos@gmail.com',
-        avatar: AVATARS_BY_SEX['Femenino'],
-        role: 'escribir'
-      },
-      {
-        id: 'mem-roberto',
-        name: 'Arq. Roberto Méndez Silva',
-        email: 'roberto.mendez.obras@gmail.com',
-        avatar: AVATARS_BY_SEX['Masculino'],
-        role: 'escribir'
-      }
-    ];
-  } else {
-    const hasMariana = rawMembers.some(m => (m.email && m.email.includes('mariana')) || (m.name && m.name.includes('Mariana')));
-    const hasRoberto = rawMembers.some(m => (m.email && m.email.includes('roberto')) || (m.name && m.name.includes('Roberto')));
-    if (!hasMariana) {
-      rawMembers.push({
-        id: 'mem-mariana',
-        name: 'Ing. Mariana Torres Morales',
-        email: 'mariana.torres.costos@gmail.com',
-        avatar: AVATARS_BY_SEX['Femenino'],
-        role: 'escribir'
-      });
-    }
-    if (!hasRoberto) {
-      rawMembers.push({
-        id: 'mem-roberto',
-        name: 'Arq. Roberto Méndez Silva',
-        email: 'roberto.mendez.obras@gmail.com',
-        avatar: AVATARS_BY_SEX['Masculino'],
-        role: 'escribir'
-      });
-    }
+    rawMembers = [];
   }
 
   return rawMembers.map(m => {
