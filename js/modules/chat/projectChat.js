@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf5';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf5';
+import { state } from '../../state/store.js?v=20261116_cf6';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf6';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf5';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf5';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf5';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf5';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf5';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf5';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf5';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf5';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf5';
+} from '../portal/projectService.js?v=20261116_cf6';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf6';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf6';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf6';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf6';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf6';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf6';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf6';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf6';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -1282,16 +1282,16 @@ export function syncNotificationStateToCloud() {
       const currentUser = getCurrentUser();
       if (!currentUser || !currentUser.id) return;
 
-      // Mantener payload compacto en user_metadata (< 3 KB) para no inflar el JWT
-      const dismissed = getDismissedNotificationIds().slice(-60);
-      const readIds = getReadMentionIds().slice(-60);
+      // Mantener payload compacto en user_metadata (< 2 KB) para no inflar el JWT
+      const dismissed = getDismissedNotificationIds().slice(-20).map(v => String(v || '').slice(0, 64)).filter(Boolean);
+      const readIds = getReadMentionIds().slice(-20).map(v => String(v || '').slice(0, 64)).filter(Boolean);
 
       const nextSig = JSON.stringify({ dismissed, readIds });
       const remoteMeta = currentUser.user_metadata || {};
       const remoteDismissed = Array.isArray(remoteMeta.cubikar_dismissed_notifications) ? remoteMeta.cubikar_dismissed_notifications : [];
       const remoteRead = Array.isArray(remoteMeta.cubikar_read_mentions) ? remoteMeta.cubikar_read_mentions : [];
       const remoteHasArr = Array.isArray(remoteMeta.cubikar_dismissed_notifications) || Array.isArray(remoteMeta.cubikar_read_mentions);
-      const remoteIsCompact = remoteDismissed.length <= 60 && remoteRead.length <= 60;
+      const remoteIsCompact = remoteDismissed.length <= 20 && remoteRead.length <= 20;
       const remoteSig = (remoteHasArr && remoteIsCompact)
         ? JSON.stringify({ dismissed: remoteDismissed, readIds: remoteRead })
         : '';

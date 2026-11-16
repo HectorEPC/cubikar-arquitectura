@@ -1,12 +1,12 @@
-import { state } from '../../state/store.js?v=20261116_cf5';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf5';
-import { formatMoney, formatQty } from '../../core/formatters.js?v=20261116_cf5';
-import { calculateParentTotal } from '../../core/calculations.js?v=20261116_cf5';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf5';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf5';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf5';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf5';
-import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf5';
+import { state } from '../../state/store.js?v=20261116_cf6';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf6';
+import { formatMoney, formatQty } from '../../core/formatters.js?v=20261116_cf6';
+import { calculateParentTotal } from '../../core/calculations.js?v=20261116_cf6';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf6';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf6';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf6';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf6';
+import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf6';
 import {
   cleanPhoneForWhatsApp,
   addCotizacion,
@@ -16,7 +16,7 @@ import {
   unsetCotizacionGanadora,
   getCotizacionHierarchyStatus,
   getCotizacionBlockMessage
-} from './cotizacionesService.js?v=20261116_cf5';
+} from './cotizacionesService.js?v=20261116_cf6';
 
 let activeSideTab = 'proveedores';
 let currentEditingCotId = null;
