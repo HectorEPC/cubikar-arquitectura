@@ -1,16 +1,16 @@
-// js/ui/firmasController.js
-// Controlador de Firmas y Responsables para el Formato de Impresión (Alcances y Presupuesto)
+﻿// js/ui/firmasController.js
+// Controlador de Firmas y Responsables para el Formato de ImpresiÃ³n (Alcances y Presupuesto)
 
-import { state, persistSettings } from '../state/store.js';
-import { showToast } from './notifications.js';
-import { getProjectById, getCurrentUser, getProjectMembers, canCurrentUserEditProject } from '../modules/portal/projectService.js';
-import { getActiveProjectId } from '../config/constants.js';
-import { guardTabUnlocked } from './tabLockController.js';
+import { state, persistSettings } from '../state/store.js?v=20261116_cf3';
+import { showToast } from './notifications.js?v=20261116_cf3';
+import { getProjectById, getCurrentUser, getProjectMembers, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf3';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf3';
+import { guardTabUnlocked } from './tabLockController.js?v=20261116_cf3';
 
 export const DEFAULT_FIRMAS_CONFIG = [
   {
     id: 'firma-1',
-    rol: 'ELABORÓ',
+    rol: 'ELABORÃ“',
     nombre: '',
     cargo: 'Coordinador de Proyecto Ejecutivo',
     cedula: '',
@@ -18,36 +18,36 @@ export const DEFAULT_FIRMAS_CONFIG = [
   },
   {
     id: 'firma-2',
-    rol: 'REVISÓ',
+    rol: 'REVISÃ“',
     nombre: '',
-    cargo: 'Coordinación de Costos e Ingenierías',
+    cargo: 'CoordinaciÃ³n de Costos e IngenierÃ­as',
     cedula: '',
     activo: true
   },
   {
     id: 'firma-3',
-    rol: 'AUTORIZÓ / CLIENTE',
+    rol: 'AUTORIZÃ“ / CLIENTE',
     nombre: '',
-    cargo: 'Dirección de Obra y Supervisión',
+    cargo: 'DirecciÃ³n de Obra y SupervisiÃ³n',
     cedula: '',
     activo: true
   }
 ];
 
 export const PRESET_ROLES = [
-  'ELABORÓ',
-  'PROYECTÓ',
-  'REVISÓ',
-  'COORDINÓ',
-  'CALCULÓ Y ESTRUCTURÓ',
-  'INGENIERÍAS Y ESPECIALIDADES',
-  'SUPERVISÓ',
+  'ELABORÃ“',
+  'PROYECTÃ“',
+  'REVISÃ“',
+  'COORDINÃ“',
+  'CALCULÃ“ Y ESTRUCTURÃ“',
+  'INGENIERÃAS Y ESPECIALIDADES',
+  'SUPERVISÃ“',
   'DIRECTOR RESPONSABLE DE OBRA (DRO)',
-  'AUTORIZÓ',
+  'AUTORIZÃ“',
   'CLIENTE / PROPIETARIO'
 ];
 
-// Copia de trabajo temporal mientras el modal está abierto
+// Copia de trabajo temporal mientras el modal estÃ¡ abierto
 let temporaryFirmas = [];
 
 function escapeHtml(str) {
@@ -71,7 +71,7 @@ export function getFirmasConfig() {
 }
 
 /**
- * Genera el bloque HTML de firmas para el formato de impresión
+ * Genera el bloque HTML de firmas para el formato de impresiÃ³n
  */
 export function getFirmasPrintHtml() {
   const firmas = getFirmasConfig();
@@ -104,7 +104,7 @@ export function getFirmasPrintHtml() {
   }).join('');
 
   return `
-    <!-- Área de Firmas Institucionales y Responsables del Proyecto -->
+    <!-- Ãrea de Firmas Institucionales y Responsables del Proyecto -->
     <div class="signatures-grid" style="grid-template-columns: repeat(${cols}, 1fr); ${maxWidthStyle}">
       ${boxesHtml}
     </div>
@@ -179,7 +179,7 @@ export function closeFirmasResponsablesModal() {
 }
 
 /**
- * Renderiza los botones rápidos del equipo para autocompletar
+ * Renderiza los botones rÃ¡pidos del equipo para autocompletar
  */
 function renderTeamQuickSelectors() {
   const container = document.getElementById('firmas-team-quick-selector-container');
@@ -203,7 +203,7 @@ function renderTeamQuickSelectors() {
                   data-person-role="${escapeHtml(p.role)}"
                   onclick="quickAssignPersonToFirstEmptySlot(this.dataset.personName || '', this.dataset.personRole || '')"
                   class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10.5px] font-semibold px-2 py-0.5 rounded-full transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                  title="Asignar a la primera firma vacía: ${escapeHtml(p.name)} (${escapeHtml(p.role)})">
+                  title="Asignar a la primera firma vacÃ­a: ${escapeHtml(p.name)} (${escapeHtml(p.role)})">
             <i class="fa-solid fa-user-plus text-[9px]"></i>
             <span class="max-w-[130px] truncate">${escapeHtml(p.name)}</span>
           </button>
@@ -214,7 +214,7 @@ function renderTeamQuickSelectors() {
 }
 
 /**
- * Asigna una persona a la primera firma que tenga el nombre vacío o a la primera firma
+ * Asigna una persona a la primera firma que tenga el nombre vacÃ­o o a la primera firma
  */
 export function quickAssignPersonToFirstEmptySlot(name, role = '') {
   if (!guardFirmasEdit()) return;
@@ -229,12 +229,12 @@ export function quickAssignPersonToFirstEmptySlot(name, role = '') {
     }
     renderFirmasModalCards();
     renderFirmasLivePreview();
-    showToast(`✓ Asignado "${name}" en Firma ${targetIndex + 1}`, 'info');
+    showToast(`âœ“ Asignado "${name}" en Firma ${targetIndex + 1}`, 'info');
   }
 }
 
 /**
- * Renderiza las tarjetas de configuración de firmas
+ * Renderiza las tarjetas de configuraciÃ³n de firmas
  */
 export function renderFirmasModalCards() {
   const container = document.getElementById('firmas-cards-container');
@@ -274,16 +274,16 @@ export function renderFirmasModalCards() {
           </div>
 
           <div class="flex items-center gap-3">
-            <!-- Toggle Activo en Impresión -->
+            <!-- Toggle Activo en ImpresiÃ³n -->
             <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
               <input type="checkbox" 
                      ${isActivo ? 'checked' : ''} 
                      onchange="toggleFirmaSlotAction(${idx}, this.checked)"
                      class="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer">
-              <span>Incluir en impresión</span>
+              <span>Incluir en impresiÃ³n</span>
             </label>
 
-            <!-- Botón Eliminar Firma -->
+            <!-- BotÃ³n Eliminar Firma -->
             ${temporaryFirmas.length > 1 ? `
               <button type="button" 
                       onclick="removeFirmaSlotAction(${idx})" 
@@ -297,15 +297,15 @@ export function renderFirmasModalCards() {
 
         <!-- Campos de la Firma -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          <!-- Campo 1: Rol / Título -->
+          <!-- Campo 1: Rol / TÃ­tulo -->
           <div>
             <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Título / Rol <span class="text-rose-500">*</span>
+              TÃ­tulo / Rol <span class="text-rose-500">*</span>
             </label>
             <div class="relative">
               <input type="text" 
                      value="${escapeHtml(f.rol || '')}"
-                     placeholder="ej. ELABORÓ"
+                     placeholder="ej. ELABORÃ“"
                      list="firmas-roles-datalist"
                      oninput="updateFirmaSlotField(${idx}, 'rol', this.value)"
                      class="w-full bg-slate-50 focus:bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none uppercase transition font-mono">
@@ -330,7 +330,7 @@ export function renderFirmasModalCards() {
             </div>
             <input type="text" 
                    value="${escapeHtml(f.nombre || '')}"
-                   placeholder="ej. Arq. Roberto Méndez S."
+                   placeholder="ej. Arq. Roberto MÃ©ndez S."
                    oninput="updateFirmaSlotField(${idx}, 'nombre', this.value)"
                    class="w-full bg-slate-50 focus:bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 outline-none transition">
           </div>
@@ -347,14 +347,14 @@ export function renderFirmasModalCards() {
                    class="w-full bg-slate-50 focus:bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none transition">
           </div>
 
-          <!-- Campo 4: Cédula o Registro -->
+          <!-- Campo 4: CÃ©dula o Registro -->
           <div>
             <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Cédula / Matrícula (Opcional)
+              CÃ©dula / MatrÃ­cula (Opcional)
             </label>
             <input type="text" 
                    value="${escapeHtml(f.cedula || '')}"
-                   placeholder="ej. Céd. Prof. 1234567"
+                   placeholder="ej. CÃ©d. Prof. 1234567"
                    oninput="updateFirmaSlotField(${idx}, 'cedula', this.value)"
                    class="w-full bg-slate-50 focus:bg-white border border-slate-300 focus:border-blue-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 font-mono outline-none transition">
           </div>
@@ -370,7 +370,7 @@ export function renderFirmasModalCards() {
 export function addFirmaSlotAction() {
   if (!guardFirmasEdit()) return;
   const nextNum = temporaryFirmas.length + 1;
-  const suggestedRol = PRESET_ROLES[Math.min(nextNum - 1, PRESET_ROLES.length - 1)] || 'REVISÓ';
+  const suggestedRol = PRESET_ROLES[Math.min(nextNum - 1, PRESET_ROLES.length - 1)] || 'REVISÃ“';
 
   temporaryFirmas.push({
     id: 'firma-' + Date.now(),
@@ -387,7 +387,7 @@ export function addFirmaSlotAction() {
 
 function guardFirmasEdit() {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite editar las firmas de este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite editar las firmas de este proyecto.', 'warning');
     return false;
   }
   const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
@@ -398,7 +398,7 @@ function guardFirmasEdit() {
 }
 
 /**
- * Elimina una firma por índice
+ * Elimina una firma por Ã­ndice
  */
 export function removeFirmaSlotAction(index) {
   if (!guardFirmasEdit()) return;
@@ -445,7 +445,7 @@ export function updateFirmaSlotField(index, field, value) {
  */
 export function resetFirmasToDefaultAction() {
   if (!guardFirmasEdit()) return;
-  if (!confirm('¿Restablecer los bloques de firmas a los 3 cargos institucionales estándar?')) return;
+  if (!confirm('Â¿Restablecer los bloques de firmas a los 3 cargos institucionales estÃ¡ndar?')) return;
   temporaryFirmas = DEFAULT_FIRMAS_CONFIG.map(f => ({ ...f }));
   renderFirmasModalCards();
   renderFirmasLivePreview();
@@ -453,7 +453,7 @@ export function resetFirmasToDefaultAction() {
 }
 
 /**
- * Renderiza la vista previa en vivo del pie de impresión
+ * Renderiza la vista previa en vivo del pie de impresiÃ³n
  */
 export function renderFirmasLivePreview() {
   const previewEl = document.getElementById('firmas-live-preview');
@@ -465,7 +465,7 @@ export function renderFirmasLivePreview() {
     previewEl.innerHTML = `
       <div class="text-center py-4 text-amber-700 bg-amber-50 rounded-lg text-xs">
         <i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i>
-        Todas las firmas están desactivadas. El documento impreso no mostrará sección de firmas.
+        Todas las firmas estÃ¡n desactivadas. El documento impreso no mostrarÃ¡ secciÃ³n de firmas.
       </div>
     `;
     return;
@@ -481,7 +481,7 @@ export function renderFirmasLivePreview() {
           <strong style="display: block; font-size: 11px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.03em;">
             ${escapeHtml(f.rol || 'RESPONSABLE')}
           </strong>
-          ${f.nombre ? `<div style="font-weight: 700; color: #1e293b; font-size: 11px; margin-top: 2px;">${escapeHtml(f.nombre)}</div>` : '<div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">[Línea para firma física]</div>'}
+          ${f.nombre ? `<div style="font-weight: 700; color: #1e293b; font-size: 11px; margin-top: 2px;">${escapeHtml(f.nombre)}</div>` : '<div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">[LÃ­nea para firma fÃ­sica]</div>'}
           ${f.cargo ? `<div style="font-size: 10px; color: #475569; margin-top: 1px;">${escapeHtml(f.cargo)}</div>` : ''}
           ${f.cedula ? `<div style="font-size: 9.5px; color: #64748b; font-family: monospace; margin-top: 1px;">${escapeHtml(f.cedula)}</div>` : ''}
         </div>
@@ -499,11 +499,11 @@ export function saveFirmasModalAction() {
   state.settings.firmas = temporaryFirmas.map(f => ({ ...f }));
   persistSettings();
   closeFirmasResponsablesModal();
-  showToast('✓ Firmas y responsables guardados. Se reflejarán en las impresiones de Alcances y Presupuesto.', 'success');
+  showToast('âœ“ Firmas y responsables guardados. Se reflejarÃ¡n en las impresiones de Alcances y Presupuesto.', 'success');
 }
 
 /**
- * Guarda y abre inmediatamente la vista previa de impresión
+ * Guarda y abre inmediatamente la vista previa de impresiÃ³n
  */
 export function previewPrintWithFirmasAction() {
   saveFirmasModalAction();

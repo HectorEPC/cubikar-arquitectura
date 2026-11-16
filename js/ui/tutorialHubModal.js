@@ -1,9 +1,9 @@
-// js/ui/tutorialHubModal.js
+﻿// js/ui/tutorialHubModal.js
 // Modal centralizado "Centro de Tutoriales y Aprendizaje" para cubikar Arquitectura
-// Permite al usuario elegir entre el Tour Guiado en Vivo interactivo o el Reproductor Web de Video-Simulación Animada.
+// Permite al usuario elegir entre el Tour Guiado en Vivo interactivo o el Reproductor Web de Video-SimulaciÃ³n Animada.
 
-import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js';
-import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js';
+import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261116_cf3';
+import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261116_cf3';
 
 let isTutorialHubOpen = false;
 
@@ -34,7 +34,7 @@ export function closeTutorialHubModal() {
 
 /**
  * Inicia el Tour Guiado interactivo cerrando el Hub
- * @param {string} preferredTourId - 'master' (17 módulos recorriendo todas las pestañas) | 'contextual' (pantalla actual)
+ * @param {string} preferredTourId - 'master' (17 mÃ³dulos recorriendo todas las pestaÃ±as) | 'contextual' (pantalla actual)
  */
 export function launchTourFromHub(preferredTourId = 'master') {
   closeTutorialHubModal();
@@ -68,7 +68,7 @@ export function launchTourFromHub(preferredTourId = 'master') {
 }
 
 /**
- * Abre el reproductor de video en un módulo específico desde el Hub
+ * Abre el reproductor de video en un mÃ³dulo especÃ­fico desde el Hub
  */
 export function launchVideoFromHub(moduleId = 1) {
   closeTutorialHubModal();
@@ -78,12 +78,12 @@ export function launchVideoFromHub(moduleId = 1) {
 }
 
 /**
- * Restablece la preferencia de tours para volver a verlos automáticamente
+ * Restablece la preferencia de tours para volver a verlos automÃ¡ticamente
  */
 export function resetTourPreferencesFromHub() {
   resetTourDismissedStatus();
   if (typeof window.showToast === 'function') {
-    window.showToast('✅ Preferencias restablecidas: los tours volverán a mostrarse.', 'success');
+    window.showToast('âœ… Preferencias restablecidas: los tours volverÃ¡n a mostrarse.', 'success');
   }
 }
 
@@ -112,13 +112,13 @@ function injectTutorialHubDom() {
           </div>
           <div>
             <h2 class="font-extrabold text-base sm:text-lg text-white tracking-tight flex items-center gap-2">
-              <span>Centro de Tutoriales • cubikar<span class="text-rose-500">.</span> Arquitectura</span>
+              <span>Centro de Tutoriales â€¢ cubikar<span class="text-rose-500">.</span> Arquitectura</span>
               <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                ${VIDEO_MODULES.length} Módulos
+                ${VIDEO_MODULES.length} MÃ³dulos
               </span>
             </h2>
             <p class="text-xs text-slate-300">
-              Tabla de Alcances • Cotizaciones • Presupuestos: Tour guiado en vivo interactivo o Video-Simulador con voz en español fluida
+              Tabla de Alcances â€¢ Cotizaciones â€¢ Presupuestos: Tour guiado en vivo interactivo o Video-Simulador con voz en espaÃ±ol fluida
             </p>
           </div>
         </div>
@@ -133,7 +133,7 @@ function injectTutorialHubDom() {
       <!-- Contenido de las 2 Alternativas -->
       <div class="p-4 sm:p-6 overflow-y-auto custom-scroll space-y-6 flex-1 text-xs">
         
-        <!-- Tarjetas Principales de Selección -->
+        <!-- Tarjetas Principales de SelecciÃ³n -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
           
           <!-- TARJETA 1: TOUR EN VIVO INTERACTIVO -->
@@ -145,7 +145,7 @@ function injectTutorialHubDom() {
                   TOUR GUIADO EN VIVO
                 </span>
                 <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                  <i class="fa-solid fa-forward-step text-[9px]"></i> Con botón de Saltar
+                  <i class="fa-solid fa-forward-step text-[9px]"></i> Con botÃ³n de Saltar
                 </span>
               </div>
 
@@ -154,18 +154,18 @@ function injectTutorialHubDom() {
                   Tour Guiado Paso a Paso
                 </h3>
                 <p class="text-slate-300 text-xs mt-1 leading-relaxed">
-                  Aprende directamente sobre la interfaz real de cubikar Arquitectura. Un foco de luz te señala dónde hacer clic, qué datos capturar y cómo estructurar tus proyectos.
+                  Aprende directamente sobre la interfaz real de cubikar Arquitectura. Un foco de luz te seÃ±ala dÃ³nde hacer clic, quÃ© datos capturar y cÃ³mo estructurar tus proyectos.
                 </p>
               </div>
 
               <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700/50 space-y-1.5 text-[11px] text-slate-300">
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-blue-400 text-xs"></i>
-                  <span>Focos de atención visuales en tiempo real.</span>
+                  <span>Focos de atenciÃ³n visuales en tiempo real.</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-blue-400 text-xs"></i>
-                  <span>Botón visible <strong>"Saltar Tutorial"</strong> para cerrar en cualquier momento.</span>
+                  <span>BotÃ³n visible <strong>"Saltar Tutorial"</strong> para cerrar en cualquier momento.</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-blue-400 text-xs"></i>
@@ -178,12 +178,12 @@ function injectTutorialHubDom() {
               <button type="button" onclick="window.launchTourFromHubAction('master')"
                       class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-600/30 transition cursor-pointer">
                 <i class="fa-solid fa-person-walking-arrow-right text-sm"></i>
-                <span>Iniciar Tour Maestro (${VIDEO_MODULES.length} Módulos)</span>
+                <span>Iniciar Tour Maestro (${VIDEO_MODULES.length} MÃ³dulos)</span>
               </button>
             </div>
           </div>
 
-          <!-- TARJETA 2: REPRODUCTOR DE VIDEO-SIMULACIÓN -->
+          <!-- TARJETA 2: REPRODUCTOR DE VIDEO-SIMULACIÃ“N -->
           <div class="p-5 rounded-2xl bg-gradient-to-b from-slate-800/80 to-slate-850 border border-slate-700/80 hover:border-amber-500/60 transition flex flex-col justify-between group shadow-lg">
             <div class="space-y-3">
               <div class="flex items-center justify-between">
@@ -201,7 +201,7 @@ function injectTutorialHubDom() {
                   Video-Simulador Interactivo
                 </h3>
                 <p class="text-slate-300 text-xs mt-1 leading-relaxed">
-                  Visualiza cómo se utiliza cubikar Arquitectura con <strong>narración por voz completa en español</strong>, un <strong>cursor animado</strong> que recorre la pantalla, clics con sonido y subtítulos sincronizados.
+                  Visualiza cÃ³mo se utiliza cubikar Arquitectura con <strong>narraciÃ³n por voz completa en espaÃ±ol</strong>, un <strong>cursor animado</strong> que recorre la pantalla, clics con sonido y subtÃ­tulos sincronizados.
                 </p>
               </div>
 
@@ -212,7 +212,7 @@ function injectTutorialHubDom() {
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
-                  <span>Pantallas fotorrealistas sin símbolos ni letras encimadas.</span>
+                  <span>Pantallas fotorrealistas sin sÃ­mbolos ni letras encimadas.</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-circle-check text-amber-400 text-xs"></i>
@@ -224,18 +224,18 @@ function injectTutorialHubDom() {
             <button type="button" onclick="window.launchVideoFromHubAction(1)"
                     class="mt-5 w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-98 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-500/30 transition cursor-pointer">
               <i class="fa-solid fa-play text-xs"></i>
-              <span>Abrir Reproductor de Video (Módulo 1)</span>
+              <span>Abrir Reproductor de Video (MÃ³dulo 1)</span>
             </button>
           </div>
 
         </div>
 
-        <!-- Acceso Directo por Módulo -->
+        <!-- Acceso Directo por MÃ³dulo -->
         <div class="space-y-3 pt-2">
           <div class="flex items-center justify-between pb-1 border-b border-slate-800">
             <h4 class="font-bold text-xs text-slate-200 flex items-center gap-2">
               <i class="fa-solid fa-film text-blue-400"></i>
-              <span>Acceso Directo a los ${VIDEO_MODULES.length} Módulos en Video</span>
+              <span>Acceso Directo a los ${VIDEO_MODULES.length} MÃ³dulos en Video</span>
             </h4>
             <span class="text-[10px] text-slate-400">Haz clic en cualquier tema para reproducir</span>
           </div>
@@ -266,7 +266,7 @@ function injectTutorialHubDom() {
         <button type="button" onclick="window.resetTourPreferencesAction()"
                 class="hover:text-white underline cursor-pointer flex items-center gap-1.5 transition">
           <i class="fa-solid fa-arrow-rotate-right text-[10px]"></i>
-          <span>Restablecer tutoriales automáticos</span>
+          <span>Restablecer tutoriales automÃ¡ticos</span>
         </button>
 
         <button type="button" onclick="window.closeTutorialHubModalAction()"
@@ -282,7 +282,7 @@ function injectTutorialHubDom() {
 }
 
 // =========================================================================
-// ASIGNACIÓN DE GLOBALES PARA EVENTOS ONCLICK EN EL DOM
+// ASIGNACIÃ“N DE GLOBALES PARA EVENTOS ONCLICK EN EL DOM
 // =========================================================================
 if (typeof window !== 'undefined') {
   window.openTutorialHubModal = openTutorialHubModal;

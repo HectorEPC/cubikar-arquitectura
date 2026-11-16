@@ -1,14 +1,14 @@
-// js/modules/estimaciones/estimacionesModel.js
-// Modelo de datos y lógica de cálculo para ESTIMACIONES DE OBRA
-// Sincronizado reactivamente con state.treeData (Catálogo Base)
+﻿// js/modules/estimaciones/estimacionesModel.js
+// Modelo de datos y lÃ³gica de cÃ¡lculo para ESTIMACIONES DE OBRA
+// Sincronizado reactivamente con state.treeData (CatÃ¡logo Base)
 
-import { state } from '../../state/store.js';
-import { getActiveProjectId, getStorageKey } from '../../config/constants.js';
-import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js';
-import { canCurrentUserEditProject } from '../portal/projectService.js';
-import { showToast } from '../../ui/notifications.js';
-import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js';
+import { state } from '../../state/store.js?v=20261116_cf3';
+import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261116_cf3';
+import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261116_cf3';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf3';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf3';
 
 const STORAGE_KEY_ARQ_PREFIX = 'estimaciones_arq_data_';
 const STORAGE_KEY_PREFIX = 'estimaciones_data_';
@@ -44,14 +44,14 @@ function getDefaultEstimacionesState() {
     activeSubView: 'cobranza', // 'cobranza' | 'especialistas'
     activeEstimacionId: 'est_1',
     anticipoPct: 30, // Porcentaje de anticipo pactado por defecto (30%)
-    ivaPct: defaultIvaPct,      // Inicializado desde la configuración económica del proyecto
+    ivaPct: defaultIvaPct,      // Inicializado desde la configuraciÃ³n econÃ³mica del proyecto
     specialists: {},            // { [nodeId]: { proveedorName, notas, pagos: [...] } }
     estimaciones: [
       {
         id: 'est_1',
         numero: 1,
         semanaNo: 1,
-        nombre: 'Estimación No. 1',
+        nombre: 'EstimaciÃ³n No. 1',
         fechaInicio: todayStr,
         fechaFin: endStr,
         fechaCorte: endStr,
@@ -60,7 +60,7 @@ function getDefaultEstimacionesState() {
         direccion: state?.settings?.projectLocation || '',
         contacto: state?.settings?.projectContact || '',
         telefono: state?.settings?.projectPhone || '',
-        notas: 'Estimación inicial de avance de obra y entregables',
+        notas: 'EstimaciÃ³n inicial de avance de obra y entregables',
         conceptos: {}, // { [conceptId]: pctAvance }
         fotos: {}
       }
@@ -135,7 +135,7 @@ export function setEstimacionesIvaPct(pct) {
   return data.ivaPct;
 }
 
-// Verificar si una estimación (o la estimación activa) se encuentra bloqueada con candado
+// Verificar si una estimaciÃ³n (o la estimaciÃ³n activa) se encuentra bloqueada con candado
 export function isEstimacionLocked(estId = null) {
   const data = loadEstimacionesData();
   const targetId = estId || data.activeEstimacionId;
@@ -143,7 +143,7 @@ export function isEstimacionLocked(estId = null) {
   return Boolean(est && est.locked);
 }
 
-// Establecer estado de bloqueo en una estimación específica (o la activa)
+// Establecer estado de bloqueo en una estimaciÃ³n especÃ­fica (o la activa)
 export function setEstimacionLocked(estId = null, locked = true) {
   const data = loadEstimacionesData();
   const targetId = estId || data.activeEstimacionId;
@@ -154,7 +154,7 @@ export function setEstimacionLocked(estId = null, locked = true) {
   return est.locked;
 }
 
-// Alternar el candado de bloqueo de la estimación activa actual
+// Alternar el candado de bloqueo de la estimaciÃ³n activa actual
 export function toggleActiveEstimacionLockState() {
   const data = loadEstimacionesData();
   const est = data.estimaciones.find(e => e.id === data.activeEstimacionId) || data.estimaciones[0];
@@ -164,14 +164,14 @@ export function toggleActiveEstimacionLockState() {
   return { locked: est.locked, est };
 }
 
-// Obtener estimación activa actual
+// Obtener estimaciÃ³n activa actual
 export function getActiveEstimacion() {
   const data = loadEstimacionesData();
   const current = data.estimaciones.find(e => e.id === data.activeEstimacionId);
   return current || data.estimaciones[0];
 }
 
-// Cambiar la estimación activa
+// Cambiar la estimaciÃ³n activa
 export function setActiveEstimacionId(estimacionId) {
   const data = loadEstimacionesData();
   if (data.estimaciones.some(e => e.id === estimacionId)) {
@@ -180,7 +180,7 @@ export function setActiveEstimacionId(estimacionId) {
   }
 }
 
-// Crear una nueva estimación secuencial (Estimación No. N+1 - Formato Panorama Real)
+// Crear una nueva estimaciÃ³n secuencial (EstimaciÃ³n No. N+1 - Formato Panorama Real)
 export function createNewEstimacion(customName = null, fechaInicio = null, fechaFin = null, semanaNo = null) {
   const data = loadEstimacionesData();
   const nextNum = data.estimaciones.length + 1;
@@ -212,7 +212,7 @@ export function createNewEstimacion(customName = null, fechaInicio = null, fecha
     id: newId,
     numero: nextNum,
     semanaNo: nextSemana,
-    nombre: customName || `Estimación No. ${nextNum}`,
+    nombre: customName || `EstimaciÃ³n No. ${nextNum}`,
     fechaInicio: sDate,
     fechaFin: eDate,
     fechaCorte: eDate,
@@ -232,7 +232,7 @@ export function createNewEstimacion(customName = null, fechaInicio = null, fecha
   return newEst;
 }
 
-// Actualizar datos generales de una estimación (fechas, nombre, notas)
+// Actualizar datos generales de una estimaciÃ³n (fechas, nombre, notas)
 export function updateEstimacionMeta(estId, updates) {
   const data = loadEstimacionesData();
   const est = data.estimaciones.find(e => e.id === estId);
@@ -242,15 +242,15 @@ export function updateEstimacionMeta(estId, updates) {
   return true;
 }
 
-// Eliminar una estimación
+// Eliminar una estimaciÃ³n
 export function deleteEstimacion(estId) {
   const data = loadEstimacionesData();
   if (data.estimaciones.length <= 1) {
-    return false; // Al menos debe quedar una estimación
+    return false; // Al menos debe quedar una estimaciÃ³n
   }
   const target = data.estimaciones.find(e => e.id === estId);
   if (target && target.locked) {
-    return false; // No permitir eliminar una estimación bloqueada
+    return false; // No permitir eliminar una estimaciÃ³n bloqueada
   }
   data.estimaciones = data.estimaciones.filter(e => e.id !== estId);
   // Re-enumerar secuencialmente
@@ -264,7 +264,7 @@ export function deleteEstimacion(estId) {
   return true;
 }
 
-// Actualizar el porcentaje de avance ejecutado (% Avance Actual) de un concepto en la estimación activa
+// Actualizar el porcentaje de avance ejecutado (% Avance Actual) de un concepto en la estimaciÃ³n activa
 export function setConceptoAvancePct(conceptId, pctAvance) {
   const data = loadEstimacionesData();
   const current = data.estimaciones.find(e => e.id === data.activeEstimacionId);
@@ -314,7 +314,7 @@ export function normalizeCloudImageUrl(rawUrl) {
   return url;
 }
 
-// Obtener los enlaces de fotos (1 o 2) asociados a un concepto en una estimación
+// Obtener los enlaces de fotos (1 o 2) asociados a un concepto en una estimaciÃ³n
 export function getConceptoFotosEstimacion(conceptId, estId = null) {
   const data = loadEstimacionesData();
   const targetId = estId || data.activeEstimacionId;
@@ -330,7 +330,7 @@ export function getConceptoFotosEstimacion(conceptId, estId = null) {
     }));
 }
 
-// Guardar los enlaces de fotos (máximo 2) de un concepto en la estimación activa
+// Guardar los enlaces de fotos (mÃ¡ximo 2) de un concepto en la estimaciÃ³n activa
 export function setConceptoFotosEstimacion(conceptId, fotosList = []) {
   const data = loadEstimacionesData();
   const current = data.estimaciones.find(e => e.id === data.activeEstimacionId);
@@ -377,10 +377,10 @@ export function formatDuracion(durDays, customDurStr = '') {
   if (w >= 1) {
     return Number.isInteger(w) ? `${w} semanas` : `${w.toFixed(1)} sem`;
   }
-  return `${d} días`;
+  return `${d} dÃ­as`;
 }
 
-// Aplanar el árbol de catálogo respetando jerarquía y calcular subtotales de estimación (Modelo Panorama Real)
+// Aplanar el Ã¡rbol de catÃ¡logo respetando jerarquÃ­a y calcular subtotales de estimaciÃ³n (Modelo Panorama Real)
 export function getEstimacionesCalculatedData() {
   const estData = loadEstimacionesData();
   let allEstimaciones = Array.isArray(estData.estimaciones) && estData.estimaciones.length > 0
@@ -436,7 +436,7 @@ export function getEstimacionesCalculatedData() {
       puMap.set(node.id, pu);
       importeMap.set(node.id, importeBase);
 
-      // Fechas y Duración
+      // Fechas y DuraciÃ³n
       const sched = node.schedule || {};
       let sDate = sched.startDate || node.fechaInicio || '';
       let eDate = sched.endDate || node.fechaFin || '';
@@ -460,7 +460,7 @@ export function getEstimacionesCalculatedData() {
       pctAnt = Math.round((pctAnt + Number.EPSILON) * 100) / 100;
       const importeAnt = Math.round(((importeBase * (pctAnt / 100)) + Number.EPSILON) * 100) / 100;
 
-      // Esta Estimación (% e Importe)
+      // Esta EstimaciÃ³n (% e Importe)
       const pctEje = (activeEst.conceptos && activeEst.conceptos[node.id] !== undefined)
         ? Number(activeEst.conceptos[node.id]) || 0
         : 0;
@@ -654,12 +654,12 @@ export function getEstimacionesCalculatedData() {
   const pctSaldoGlobal = grandTotalBase > 0 ? Math.max(0, Math.round((((grandTotalSaldo / grandTotalBase) * 100) + Number.EPSILON) * 100) / 100) : 0;
 
   // ============================================================
-  // CÁLCULO DE ANTICIPO Y AMORTIZACIÓN PROGRESIVA HASTA EL 100%
+  // CÃLCULO DE ANTICIPO Y AMORTIZACIÃ“N PROGRESIVA HASTA EL 100%
   // ============================================================
   const anticipoPct = estData.anticipoPct !== undefined && estData.anticipoPct !== null ? Number(estData.anticipoPct) : 30;
   const totalAnticipoContratado = Math.round(((grandTotalBase * (anticipoPct / 100)) + Number.EPSILON) * 100) / 100;
 
-  // Ordenar cronológicamente todas las estimaciones para simular la amortización estricta acumulada
+  // Ordenar cronolÃ³gicamente todas las estimaciones para simular la amortizaciÃ³n estricta acumulada
   const sortedEsts = [...allEstimaciones].sort((a, b) => a.numero - b.numero);
 
   let saldoAnticipoDisponible = totalAnticipoContratado;
@@ -676,9 +676,9 @@ export function getEstimacionesCalculatedData() {
     }
     estTotal = Math.round((estTotal + Number.EPSILON) * 100) / 100;
 
-    // Amortización teórica proporcional al % de anticipo
+    // AmortizaciÃ³n teÃ³rica proporcional al % de anticipo
     const amortTeorica = Math.round(((estTotal * (anticipoPct / 100)) + Number.EPSILON) * 100) / 100;
-    // La amortización real se limita a no sobrepasar el saldo disponible de anticipo (hasta cubrir el 100%)
+    // La amortizaciÃ³n real se limita a no sobrepasar el saldo disponible de anticipo (hasta cubrir el 100%)
     const amortReal = Math.min(amortTeorica, saldoAnticipoDisponible);
     saldoAnticipoDisponible = Math.max(0, Math.round(((saldoAnticipoDisponible - amortReal) + Number.EPSILON) * 100) / 100);
 
@@ -700,7 +700,7 @@ export function getEstimacionesCalculatedData() {
   const netoEstaEstimacion = Math.max(0, Math.round(((grandTotalEjecutado - amortizacionEsta) + Number.EPSILON) * 100) / 100);
 
   // ============================================================
-  // CÁLCULO DE IVA Y TOTAL FACTURABLE (OPCIÓN 16% / PERSONALIZADO)
+  // CÃLCULO DE IVA Y TOTAL FACTURABLE (OPCIÃ“N 16% / PERSONALIZADO)
   // ============================================================
   const ivaPct = typeof estData.ivaPct === 'number' ? estData.ivaPct : 16;
   const ivaTotalContratado = Math.round(((grandTotalBase * (ivaPct / 100)) + Number.EPSILON) * 100) / 100;
@@ -827,7 +827,7 @@ export function calculateProjectTotalEstimacionesSummary(projectId, fallbackTota
 }
 
 // =========================================================================
-// GESTIÓN DE SUB-VISTAS: COBRANZA AL CLIENTE vs PAGOS A ESPECIALISTAS
+// GESTIÃ“N DE SUB-VISTAS: COBRANZA AL CLIENTE vs PAGOS A ESPECIALISTAS
 // =========================================================================
 
 export function getEstimacionesSubView() {
@@ -843,7 +843,7 @@ export function setEstimacionesSubView(subView) {
 }
 
 // =========================================================================
-// MÓDULO DE PAGOS A ESPECIALISTAS Y SUBCONTRATOS (CUENTAS POR PAGAR)
+// MÃ“DULO DE PAGOS A ESPECIALISTAS Y SUBCONTRATOS (CUENTAS POR PAGAR)
 // =========================================================================
 
 const SPECIALTY_KEYWORDS = [
@@ -863,7 +863,7 @@ function isSpecialtyOrStudyNode(node, parentTitle = '') {
   return SPECIALTY_KEYWORDS.some(kw => textToCheck.includes(kw));
 }
 
-// Obtener la lista consolidada de contratos de ingenierías y estudios desde ALCANCES
+// Obtener la lista consolidada de contratos de ingenierÃ­as y estudios desde ALCANCES
 export function getSpecialistsContractsData() {
   const data = loadEstimacionesData();
   const specialistsStore = data.specialists || {};
@@ -993,7 +993,7 @@ export function getSpecialistsContractsData() {
 
   treeNodes.forEach(rootNode => scanNode(rootNode, '', 1));
 
-  // Ordenar por clave lógica
+  // Ordenar por clave lÃ³gica
   contracts.sort((a, b) => {
     return String(a.clave).localeCompare(String(b.clave), undefined, { numeric: true, sensitivity: 'base' });
   });
@@ -1004,7 +1004,7 @@ export function getSpecialistsContractsData() {
 // Registrar un nuevo pago a un especialista
 export function addSpecialistPayment(nodeId, paymentData) {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite registrar pagos a especialistas.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite registrar pagos a especialistas.', 'warning');
     return null;
   }
   const data = loadEstimacionesData();
@@ -1045,7 +1045,7 @@ export function addSpecialistPayment(nodeId, paymentData) {
 // Actualizar un pago existente
 export function updateSpecialistPayment(nodeId, paymentId, paymentData) {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite modificar pagos a especialistas.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite modificar pagos a especialistas.', 'warning');
     return false;
   }
   const data = loadEstimacionesData();
@@ -1069,7 +1069,7 @@ export function updateSpecialistPayment(nodeId, paymentId, paymentData) {
 // Eliminar un pago
 export function deleteSpecialistPayment(nodeId, paymentId) {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite eliminar pagos a especialistas.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite eliminar pagos a especialistas.', 'warning');
     return false;
   }
   const data = loadEstimacionesData();
@@ -1083,7 +1083,7 @@ export function deleteSpecialistPayment(nodeId, paymentId) {
 // Asignar o actualizar el nombre del proveedor para una especialidad
 export function updateSpecialistProveedor(nodeId, proveedorName) {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite editar el proveedor de la especialidad.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite editar el proveedor de la especialidad.', 'warning');
     return false;
   }
   const data = loadEstimacionesData();

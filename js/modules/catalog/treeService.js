@@ -1,18 +1,31 @@
-import { state, persistLocalData } from '../../state/store.js';
-import { saveState } from '../../state/history.js';
-import { showToast } from '../../ui/notifications.js';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js';
-import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js';
-import { guardTabUnlocked } from '../../ui/tabLockController.js';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js';
+﻿import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
+import { saveState } from '../../state/history.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf3';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf3';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf3';
+import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf3';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf3';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf3';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf3';
 
-// Buscar un nodo por su ID recursivamente
+function createNodeUuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Buscar un nodo por su ID, UUID o Clave recursivamente
 export function findNodeById(nodes, id) {
+  if (!Array.isArray(nodes) || !id) return null;
   for (let n of nodes) {
-    if (n.id === id) return n;
+    if (n.id === id || (n.uuid && n.uuid === id) || (n.clave && n.clave === id)) return n;
     if (n.children) {
       let found = findNodeById(n.children, id);
       if (found) return found;
@@ -21,7 +34,7 @@ export function findNodeById(nodes, id) {
   return null;
 }
 
-// Obtener contexto de un nodo (padre, arreglo contenedor, índice)
+// Obtener contexto de un nodo (padre, arreglo contenedor, Ã­ndice)
 export function findNodeContext(nodes, id, parent = null, parentArray = null) {
   if (!parentArray) parentArray = nodes;
   for (let i = 0; i < nodes.length; i++) {
@@ -54,7 +67,7 @@ export function findParentArrayOfNode(nodes, id) {
   return null;
 }
 
-// Obtener la ruta jerárquica de descripciones para dar contexto completo a la IA
+// Obtener la ruta jerÃ¡rquica de descripciones para dar contexto completo a la IA
 export function getNodeHierarchyPath(nodes, targetId, path = []) {
   for (let n of nodes) {
     const current = [...path, n.descripcion];
@@ -67,7 +80,7 @@ export function getNodeHierarchyPath(nodes, targetId, path = []) {
   return null;
 }
 
-// Renumeración jerárquica de claves (1, 1.1, 1.1.1...)
+// RenumeraciÃ³n jerÃ¡rquica de claves (1, 1.1, 1.1.1...)
 export function recalculateClaves(nodes, parentClave = '') {
   nodes.forEach((node, idx) => {
     node.clave = parentClave ? `${parentClave}.${idx + 1}` : `${idx + 1}`;
@@ -77,17 +90,18 @@ export function recalculateClaves(nodes, parentClave = '') {
   });
 }
 
-// Agregar partida raíz principal
+// Agregar partida raÃ­z principal
 export function addRootRow() {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para agregar partidas en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para agregar partidas en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
   saveState();
-  const newId = '_' + Math.random().toString(36).substr(2, 9);
+  const newId = createNodeUuid();
   const newPartida = {
     id: newId,
+    uuid: newId,
     clave: '',
     descripcion: 'NUEVA PARTIDA PRINCIPAL',
     unidad: 'lote',
@@ -110,11 +124,11 @@ export function addRootRow() {
   showToast('Partida agregada', 'success');
 }
 
-// Agregar sub-concepto / sub-renglón
+// Agregar sub-concepto / sub-renglÃ³n
 export function addChildRow(parentId, e) {
   if (e) e.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para agregar conceptos en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para agregar conceptos en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
@@ -124,9 +138,10 @@ export function addChildRow(parentId, e) {
   saveState();
   if (!parent.children) parent.children = [];
   parent.unidad = 'lote';
-  const newId = '_' + Math.random().toString(36).substr(2, 9);
+  const newId = createNodeUuid();
   const newNode = {
     id: newId,
+    uuid: newId,
     clave: '',
     descripcion: 'Nuevo Sub-concepto',
     unidad: 'm2',
@@ -148,14 +163,14 @@ export function addChildRow(parentId, e) {
     patch: { type: 'add_child_row', parentId, node: newNode }
   });
   renderTAB1();
-  showToast('Sub-renglón agregado', 'success');
+  showToast('Sub-renglÃ³n agregado', 'success');
 }
 
 // Duplicar un nodo
 export function duplicarNode(id, e) {
   if (e) e.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para duplicar renglones.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para duplicar renglones.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
@@ -192,11 +207,11 @@ export function duplicarNode(id, e) {
     persistLocalData(true, {
       changeType: 'row_added',
       highlightId: cloned.id,
-      changeDescription: 'renglón duplicado',
+      changeDescription: 'renglÃ³n duplicado',
       patch: { type: 'duplicate_node', id, clonedNode: cloned }
     });
     renderTAB1();
-    showToast('Renglón duplicado', 'success');
+    showToast('RenglÃ³n duplicado', 'success');
   }
 }
 
@@ -294,18 +309,18 @@ export function copiarSelectedRow() {
   copiarNode(state.activeSelectedId);
 }
 
-// Pegar concepto copiado (con su respectiva matriz APU) en la ubicación seleccionada
+// Pegar concepto copiado (con su respectiva matriz APU) en la ubicaciÃ³n seleccionada
 export function pegarNode(targetId, e) {
   if (e) e.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para pegar conceptos en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para pegar conceptos en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
 
   const clip = getClipboardData();
   if (!clip || !clip.node) {
-    showToast('No hay ningún concepto copiado en el portapapeles. Copia un concepto primero.', 'warning');
+    showToast('No hay ningÃºn concepto copiado en el portapapeles. Copia un concepto primero.', 'warning');
     return;
   }
 
@@ -330,7 +345,7 @@ export function pegarNode(targetId, e) {
     insertIndex = parentList.length - 1;
   }
 
-  // Renovación recursiva de IDs únicos y preservación íntegra de la Matriz APU
+  // RenovaciÃ³n recursiva de IDs Ãºnicos y preservaciÃ³n Ã­ntegra de la Matriz APU
   function renewNodeDeep(n) {
     n.id = '_' + Math.random().toString(36).substr(2, 9);
     n.selected = true;
@@ -372,18 +387,18 @@ export function pegarNode(targetId, e) {
   persistLocalData();
   renderTAB1();
 
-  // Resaltar la fila pegada en la tabla (el panel lateral solo se abre con el botón de fila)
+  // Resaltar la fila pegada en la tabla (el panel lateral solo se abre con el botÃ³n de fila)
   highlightCatalogRowInPlace(pastedNode.id);
 
   const insCount = Array.isArray(pastedNode.insumos) ? pastedNode.insumos.length : 0;
   const originStr = (meta && meta.sourceProjectName) ? ` desde "${meta.sourceProjectName}"` : '';
-  showToast(`¡Concepto pegado con su Matriz APU (${insCount} insumo${insCount === 1 ? '' : 's'})${originStr}!`, 'success');
+  showToast(`Â¡Concepto pegado con su Matriz APU (${insCount} insumo${insCount === 1 ? '' : 's'})${originStr}!`, 'success');
 }
 
 export function pegarSelectedRow() {
   const clip = getClipboardData();
   if (!clip || !clip.node) {
-    showToast('No hay ningún concepto copiado en el portapapeles.', 'warning');
+    showToast('No hay ningÃºn concepto copiado en el portapapeles.', 'warning');
     return;
   }
   const targetId = state.activeSelectedId || (state.treeData.length > 0 ? state.treeData[state.treeData.length - 1].id : null);
@@ -412,7 +427,7 @@ export function updateClipboardUI() {
       btnPegar.classList.remove('opacity-40');
       btnPegar.title = `Pegar concepto copiado: [${clip.node.clave || ''}] ${clip.node.descripcion.slice(0, 30)}... (${clip.meta?.insumosCount || 0} insumos)`;
     } else {
-      btnPegar.title = 'No hay ningún concepto copiado en el portapapeles';
+      btnPegar.title = 'No hay ningÃºn concepto copiado en el portapapeles';
     }
   }
 
@@ -427,7 +442,7 @@ export function updateClipboardUI() {
 export function moverNode(id, direction, e) {
   if (e) e.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para mover filas en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para mover filas en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
@@ -458,7 +473,7 @@ export function moverNode(id, direction, e) {
           grandCtx.parentArray.splice(grandCtx.index, 0, node);
         }
       } else {
-        showToast('Ya está en la primera posición', 'info');
+        showToast('Ya estÃ¡ en la primera posiciÃ³n', 'info');
         return;
       }
     }
@@ -481,7 +496,7 @@ export function moverNode(id, direction, e) {
           grandCtx.parentArray.splice(grandCtx.index + 1, 0, node);
         }
       } else {
-        showToast('Ya está en la última posición', 'info');
+        showToast('Ya estÃ¡ en la Ãºltima posiciÃ³n', 'info');
         return;
       }
     }
@@ -531,7 +546,7 @@ export function moverSelectedRow(direction) {
 export function deleteNode(id, e) {
   if (e) e.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para eliminar filas en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para eliminar filas en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
@@ -548,7 +563,7 @@ export function deleteNode(id, e) {
   recalculateClaves(state.treeData);
   persistLocalData(true, {
     changeType: 'row_deleted',
-    changeDescription: 'una fila del catálogo',
+    changeDescription: 'una fila del catÃ¡logo',
     patch: { type: 'delete_node', id }
   });
   renderTAB1();
@@ -558,7 +573,7 @@ export function deleteNode(id, e) {
 // Eliminar filas marcadas o fila seleccionada
 export function deleteSelectedRow() {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para eliminar filas en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para eliminar filas en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) return;
@@ -574,7 +589,7 @@ export function deleteSelectedRow() {
   const checkedTotal = countCheckedNodes(state.treeData);
 
   if (checkedTotal > 0) {
-    if (!confirm(`¿Deseas eliminar las ${checkedTotal} filas marcadas con Checkbox?`)) return;
+    if (!confirm(`Â¿Deseas eliminar las ${checkedTotal} filas marcadas con Checkbox?`)) return;
     saveState();
 
     const deletedIds = [];
@@ -604,13 +619,13 @@ export function deleteSelectedRow() {
     recalculateClaves(state.treeData);
     persistLocalData(true, {
       changeType: 'row_deleted',
-      changeDescription: `${checkedTotal} fila(s) del catálogo`,
+      changeDescription: `${checkedTotal} fila(s) del catÃ¡logo`,
       patch: { type: 'delete_nodes', ids: deletedIds }
     });
   renderTAB1();
   showToast(`${checkedTotal} filas eliminadas`, 'info');
   } else if (state.activeSelectedId) {
-    if (confirm('¿Deseas eliminar la fila seleccionada actual?')) {
+    if (confirm('Â¿Deseas eliminar la fila seleccionada actual?')) {
       deleteNode(state.activeSelectedId);
     }
   } else {
@@ -621,7 +636,7 @@ export function deleteSelectedRow() {
 // Actualizar un campo de un nodo (descripcion, unidad, cantidad, precioUnitario, porcentaje_relativo, costo_proveedor)
 export function updateNode(id, field, value) {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para editar conceptos en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para editar conceptos en este proyecto.', 'warning');
     renderTAB1();
     return;
   }
@@ -640,11 +655,23 @@ export function updateNode(id, field, value) {
       node[field] = value;
     }
     calculateProrrateoCascade(state.treeData);
-    persistLocalData(false, {
+    try {
+      broadcastConceptChange(node);
+      pushConceptUpdateToSupabase(node);
+    } catch (_) {}
+    persistLocalData(true, {
       changeType: 'text_edit',
-      highlightId: id,
+      highlightId: node.id,
       changeDescription: `el concepto "${node.clave || ''}"`,
-      patch: { type: 'update_field', id, field, value: node[field] }
+      patch: {
+        type: 'update_field',
+        id: node.id,
+        uuid: node.uuid || node.id,
+        clave: node.clave || '',
+        field,
+        value: node[field]
+      },
+      skipFullCloudSync: field !== 'porcentaje_relativo'
     });
     renderTAB1();
   }
@@ -676,7 +703,7 @@ export function repartirEquitativamente(parentId, e) {
   calculateProrrateoCascade(state.treeData);
   persistLocalData();
   renderTAB1();
-  showToast(`Ponderación 100% repartida equitativamente entre los ${n} subconceptos de [${parent.clave || ''}].`, 'success');
+  showToast(`PonderaciÃ³n 100% repartida equitativamente entre los ${n} subconceptos de [${parent.clave || ''}].`, 'success');
 }
 
 // Plegar / desplegar hijos de un nodo
@@ -690,7 +717,7 @@ export function toggleExpand(id, e) {
   }
 }
 
-// Agrupar (colapsar) todas las partidas del Catálogo Base
+// Agrupar (colapsar) todas las partidas del CatÃ¡logo Base
 export function collapseAllCatalogNodes() {
   function collapseRecursive(nodes) {
     nodes.forEach(n => {
@@ -703,10 +730,10 @@ export function collapseAllCatalogNodes() {
   collapseRecursive(state.treeData);
   persistLocalData();
   renderTAB1();
-  showToast('Se han agrupado todas las partidas del catálogo', 'info');
+  showToast('Se han agrupado todas las partidas del catÃ¡logo', 'info');
 }
 
-// Desagrupar (expandir) todas las partidas del Catálogo Base
+// Desagrupar (expandir) todas las partidas del CatÃ¡logo Base
 export function expandAllCatalogNodes() {
   function expandRecursive(nodes) {
     nodes.forEach(n => {
@@ -722,7 +749,7 @@ export function expandAllCatalogNodes() {
   showToast('Se han desagrupado y mostrado todos los conceptos', 'info');
 }
 
-// Acción de barra de herramientas: Agrupar conceptos
+// AcciÃ³n de barra de herramientas: Agrupar conceptos
 export function agruparCatalogoConceptos() {
   if (state.activeSelectedId) {
     const selectedNode = findNodeById(state.treeData, state.activeSelectedId);
@@ -737,7 +764,7 @@ export function agruparCatalogoConceptos() {
   collapseAllCatalogNodes();
 }
 
-// Acción de barra de herramientas: Desagrupar conceptos
+// AcciÃ³n de barra de herramientas: Desagrupar conceptos
 export function desagruparCatalogoConceptos() {
   if (state.activeSelectedId) {
     const selectedNode = findNodeById(state.treeData, state.activeSelectedId);
@@ -756,7 +783,7 @@ export function desagruparCatalogoConceptos() {
 export function updateNodeColor(id, newColor, event) {
   if (event) event.stopPropagation();
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo solo lectura: No tienes permisos para editar colores en este proyecto.', 'warning');
+    showToast('ðŸ”’ Modo solo lectura: No tienes permisos para editar colores en este proyecto.', 'warning');
     return;
   }
   if (!guardTabUnlocked('cat')) {
@@ -788,7 +815,7 @@ export function clearNodeColor(id, event) {
   showToast(`Color restablecido en ${node.clave || 'partida'}`, 'info');
 }
 
-// Asignar colores automáticamente a las filas de Nivel 1 (propagándose progresivamente a sus sub-filas)
+// Asignar colores automÃ¡ticamente a las filas de Nivel 1 (propagÃ¡ndose progresivamente a sus sub-filas)
 export function autoAssignCatalogColors(event) {
   if (event) {
     event.stopPropagation();
@@ -858,10 +885,10 @@ export function autoAssignCatalogColors(event) {
 
   persistLocalData();
   renderTAB1();
-  showToast('Colores asignados automáticamente a filas y sub-filas', 'success');
+  showToast('Colores asignados automÃ¡ticamente a filas y sub-filas', 'success');
 }
 
-// Checkbox individual de fila (con propagación a hijos)
+// Checkbox individual de fila (con propagaciÃ³n a hijos)
 export function toggleSelectNode(id, isChecked, e) {
   if (e) e.stopPropagation();
   if (!guardTabUnlocked('cat')) {

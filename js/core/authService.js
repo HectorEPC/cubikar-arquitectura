@@ -1,12 +1,12 @@
-// js/core/authService.js
-// Servicio de Autenticación integrado con Supabase Auth y tabla public.perfiles
+﻿// js/core/authService.js
+// Servicio de AutenticaciÃ³n integrado con Supabase Auth y tabla public.perfiles
 
-import { STORAGE_KEY_USER } from '../config/constants.js';
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js';
+import { STORAGE_KEY_USER } from '../config/constants.js?v=20261116_cf3';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf3';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261116_cf3';
 
 export { enforceGlobalSessionRevocation };
-import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js';
+import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261116_cf3';
 import {
   writeSharedSsoCookie,
   clearSharedSsoCookie,
@@ -16,7 +16,7 @@ import {
   scrubSsoHashParams,
   hasPendingIncomingSso,
   getLastSignOutTimestamp
-} from './ssoHelper.js';
+} from './ssoHelper.js?v=20261116_cf3';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -99,18 +99,18 @@ function hasValidLocalSessionForEmail(email) {
     }
   }
 
-  // 1. Sesión activa en pestaña actual
+  // 1. SesiÃ³n activa en pestaÃ±a actual
   if (typeof sessionStorage !== 'undefined' && !!sessionStorage.getItem(STORAGE_KEY_USER)) {
     return true;
   }
 
-  // 2. Sesión recordada en localStorage
+  // 2. SesiÃ³n recordada en localStorage
   const isDeviceRemembered = typeof localStorage !== 'undefined' && localStorage.getItem('cubikar_remember_device') !== 'false';
   if (typeof localStorage !== 'undefined' && !!localStorage.getItem(STORAGE_KEY_USER) && isDeviceRemembered) {
     return true;
   }
 
-  // 3. Tokens SSO compartidos válidos de .cubikar.app (no revocados por sign out posterior)
+  // 3. Tokens SSO compartidos vÃ¡lidos de .cubikar.app (no revocados por sign out posterior)
   const cookieTokens = readSharedSsoCookie();
   const lastSignOutTs = getLastSignOutTimestamp();
   if (cookieTokens?.refreshToken) {
@@ -194,7 +194,7 @@ function bytesToHex(bytes) {
 
 async function createGoogleNoncePair() {
   if (typeof window === 'undefined' || !window.crypto?.getRandomValues || !window.crypto?.subtle) {
-    throw new Error('Tu navegador no soporta criptografía segura para iniciar sesión con Google.');
+    throw new Error('Tu navegador no soporta criptografÃ­a segura para iniciar sesiÃ³n con Google.');
   }
   const randomBytes = new Uint8Array(24);
   window.crypto.getRandomValues(randomBytes);
@@ -231,7 +231,7 @@ export async function ensureGoogleGsiScript(timeoutMs = 8000) {
       scriptEl.addEventListener('error', () => {
         cleanup();
         googleGsiLoadPromise = null;
-        reject(new Error('No se pudo cargar Google Sign-In. Verifica tu conexión o bloqueadores.'));
+        reject(new Error('No se pudo cargar Google Sign-In. Verifica tu conexiÃ³n o bloqueadores.'));
       }, { once: true });
 
       const pollId = setInterval(() => {
@@ -241,7 +241,7 @@ export async function ensureGoogleGsiScript(timeoutMs = 8000) {
         } else if (Date.now() - startTime >= timeoutMs) {
           cleanup();
           googleGsiLoadPromise = null;
-          reject(new Error('Google Sign-In tardó demasiado en responder.'));
+          reject(new Error('Google Sign-In tardÃ³ demasiado en responder.'));
         }
       }, 100);
     });
@@ -250,12 +250,12 @@ export async function ensureGoogleGsiScript(timeoutMs = 8000) {
 }
 
 /**
- * Registro con Correo Electrónico y Contraseña
+ * Registro con Correo ElectrÃ³nico y ContraseÃ±a
  */
 export async function signUp({ email, password, fullName }) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
-    throw new Error('Supabase no está disponible en este momento.');
+    throw new Error('Supabase no estÃ¡ disponible en este momento.');
   }
 
   explicitAuthDepth += 1;
@@ -281,12 +281,12 @@ export async function signUp({ email, password, fullName }) {
 }
 
 /**
- * Inicio de sesión con Correo Electrónico y Contraseña
+ * Inicio de sesiÃ³n con Correo ElectrÃ³nico y ContraseÃ±a
  */
 export async function signInWithPassword({ email, password, remember = null }) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
-    throw new Error('Supabase no está disponible en este momento.');
+    throw new Error('Supabase no estÃ¡ disponible en este momento.');
   }
 
   const cleanEmail = (email || '').toLowerCase().trim();
@@ -385,12 +385,12 @@ export async function signInWithPassword({ email, password, remember = null }) {
 }
 
 /**
- * Inicio de sesión mediante Google (OAuth)
+ * Inicio de sesiÃ³n mediante Google (OAuth)
  */
 export async function signInWithGoogle() {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
-    throw new Error('Supabase no está disponible en este momento.');
+    throw new Error('Supabase no estÃ¡ disponible en este momento.');
   }
 
   let cleanRedirect = window.location.href.split('#')[0].split('?')[0];
@@ -413,15 +413,15 @@ export async function signInWithGoogle() {
 }
 
 /**
- * Autenticación directa con ID Token de Google (evita redirect /auth/v1/callback)
+ * AutenticaciÃ³n directa con ID Token de Google (evita redirect /auth/v1/callback)
  */
 export async function signInWithGoogleIdToken({ idToken, rawNonce, remember = null }) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
-    throw new Error('Supabase no está configurado para iniciar sesión con Google.');
+    throw new Error('Supabase no estÃ¡ configurado para iniciar sesiÃ³n con Google.');
   }
   if (!idToken) {
-    throw new Error('Google no devolvió un token de identidad válido.');
+    throw new Error('Google no devolviÃ³ un token de identidad vÃ¡lido.');
   }
 
   const payload = {
@@ -470,7 +470,7 @@ export async function signInWithGoogleIdToken({ idToken, rawNonce, remember = nu
 }
 
 /**
- * Monta el botón oficial de Google Identity Services con nonce SHA-256
+ * Monta el botÃ³n oficial de Google Identity Services con nonce SHA-256
  */
 export async function mountGoogleSignInButton({
   container,
@@ -504,7 +504,7 @@ export async function mountGoogleSignInButton({
         const usedRawNonce = activeGoogleNoncePair?.rawNonce || null;
         activeGoogleNoncePair = null;
         if (!response?.credential) {
-          const credErr = new Error('No se recibió una credencial válida de Google.');
+          const credErr = new Error('No se recibiÃ³ una credencial vÃ¡lida de Google.');
           if (typeof onError === 'function') onError(credErr);
           return;
         }
@@ -548,7 +548,7 @@ export async function mountGoogleSignInButton({
     }
     return true;
   } catch (err) {
-    console.warn('[Google GIS] No se pudo renderizar el botón oficial:', err);
+    console.warn('[Google GIS] No se pudo renderizar el botÃ³n oficial:', err);
     container.classList.add('hidden');
     if (fallbackBtn) {
       fallbackBtn.classList.remove('hidden');
@@ -558,7 +558,7 @@ export async function mountGoogleSignInButton({
 }
 
 /**
- * Cierre de sesión seguro
+ * Cierre de sesiÃ³n seguro
  */
 export async function signOut(options = {}) {
   const scope = options?.scope === 'global' ? 'global' : 'local';
@@ -592,12 +592,12 @@ export async function signOut(options = {}) {
 export const signOutUser = signOut;
 
 /**
- * Recuperación de contraseña por Email
+ * RecuperaciÃ³n de contraseÃ±a por Email
  */
 export async function resetPasswordForEmail(email) {
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) {
-    throw new Error('Supabase no está disponible en este momento.');
+    throw new Error('Supabase no estÃ¡ disponible en este momento.');
   }
 
   const { data, error } = await sb.auth.resetPasswordForEmail(email, {
@@ -670,7 +670,7 @@ export async function fetchUserProfile(userId, forceRefresh = false) {
 }
 
 /**
- * Sincroniza la sesión con el estado local del portal
+ * Sincroniza la sesiÃ³n con el estado local del portal
  */
 export function syncLocalUserSession(user, perfil, force = false, remember = null) {
   if (!user) return;
@@ -678,7 +678,7 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
   const cleanEmail = (user.email || '').toLowerCase().trim();
   const sameEmail = !!(current?.email && cleanEmail && current.email.toLowerCase().trim() === cleanEmail);
   if (!force && current && current.email && user.email && !sameEmail) {
-    console.info('[Supabase Auth] Sesión remota difiere del usuario activo local, respetando usuario activo actual.');
+    console.info('[Supabase Auth] SesiÃ³n remota difiere del usuario activo local, respetando usuario activo actual.');
     return;
   }
   const existingSameUser = sameEmail ? current : null;
@@ -690,7 +690,7 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
   const metaSub = user.user_metadata?.subscription;
   const existingCycle = metaSub?.billingCycle === 'annual' ? 'annual' : 'monthly';
 
-  // 1. Prioridad máxima: Plan autoritativo en tabla empresas de Supabase (plan_arq || plan)
+  // 1. Prioridad mÃ¡xima: Plan autoritativo en tabla empresas de Supabase (plan_arq || plan)
   if (perfil?.empresas) {
     const emp = perfil.empresas;
     const dbPlan = emp.plan_arq || emp.plan || 'free';
@@ -705,7 +705,7 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
     }
   }
 
-  // 2. Metadatos en Supabase Auth si aún no se resolvió desde empresas
+  // 2. Metadatos en Supabase Auth si aÃºn no se resolviÃ³ desde empresas
   if ((!userSub || userSub.planId === 'free') && metaSub && typeof metaSub === 'object' && metaSub.planId && metaSub.planId !== 'free') {
     userSub = {
       planId: metaSub.planId,
@@ -714,7 +714,7 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
     };
   }
 
-  // 3. Caché local aislada de ADM_ARQ (con fallback de migración solo lectura)
+  // 3. CachÃ© local aislada de ADM_ARQ (con fallback de migraciÃ³n solo lectura)
   if ((!userSub || userSub.planId === 'free') && typeof localStorage !== 'undefined') {
     const userSubRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
       || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
@@ -783,14 +783,14 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
 }
 
 /**
- * Verifica síncronamente si hay una sesión SSO entrante pendiente desde otro subdominio Cubikar
+ * Verifica sÃ­ncronamente si hay una sesiÃ³n SSO entrante pendiente desde otro subdominio Cubikar
  */
 export function hasPendingIncomingSsoSession() {
   return hasPendingIncomingSso(!!getCurrentUser());
 }
 
 /**
- * Hidrata una sesión SSO entrante (vía URL hash o cookie compartida .cubikar.app) sin pedir login de nuevo
+ * Hidrata una sesiÃ³n SSO entrante (vÃ­a URL hash o cookie compartida .cubikar.app) sin pedir login de nuevo
  */
 export async function hydrateIncomingSsoSession() {
   const sb = getSupabaseClient();
@@ -934,7 +934,7 @@ export async function hydrateIncomingSsoSession() {
 
     return { hydrated: true, session: data.session, user: data.session.user };
   } catch (err) {
-    console.warn('[Supabase SSO] No se pudo hidratar sesión entrante:', err?.message || err);
+    console.warn('[Supabase SSO] No se pudo hidratar sesiÃ³n entrante:', err?.message || err);
     return { hydrated: false, error: err };
   } finally {
     ssoHydrationInProgress = false;
@@ -944,14 +944,14 @@ export async function hydrateIncomingSsoSession() {
 }
 
 /**
- * Listener global de eventos de autenticación
+ * Listener global de eventos de autenticaciÃ³n
  */
 export function initAuthListener(onAuthChangeCallback) {
   enforceGlobalSessionRevocation();
   const sb = getSupabaseClient();
   if (!sb) return;
 
-  // Callback síncrono: evita bloquear navigator.locks de Supabase GoTrue con consultas DB en línea.
+  // Callback sÃ­ncrono: evita bloquear navigator.locks de Supabase GoTrue con consultas DB en lÃ­nea.
   sb.auth.onAuthStateChange((event, session) => {
     console.info(`[Supabase Auth] Evento: ${event}`);
     if (session?.user) {
@@ -973,7 +973,7 @@ export function initAuthListener(onAuthChangeCallback) {
       if (isExplicitInteractive) {
         markSessionOpen(email);
       } else if (isClosed || (!hasActiveLocal && !hasPendingIncomingSso(false))) {
-        console.info(`[Supabase Auth] Bloqueando auto-sesión pasiva (${event}) por sesión cerrada o sin persistencia en este equipo.`);
+        console.info(`[Supabase Auth] Bloqueando auto-sesiÃ³n pasiva (${event}) por sesiÃ³n cerrada o sin persistencia en este equipo.`);
         clearCachedUserProfiles();
         clearLocalSupabaseTokens();
         saveCurrentUser(null);

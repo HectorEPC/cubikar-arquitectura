@@ -1,9 +1,9 @@
-import { isNightMode } from '../ui/themeController.js';
+﻿import { isNightMode } from '../ui/themeController.js?v=20261116_cf3';
 
-// Cache de colores jerárquicos para evitar cálculos repetitivos
+// Cache de colores jerÃ¡rquicos para evitar cÃ¡lculos repetitivos
 export const hierarchyColorCache = new Map();
 
-// Paleta armónica para colorear automáticamente partidas Nivel 1 y sus sub-filas
+// Paleta armÃ³nica para colorear automÃ¡ticamente partidas Nivel 1 y sus sub-filas
 export const AUTO_ROW_PALETTE = [
   '#6366f1',
   '#3b82f6',
@@ -19,7 +19,7 @@ export const AUTO_ROW_PALETTE = [
   '#84cc16'
 ];
 
-// Función de cálculo de color jerárquico progresivo (se va aclarando en Vista de Día y suavizando en Modo Nocturno)
+// FunciÃ³n de cÃ¡lculo de color jerÃ¡rquico progresivo (se va aclarando en Vista de DÃ­a y suavizando en Modo Nocturno)
 export function getHierarchyColor(hexColor, depthOffset, options = {}) {
   if (!hexColor) return null;
   const night = options.forceLight ? false : isNightMode();
@@ -51,7 +51,7 @@ export function getHierarchyColor(hexColor, depthOffset, options = {}) {
     return resDark;
   }
 
-  // Factores de mezcla con blanco según la jerarquía (se va aclarando progresivamente)
+  // Factores de mezcla con blanco segÃºn la jerarquÃ­a (se va aclarando progresivamente)
   // Nivel 0 (concepto con color propio): 28% color + 72% blanco
   // Nivel 1 (sub-fila directa): 18% color + 82% blanco
   // Nivel 2 (sub-sub-fila): 10% color + 90% blanco

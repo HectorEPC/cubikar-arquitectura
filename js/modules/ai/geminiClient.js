@@ -1,16 +1,16 @@
-import { state, persistSettings, persistLocalData } from '../../state/store.js';
-import { saveState } from '../../state/history.js';
-import { showToast } from '../../ui/notifications.js';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js';
-import { renderTAB1 } from '../catalog/catalogView.js';
-import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js';
-import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js';
-import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js';
-import { round5 } from '../../core/formatters.js';
+﻿import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261116_cf3';
+import { saveState } from '../../state/history.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261116_cf3';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf3';
+import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261116_cf3';
+import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261116_cf3';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf3';
+import { round5 } from '../../core/formatters.js?v=20261116_cf3';
 
 // Extractor robusto de JSON para respuestas de Gemini
 export function extractJsonFromAiResponse(text) {
-  if (!text) throw new Error('Respuesta vacía');
+  if (!text) throw new Error('Respuesta vacÃ­a');
   try {
     return JSON.parse(text);
   } catch (e) {
@@ -30,7 +30,7 @@ export function extractJsonFromAiResponse(text) {
   }
 }
 
-// Probar conexión de API Key con Google Search Grounding
+// Probar conexiÃ³n de API Key con Google Search Grounding
 export async function testGeminiConnection() {
   const apiKeyInput = (document.getElementById('ai-modal-api-key')?.value || '').trim();
   const errorBox = document.getElementById('ai-modal-error');
@@ -40,7 +40,7 @@ export async function testGeminiConnection() {
   if (!apiKeyInput) {
     if (errorBox) errorBox.classList.remove('hidden');
     if (errorTitle) errorTitle.innerText = 'Se requiere API Key';
-    if (errorMsg) errorMsg.innerText = 'Ingresa una API Key para probar la conexión con Google Search Grounding.';
+    if (errorMsg) errorMsg.innerText = 'Ingresa una API Key para probar la conexiÃ³n con Google Search Grounding.';
     return;
   }
 
@@ -56,7 +56,7 @@ export async function testGeminiConnection() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Prueba de conexión con Google Search. ¿Cuál es el precio del cemento en México?' }] }],
+          contents: [{ parts: [{ text: 'Prueba de conexiÃ³n con Google Search. Â¿CuÃ¡l es el precio del cemento en MÃ©xico?' }] }],
           tools: [{ googleSearch: {} }]
         })
       });
@@ -64,7 +64,7 @@ export async function testGeminiConnection() {
       if (response.ok) {
         testSuccess = true;
         if (errorBox) errorBox.classList.add('hidden');
-        showToast(`✅ Conexión verificada con ${m} y Google Search Grounding`, 'success');
+        showToast(`âœ… ConexiÃ³n verificada con ${m} y Google Search Grounding`, 'success');
         break;
       } else {
         const errData = await response.json().catch(() => ({}));
@@ -77,7 +77,7 @@ export async function testGeminiConnection() {
 
   if (!testSuccess) {
     if (errorBox) errorBox.classList.remove('hidden');
-    if (errorTitle) errorTitle.innerText = 'Fallo en la prueba de conexión';
+    if (errorTitle) errorTitle.innerText = 'Fallo en la prueba de conexiÃ³n';
     if (errorMsg) errorMsg.innerText = testErr;
   }
 }
@@ -91,7 +91,7 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
   const node = targetId ? findNodeById(state.treeData, targetId) : null;
 
   if (!node) {
-    showToast('Selecciona un concepto en el catálogo primero para generar su matriz con Google IA.', 'warning');
+    showToast('Selecciona un concepto en el catÃ¡logo primero para generar su matriz con Google IA.', 'warning');
     return false;
   }
 
@@ -161,7 +161,7 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
     }
 
     if (!Array.isArray(data.insumos) || data.insumos.length === 0) {
-      throw new Error('La IA no devolvió insumos utilizables para este concepto.');
+      throw new Error('La IA no devolviÃ³ insumos utilizables para este concepto.');
     }
 
     // Guardar estado previo para Deshacer (Undo)
@@ -188,7 +188,7 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
     renderInsumosUnitarios(node);
     renderTAB1();
 
-    showToast(`✅ ¡Matriz APU generada automáticamente con Google IA para [${node.clave || ''}]!`, 'success');
+    showToast(`âœ… Â¡Matriz APU generada automÃ¡ticamente con Google IA para [${node.clave || ''}]!`, 'success');
     return true;
   } catch (err) {
     console.error('Error generando matriz con Google IA:', err);
@@ -203,7 +203,7 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
           renderAPUInsumos(node);
           renderInsumosUnitarios(node);
           renderTAB1();
-          showToast(`✅ Matriz generada con Google Search Grounding`, 'success');
+          showToast(`âœ… Matriz generada con Google Search Grounding`, 'success');
           return true;
         }
       } catch (fbErr) {
@@ -259,7 +259,7 @@ export async function generarMatrizCasillasGoogleIA() {
   }
 
   if (successCount > 0) {
-    showToast(`✅ ${successCount} de ${selected.length} matrices generadas exitosamente con Google IA.`, 'success');
+    showToast(`âœ… ${successCount} de ${selected.length} matrices generadas exitosamente con Google IA.`, 'success');
   }
 }
 
@@ -267,7 +267,7 @@ export async function generarMatrizCasillasGoogleIA() {
  * Consulta a Gemini con Google Search Grounding para estructurar la matriz de un concepto individual.
  */
 export async function queryGeminiSingleConcept(node, apiKeyInput, onStatus) {
-  if (!node) return { success: false, error: 'Nodo no válido' };
+  if (!node) return { success: false, error: 'Nodo no vÃ¡lido' };
 
   const pathArr = getNodeHierarchyPath(state.treeData, node.id) || [];
   const fullPath = pathArr.join('  >  ');
@@ -275,39 +275,39 @@ export async function queryGeminiSingleConcept(node, apiKeyInput, onStatus) {
   const fasarVal = state.settings?.pctFasar !== undefined ? Number(state.settings.pctFasar) : 70.0;
   const fasarFactor = (fasarVal > 0 && fasarVal < 5.0) ? fasarVal : (1 + (fasarVal / 100));
 
-  const promptText = `Eres un ingeniero civil especialista senior en Análisis de Precios Unitarios (APU) y costos de construcción en México.
-Utiliza Google Search Grounding para investigar precios comerciales y rendimientos vigentes en el mercado de la construcción en México (en Pesos Mexicanos MXN).
+  const promptText = `Eres un ingeniero civil especialista senior en AnÃ¡lisis de Precios Unitarios (APU) y costos de construcciÃ³n en MÃ©xico.
+Utiliza Google Search Grounding para investigar precios comerciales y rendimientos vigentes en el mercado de la construcciÃ³n en MÃ©xico (en Pesos Mexicanos MXN).
 
 Datos de la fila seleccionada en TAB1-CAT-BASE:
-- Ubicación / Partida en presupuesto: "${fullPath}"
+- UbicaciÃ³n / Partida en presupuesto: "${fullPath}"
 - Clave de concepto: "${node.clave || ''}"
-- Descripción exacta del concepto: "${node.descripcion || ''}"
+- DescripciÃ³n exacta del concepto: "${node.descripcion || ''}"
 - Unidad de medida del concepto: "${node.unidad || 'pza'}"
 - Cantidad de obra en presupuesto: ${node.cantidad || 1} ${node.unidad || 'pza'}
 
 REGLA FUNDAMENTAL DE PRECIOS UNITARIOS (APU):
 La propiedad 'cantidad' de CADA insumo (Material, Mano de Obra, Equipo/Herramienta, Subcontrato) DEBE SER ESTRICTAMENTE el consumo o rendimiento unitario necesario para elaborar EXACTAMENTE UNA UNIDAD (1 ${node.unidad || 'pza'}) del concepto.
-¡NO debes multiplicar por la cantidad total de obra del presupuesto (${node.cantidad || 1})! Únicamente el consumo por 1 ${node.unidad || 'pza'}.
-Ejemplos de congruencia matemática:
+Â¡NO debes multiplicar por la cantidad total de obra del presupuesto (${node.cantidad || 1})! Ãšnicamente el consumo por 1 ${node.unidad || 'pza'}.
+Ejemplos de congruencia matemÃ¡tica:
 - Si el concepto es en m2 y lleva concreto (m3) con espesor 10 cm: cantidad = 1.0 * 0.10 * 1.05 desperdicio = 0.105 m3.
 - Si lleva malla electrosoldada en m2: cantidad = 1.10 m2 (considerando 10% traslapes).
 - Si es Mano de Obra en 'jor': cantidad = 1 / RendimientoDiario (ej. 1 / 12.5 m2/jor = 0.0800 jor).
 - Si es Herramienta menor (%): cantidad = 0.03 (3%).
 
 Instrucciones prioritarias con Google Search:
-1. Realiza búsquedas en Google de los precios actuales de mercado en México para los materiales comerciales que componen este concepto (puestos en obra).
-2. Busca los salarios de cuadrillas (oficiales + peones) aplicando el Factor de Salario Real (FASAR) configurado en el sistema (+${fasarVal.toFixed(1)}% / Factor ${fasarFactor.toFixed(2)}) para inflar el salario nominal y cubrir IMSS, INFONAVIT, SAR, riesgos y prestaciones según tabuladores CMIC / Neodata / Opus.
+1. Realiza bÃºsquedas en Google de los precios actuales de mercado en MÃ©xico para los materiales comerciales que componen este concepto (puestos en obra).
+2. Busca los salarios de cuadrillas (oficiales + peones) aplicando el Factor de Salario Real (FASAR) configurado en el sistema (+${fasarVal.toFixed(1)}% / Factor ${fasarFactor.toFixed(2)}) para inflar el salario nominal y cubrir IMSS, INFONAVIT, SAR, riesgos y prestaciones segÃºn tabuladores CMIC / Neodata / Opus.
 3. Determina el equipo, maquinaria y herramienta requerida.
 4. Clasifica los insumos en los rubros: "Material", "Mano de Obra", "Herramienta", "Equipo", "Maquinaria" o "Subcontrato".
-5. Al final de tu análisis, devuelve OBLIGATORIAMENTE un bloque de código JSON con esta estructura exacta:
+5. Al final de tu anÃ¡lisis, devuelve OBLIGATORIAMENTE un bloque de cÃ³digo JSON con esta estructura exacta:
 \`\`\`json
 {
-  "sugerencias": "Recomendación técnica sobre ejecución, curado, pruebas o normativas mexicanas para este concepto...",
+  "sugerencias": "RecomendaciÃ³n tÃ©cnica sobre ejecuciÃ³n, curado, pruebas o normativas mexicanas para este concepto...",
   "insumos": [
     {
       "clave": "MAT-01",
       "tipo": "Material",
-      "descripcion": "Descripción comercial detallada del material con especificación",
+      "descripcion": "DescripciÃ³n comercial detallada del material con especificaciÃ³n",
       "unidad": "m3/kg/pza/etc",
       "cantidad": 0.00,
       "costoUnitario": 0.00
@@ -315,7 +315,7 @@ Instrucciones prioritarias con Google Search:
     {
       "clave": "MO-01",
       "tipo": "Mano de Obra",
-      "descripcion": "Cuadrilla de mano de obra (Oficial + Peón) con rendimiento",
+      "descripcion": "Cuadrilla de mano de obra (Oficial + PeÃ³n) con rendimiento",
       "unidad": "jor/m2/etc",
       "cantidad": 0.00,
       "costoUnitario": 0.00
@@ -379,7 +379,7 @@ Instrucciones prioritarias con Google Search:
       const textContent = candidate?.content?.parts?.[0]?.text;
 
       if (!textContent) {
-        lastError = 'La IA no devolvió texto en su respuesta.';
+        lastError = 'La IA no devolviÃ³ texto en su respuesta.';
         continue;
       }
 
@@ -434,7 +434,7 @@ Instrucciones prioritarias con Google Search:
   return { success: false, error: lastError };
 }
 
-// Ejecución de Generación con IA y Google Search Grounding (Lote o Individual)
+// EjecuciÃ³n de GeneraciÃ³n con IA y Google Search Grounding (Lote o Individual)
 export async function executeAiGeneration() {
   const apiKeyInput = (document.getElementById('ai-modal-api-key')?.value || '').trim();
   const errorBox = document.getElementById('ai-modal-error');
@@ -447,7 +447,7 @@ export async function executeAiGeneration() {
   if (!apiKeyInput) {
     if (errorBox) errorBox.classList.remove('hidden');
     if (errorTitle) errorTitle.innerText = 'Se requiere API Key';
-    if (errorMsg) errorMsg.innerText = 'Para realizar búsquedas en Google Search Grounding en tiempo real, ingresa tu API Key gratuita de Gemini.';
+    if (errorMsg) errorMsg.innerText = 'Para realizar bÃºsquedas en Google Search Grounding en tiempo real, ingresa tu API Key gratuita de Gemini.';
     document.getElementById('ai-modal-api-key')?.focus();
     return;
   }
@@ -508,7 +508,7 @@ export async function executeAiGeneration() {
         lastError = res.error || 'Fallo al procesar respuesta';
       }
     } catch (err) {
-      lastError = err.message || 'Error de conexión';
+      lastError = err.message || 'Error de conexiÃ³n';
       console.error(`Error en concepto ${node.clave}:`, err);
     }
   }
@@ -528,13 +528,13 @@ export async function executeAiGeneration() {
 
     const msg = targets.length === 1
       ? 'Matriz generada con Google Search Grounding'
-      : `✅ Matrices generadas con Google IA para ${successCount} de ${targets.length} conceptos`;
+      : `âœ… Matrices generadas con Google IA para ${successCount} de ${targets.length} conceptos`;
     showToast(msg, 'success');
   } else {
     if (loadingBox) loadingBox.classList.add('hidden');
     if (errorBox) errorBox.classList.remove('hidden');
     if (errorTitle) errorTitle.innerText = 'Error al consultar Google Search';
-    if (errorMsg) errorMsg.innerText = `${lastError}. Verifica tu API Key o prueba la conexión.`;
+    if (errorMsg) errorMsg.innerText = `${lastError}. Verifica tu API Key o prueba la conexiÃ³n.`;
     if (btnRun) btnRun.disabled = false;
   }
 }

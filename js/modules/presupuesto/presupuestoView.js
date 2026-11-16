@@ -1,14 +1,14 @@
 ﻿// js/modules/presupuesto/presupuestoView.js
 // Pestaña 1: Presupuesto al Cliente (Barra de botones, Desglose de Presupuesto, Resumen Ejecutivo y Notas)
 
-import { state, persistLocalData } from '../../state/store.js';
-import { findNodeById } from '../catalog/treeService.js';
-import { formatMoney, getCurrencyCode } from '../../core/formatters.js';
-import { showToast } from '../../ui/notifications.js';
-import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js';
-import { getActiveProjectId } from '../../config/constants.js';
-import { canCurrentUserEditProject } from '../portal/projectService.js';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf3';
+import { formatMoney, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf3';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf3';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261116_cf3';
 
 import {
   getProjectPresupuestoConfig,
@@ -16,12 +16,12 @@ import {
   calcularResumenPresupuesto,
   savePresupuestoSettings,
   isSubtituloNode
-} from './presupuestoModel.js';
+} from './presupuestoModel.js?v=20261116_cf3';
 import {
   buildPresupuestoPrintTableHtml,
   printPresupuestoCotizacion,
   exportPresupuestoExcel
-} from './presupuestoExport.js';
+} from './presupuestoExport.js?v=20261116_cf3';
 
 export {
   getProjectPresupuestoConfig,

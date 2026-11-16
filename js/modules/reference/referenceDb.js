@@ -1,12 +1,12 @@
-// js/modules/reference/referenceDb.js
-// Gestor de base de datos local IndexedDB para Catálogos Maestros de Referencia
+﻿// js/modules/reference/referenceDb.js
+// Gestor de base de datos local IndexedDB para CatÃ¡logos Maestros de Referencia
 
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf3';
 import {
   STORAGE_KEY_USER,
   STORAGE_KEY_ACTIVE_WORKSPACE,
   STORAGE_KEY_SUBSCRIPTION
-} from '../../config/constants.js';
+} from '../../config/constants.js?v=20261116_cf3';
 
 const DB_NAME = 'APU_REFERENCE_DB';
 const DB_VERSION = 1;
@@ -22,7 +22,7 @@ export const PLAN_STORAGE_MB = {
   pro: { planId: 'pro', name: 'Pro', storageMb: 2500 }
 };
 
-// Obtener plan de suscripción para un propietario específico
+// Obtener plan de suscripciÃ³n para un propietario especÃ­fico
 export function getWorkspacePlanInfo(ownerEmail) {
   const normEmail = (ownerEmail || '').toLowerCase().trim();
   try {
@@ -135,12 +135,12 @@ export function getActiveWorkspaceContext() {
   };
 }
 
-// Helper rápido para obtener el email del titular del espacio activo
+// Helper rÃ¡pido para obtener el email del titular del espacio activo
 export function getActiveWorkspaceOwnerEmail() {
   return getActiveWorkspaceContext().ownerEmail;
 }
 
-// Verificar si la importación cabe en el almacenamiento del plan del espacio de trabajo
+// Verificar si la importaciÃ³n cabe en el almacenamiento del plan del espacio de trabajo
 export async function canImportReferenceCatalog(estimatedBytes = 0, targetOwnerEmail = null) {
   const context = getActiveWorkspaceContext();
   const owner = (targetOwnerEmail || context.ownerEmail).toLowerCase().trim();
@@ -175,7 +175,7 @@ export function openReferenceDb() {
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
 
-      // Store para metadatos de los catálogos importados
+      // Store para metadatos de los catÃ¡logos importados
       if (!db.objectStoreNames.contains('catalogs')) {
         const catStore = db.createObjectStore('catalogs', { keyPath: 'id' });
         catStore.createIndex('name', 'name', { unique: false });
@@ -204,13 +204,13 @@ export function openReferenceDb() {
   });
 }
 
-// Guardar un catálogo nuevo con todos sus elementos (conceptos o insumos)
+// Guardar un catÃ¡logo nuevo con todos sus elementos (conceptos o insumos)
 export async function saveReferenceCatalog(catalogMeta, itemsList, targetOwnerEmail = null) {
   const db = await openReferenceDb();
   const context = getActiveWorkspaceContext();
   const ownerEmail = (targetOwnerEmail || context.ownerEmail).toLowerCase().trim();
 
-  // Calcular tamaño real en bytes del catálogo importado
+  // Calcular tamaÃ±o real en bytes del catÃ¡logo importado
   let sizeBytes = 0;
   try {
     const jsonStr = JSON.stringify(itemsList);
@@ -223,8 +223,8 @@ export async function saveReferenceCatalog(catalogMeta, itemsList, targetOwnerEm
   const catalogId = catalogMeta.id || 'cat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
   const catalogRecord = {
     id: catalogId,
-    name: catalogMeta.name || 'Catálogo de Referencia',
-    category: catalogMeta.category || 'General', // Edificación, Instalaciones, Gobierno, etc.
+    name: catalogMeta.name || 'CatÃ¡logo de Referencia',
+    category: catalogMeta.category || 'General', // EdificaciÃ³n, Instalaciones, Gobierno, etc.
     type: catalogMeta.type || 'mixto', // conceptos, materiales, mano_obra, maquinaria, mixto
     sourceFileName: catalogMeta.sourceFileName || '',
     itemsCount: itemsList.length,
@@ -264,13 +264,13 @@ export async function saveReferenceCatalog(catalogMeta, itemsList, targetOwnerEm
     };
 
     tx.onerror = (e) => {
-      console.error('Error guardando catálogo en IndexedDB:', e.target.error);
+      console.error('Error guardando catÃ¡logo en IndexedDB:', e.target.error);
       reject(e.target.error);
     };
   });
 }
 
-// Obtener la lista de todos los catálogos guardados para el titular del espacio de trabajo
+// Obtener la lista de todos los catÃ¡logos guardados para el titular del espacio de trabajo
 export async function listReferenceCatalogs(ownerEmail = null) {
   const db = await openReferenceDb();
   const targetOwner = (ownerEmail || getActiveWorkspaceOwnerEmail()).toLowerCase().trim();
@@ -292,7 +292,7 @@ export async function listReferenceCatalogs(ownerEmail = null) {
   });
 }
 
-// Eliminar un catálogo y todos sus items asociados
+// Eliminar un catÃ¡logo y todos sus items asociados
 export async function deleteReferenceCatalog(catalogId) {
   const db = await openReferenceDb();
   return new Promise((resolve, reject) => {
@@ -323,12 +323,12 @@ export async function searchReferenceItems({ catalogId = 'all', tipo = 'all', qu
   const allowedCatalogs = await listReferenceCatalogs(ownerEmail);
   const allowedCatIds = new Set(allowedCatalogs.map(c => c.id));
 
-  // Si el titular no tiene catálogos cargados para este espacio de trabajo, retornar vacío de inmediato
+  // Si el titular no tiene catÃ¡logos cargados para este espacio de trabajo, retornar vacÃ­o de inmediato
   if (allowedCatIds.size === 0) {
     return [];
   }
 
-  // Si especificó un catálogo que no pertenece al espacio activo, no mostrar resultados ajenos
+  // Si especificÃ³ un catÃ¡logo que no pertenece al espacio activo, no mostrar resultados ajenos
   if (catalogId !== 'all' && !allowedCatIds.has(catalogId)) {
     return [];
   }
@@ -360,13 +360,13 @@ export async function searchReferenceItems({ catalogId = 'all', tipo = 'all', qu
       if (cursor) {
         const item = cursor.value;
 
-        // Validar pertenencia estricta a un catálogo del titular activo
+        // Validar pertenencia estricta a un catÃ¡logo del titular activo
         if (!allowedCatIds.has(item.catalogId)) {
           cursor.continue();
           return;
         }
 
-        // Comprobación de términos de búsqueda en clave y descripción
+        // ComprobaciÃ³n de tÃ©rminos de bÃºsqueda en clave y descripciÃ³n
         let matches = true;
         if (searchTerms.length > 0) {
           const itemText = `${item.clave} ${item.descripcion} ${item.familia || ''}`.toLowerCase();
@@ -398,7 +398,7 @@ export async function searchReferenceItems({ catalogId = 'all', tipo = 'all', qu
   });
 }
 
-// Conteo total de items, catálogos y MB ocupados del titular activo
+// Conteo total de items, catÃ¡logos y MB ocupados del titular activo
 export async function getReferenceDatabaseStats(ownerEmail = null) {
   const context = getActiveWorkspaceContext();
   const targetOwner = (ownerEmail || context.ownerEmail).toLowerCase().trim();
@@ -434,7 +434,7 @@ export async function getReferenceDatabaseStats(ownerEmail = null) {
   };
 }
 
-// Obtener todos los items para los catálogos seleccionados del titular
+// Obtener todos los items para los catÃ¡logos seleccionados del titular
 export async function getItemsByCatalogIds(catalogIds = 'all', ownerEmail = null) {
   const allowedCatalogs = await listReferenceCatalogs(ownerEmail);
   const userCatIds = new Set(allowedCatalogs.map(c => c.id));
@@ -484,7 +484,7 @@ export async function getItemsByCatalogIds(catalogIds = 'all', ownerEmail = null
   });
 }
 
-// Buscar insumos y componentes reales en todos los catálogos cargados en Catálogo Maestro para el titular
+// Buscar insumos y componentes reales en todos los catÃ¡logos cargados en CatÃ¡logo Maestro para el titular
 export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = [], tipos = [], catalogId = 'all', catalogIds = 'all', limit = 15, ownerEmail = null }) {
   const allowedCatalogs = await listReferenceCatalogs(ownerEmail);
   const userCatIds = new Set(allowedCatalogs.map(c => c.id));
@@ -494,14 +494,14 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
 
   const cleanQuery = (query || '').toLowerCase().trim();
   const rawTerms = [
-    ...cleanQuery.replace(/[^a-záéíóúüñ0-9/.-]/g, ' ').split(/\s+/).filter(t => t.length > 1),
-    ...(keywords || []).map(k => (k || '').toLowerCase().replace(/[^a-záéíóúüñ0-9/.-]/g, ' ').trim()).filter(k => k.length > 1)
+    ...cleanQuery.replace(/[^a-zÃ¡Ã©Ã­Ã³ÃºÃ¼Ã±0-9/.-]/g, ' ').split(/\s+/).filter(t => t.length > 1),
+    ...(keywords || []).map(k => (k || '').toLowerCase().replace(/[^a-zÃ¡Ã©Ã­Ã³ÃºÃ¼Ã±0-9/.-]/g, ' ').trim()).filter(k => k.length > 1)
   ];
   const uniqueTerms = Array.from(new Set(rawTerms));
 
   const tiposSet = tipos && tipos.length > 0 ? new Set(tipos.map(t => t.toLowerCase())) : null;
 
-  // Filtrado de catálogos considerados respetando titular
+  // Filtrado de catÃ¡logos considerados respetando titular
   let allowedCatalogIds = null;
   const rawCats = catalogIds !== 'all' ? catalogIds : catalogId;
   if (Array.isArray(rawCats)) {
@@ -533,7 +533,7 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
       if (cursor) {
         const item = cursor.value;
 
-        // Comprobar catálogo permitido
+        // Comprobar catÃ¡logo permitido
         if (!allowedCatalogIds.has(item.catalogId)) {
           cursor.continue();
           return;
@@ -541,12 +541,12 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
 
         const itemTipo = (item.tipo || '').toLowerCase();
 
-        // Filtrar por tipos si se especificó
+        // Filtrar por tipos si se especificÃ³
         let tipoMatches = true;
         if (tiposSet) {
           tipoMatches = tiposSet.has(itemTipo);
           if (!tipoMatches) {
-            if (tiposSet.has('material') && (itemTipo.includes('mat') || itemTipo.includes('insumo') || itemTipo.includes('básico') || itemTipo.includes('basico'))) tipoMatches = true;
+            if (tiposSet.has('material') && (itemTipo.includes('mat') || itemTipo.includes('insumo') || itemTipo.includes('bÃ¡sico') || itemTipo.includes('basico'))) tipoMatches = true;
             if (tiposSet.has('mano de obra') && (itemTipo.includes('obra') || itemTipo.includes('cuadrilla') || itemTipo.includes('mo'))) tipoMatches = true;
             if (tiposSet.has('equipo') && (itemTipo.includes('equipo') || itemTipo.includes('maq') || itemTipo.includes('herr'))) tipoMatches = true;
           }
@@ -564,7 +564,7 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
             score += 25;
           }
 
-          // Coincidencia por términos individuales
+          // Coincidencia por tÃ©rminos individuales
           let matchedTermsCount = 0;
           for (const term of uniqueTerms) {
             if (itemText.includes(term)) {
@@ -573,7 +573,7 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
             }
           }
 
-          // Si coincide con al menos 1 término importante o la consulta estaba vacía
+          // Si coincide con al menos 1 tÃ©rmino importante o la consulta estaba vacÃ­a
           if (uniqueTerms.length === 0 || matchedTermsCount > 0) {
             const pu = parseFloat(item.precioUnitario || item.costoUnitario || 0);
             if (pu > 0) {
@@ -599,7 +599,7 @@ export async function searchSuppliesInLoadedCatalogs({ query = '', keywords = []
   });
 }
 
-// Buscar si un concepto con matriz completa ya existe en los catálogos cargados del titular
+// Buscar si un concepto con matriz completa ya existe en los catÃ¡logos cargados del titular
 export async function findDirectConceptWithInsumos(conceptDesc, conceptUnit, catalogIds = 'all', ownerEmail = null) {
   const allowedCatalogs = await listReferenceCatalogs(ownerEmail);
   const userCatIds = new Set(allowedCatalogs.map(c => c.id));
@@ -608,7 +608,7 @@ export async function findDirectConceptWithInsumos(conceptDesc, conceptUnit, cat
   const db = await openReferenceDb();
   const cDesc = (conceptDesc || '').toLowerCase().trim();
   const cUnit = (conceptUnit || '').toLowerCase().trim();
-  const words = cDesc.replace(/[^a-záéíóúüñ0-9/.-]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+  const words = cDesc.replace(/[^a-zÃ¡Ã©Ã­Ã³ÃºÃ¼Ã±0-9/.-]/g, ' ').split(/\s+/).filter(w => w.length > 3);
 
   let allowedCatalogIds = null;
   if (Array.isArray(catalogIds)) {

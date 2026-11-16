@@ -1,15 +1,15 @@
-import { state, persistLocalData } from '../../state/store.js';
-import { findNodeById } from '../catalog/treeService.js';
-import { renderTAB1 } from '../catalog/catalogView.js';
-import { showToast } from '../../ui/notifications.js';
-import { formatMoney } from '../../core/formatters.js';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js';
-import { renderCotizacionesSidePanel } from './proveedoresView.js';
-import { canCurrentUserEditProject } from '../portal/projectService.js';
-import { guardTabUnlocked } from '../../ui/tabLockController.js';
+﻿import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf3';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { formatMoney } from '../../core/formatters.js?v=20261116_cf3';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf3';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf3';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf3';
 
 /**
- * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
+ * Devuelve la ruta jerÃ¡rquica de nodos desde Nivel 1 hasta el nodo objetivo.
  * @param {Array} nodes
  * @param {string} targetId
  * @param {Array} trail
@@ -58,7 +58,7 @@ function collectDescendantQuoteInfo(node, info = null) {
 }
 
 /**
- * Evalúa las reglas jerárquicas de cotización de un concepto (Nivel 1 vs subconceptos).
+ * EvalÃºa las reglas jerÃ¡rquicas de cotizaciÃ³n de un concepto (Nivel 1 vs subconceptos).
  * @param {string|Object} nodeOrId
  */
 export function getCotizacionHierarchyStatus(nodeOrId) {
@@ -117,7 +117,7 @@ export function getCotizacionHierarchyStatus(nodeOrId) {
 }
 
 /**
- * Construye el mensaje descriptivo cuando no está permitido agregar cotizaciones a un concepto.
+ * Construye el mensaje descriptivo cuando no estÃ¡ permitido agregar cotizaciones a un concepto.
  * @param {Object} status
  * @returns {string}
  */
@@ -141,9 +141,9 @@ function clearNodeWinnerSelection(node) {
 }
 
 /**
- * Limpia y normaliza el número de teléfono para generar un enlace de WhatsApp directo
+ * Limpia y normaliza el nÃºmero de telÃ©fono para generar un enlace de WhatsApp directo
  * @param {string} phone 
- * @returns {string} Dígitos limpios con código de país
+ * @returns {string} DÃ­gitos limpios con cÃ³digo de paÃ­s
  */
 export function cleanPhoneForWhatsApp(phone) {
   if (!phone) return '';
@@ -151,7 +151,7 @@ export function cleanPhoneForWhatsApp(phone) {
   if (cleaned.startsWith('+')) {
     cleaned = cleaned.substring(1);
   } else if (cleaned.length === 10) {
-    // Si tiene 10 dígitos (formato estándar México / Norteamérica), agregar lada +52
+    // Si tiene 10 dÃ­gitos (formato estÃ¡ndar MÃ©xico / NorteamÃ©rica), agregar lada +52
     cleaned = '52' + cleaned;
   }
   return cleaned;
@@ -169,14 +169,14 @@ export function getCotizaciones(nodeId) {
 }
 
 /**
- * Agrega una nueva cotización a un concepto
+ * Agrega una nueva cotizaciÃ³n a un concepto
  * @param {string} nodeId 
  * @param {Object} data 
  * @returns {Object|null}
  */
 function guardCotizacionMutation() {
   if (!canCurrentUserEditProject()) {
-    showToast('🔒 Modo lectura: tu rol no permite modificar cotizaciones ni proveedores.', 'warning');
+    showToast('ðŸ”’ Modo lectura: tu rol no permite modificar cotizaciones ni proveedores.', 'warning');
     return false;
   }
   if (typeof document !== 'undefined') {
@@ -251,7 +251,7 @@ export function addCotizacion(nodeId, data) {
       node.importe_calculado = newCot.costo;
     }
   } else if (!node.cotizaciones.some(c => Boolean(c.isGanador))) {
-    // Mientras no exista una cotización seleccionada como ganadora, el importe del concepto permanece en 0
+    // Mientras no exista una cotizaciÃ³n seleccionada como ganadora, el importe del concepto permanece en 0
     clearNodeWinnerSelection(node);
   }
 
@@ -262,12 +262,12 @@ export function addCotizacion(nodeId, data) {
   renderTAB1();
   renderCotizacionesSidePanel(node);
 
-  showToast(`Cotización de "${newCot.proveedor}" registrada con éxito.`, 'success');
+  showToast(`CotizaciÃ³n de "${newCot.proveedor}" registrada con Ã©xito.`, 'success');
   return newCot;
 }
 
 /**
- * Actualiza una cotización existente
+ * Actualiza una cotizaciÃ³n existente
  * @param {string} nodeId 
  * @param {string} cotId 
  * @param {Object} data 
@@ -319,7 +319,7 @@ export function updateCotizacion(nodeId, cotId, data) {
       clearNodeWinnerSelection(node);
     }
   } else if (cot.isGanador) {
-    // Si ya era ganador y cambió el monto o cantidad, actualizar nodo
+    // Si ya era ganador y cambiÃ³ el monto o cantidad, actualizar nodo
     node.proveedorElegidoNombre = cot.proveedor;
     node.costo_proveedor = cot.costo;
     node.precioUnitario = cot.monto;
@@ -334,11 +334,11 @@ export function updateCotizacion(nodeId, cotId, data) {
   persistLocalData();
   renderTAB1();
   renderCotizacionesSidePanel(node);
-  showToast('Cotización actualizada.', 'success');
+  showToast('CotizaciÃ³n actualizada.', 'success');
 }
 
 /**
- * Elimina una cotización
+ * Elimina una cotizaciÃ³n
  * @param {string} nodeId 
  * @param {string} cotId 
  */
@@ -361,11 +361,11 @@ export function deleteCotizacion(nodeId, cotId) {
   persistLocalData();
   renderTAB1();
   renderCotizacionesSidePanel(node);
-  showToast('Cotización eliminada.', 'info');
+  showToast('CotizaciÃ³n eliminada.', 'info');
 }
 
 /**
- * Selecciona una cotización como ganadora y asigna su precio a la Tabla de Alcances
+ * Selecciona una cotizaciÃ³n como ganadora y asigna su precio a la Tabla de Alcances
  * @param {string} nodeId 
  * @param {string} cotId 
  */
@@ -412,7 +412,7 @@ export function setCotizacionGanadora(nodeId, cotId) {
 }
 
 /**
- * Desmarca la cotización ganadora
+ * Desmarca la cotizaciÃ³n ganadora
  * @param {string} nodeId 
  * @param {string} cotId 
  */
@@ -432,5 +432,5 @@ export function unsetCotizacionGanadora(nodeId, cotId) {
   persistLocalData();
   renderTAB1();
   renderCotizacionesSidePanel(node);
-  showToast('Se retiró la selección de proveedor ganador.', 'info');
+  showToast('Se retirÃ³ la selecciÃ³n de proveedor ganador.', 'info');
 }

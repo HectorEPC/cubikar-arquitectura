@@ -1,4 +1,4 @@
-import {
+﻿import {
   renderCalendarioObra,
   setCalendarioViewMode,
   setCalendarioTimeScale,
@@ -54,7 +54,7 @@ import {
   runCalendarioGeminiAiProposal,
   applyCalendarioAiProposal,
   selectCalendarioRow
-} from './modules/calendario/calendarioView.js';
+} from './modules/calendario/calendarioView.js?v=20261116_cf3';
 import {
   renderPresupuestoView,
   togglePresupuestoSelectNode,
@@ -62,19 +62,19 @@ import {
   togglePresupuestoSubtituloExpand,
   agruparPresupuestoConceptos,
   desagruparPresupuestoConceptos
-} from './modules/presupuesto/presupuestoView.js';
-import { getProjectPresupuestoConfig } from './modules/presupuesto/presupuestoModel.js';
-import { renderSeguimientoView } from './modules/seguimiento/seguimientoView.js';
-import { initStore, state, syncClipboardFromStorage } from './state/store.js';
-import { STORAGE_KEY_CLIPBOARD, getActiveProjectId } from './config/constants.js';
-import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback } from './state/history.js';
-import { showToast } from './ui/notifications.js';
-import { formatMoney, formatQty } from './core/formatters.js';
-import { updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
-import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js';
-import { getCurrentUser } from './modules/portal/projectService.js';
-import { initAppSwitcher } from './ui/appSwitcher.js';
+} from './modules/presupuesto/presupuestoView.js?v=20261116_cf3';
+import { getProjectPresupuestoConfig } from './modules/presupuesto/presupuestoModel.js?v=20261116_cf3';
+import { renderSeguimientoView } from './modules/seguimiento/seguimientoView.js?v=20261116_cf3';
+import { initStore, state, syncClipboardFromStorage } from './state/store.js?v=20261116_cf3';
+import { STORAGE_KEY_CLIPBOARD, getActiveProjectId } from './config/constants.js?v=20261116_cf3';
+import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback } from './state/history.js?v=20261116_cf3';
+import { showToast } from './ui/notifications.js?v=20261116_cf3';
+import { formatMoney, formatQty } from './core/formatters.js?v=20261116_cf3';
+import { updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js?v=20261116_cf3';
+import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261116_cf3';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261116_cf3';
+import { getCurrentUser } from './modules/portal/projectService.js?v=20261116_cf3';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261116_cf3';
 
 import {
   findNodeById,
@@ -106,7 +106,7 @@ import {
   repartirEquitativamente,
   toggleSelectNode,
   toggleSelectAll
-} from './modules/catalog/treeService.js';
+} from './modules/catalog/treeService.js?v=20261116_cf3';
 
 import {
   openImportConceptsModal,
@@ -118,9 +118,9 @@ import {
   toggleMatrixPreviewAccordion,
   quickCopyPasteSingleConcept,
   importSelectedConceptsToCurrentProject
-} from './modules/catalog/importFromProjectModal.js';
+} from './modules/catalog/importFromProjectModal.js?v=20261116_cf3';
 
-import { renderTAB1, selectRow, highlightCatalogRowInPlace, closeApuPanel, toggleDropdownMenu, closeAllDropdownMenus } from './modules/catalog/catalogView.js';
+import { renderTAB1, selectRow, highlightCatalogRowInPlace, closeApuPanel, toggleDropdownMenu, closeAllDropdownMenus } from './modules/catalog/catalogView.js?v=20261116_cf3';
 
 import {
   switchSidePanelTab,
@@ -133,7 +133,7 @@ import {
   handleModalFileInputChange,
   handleCardDirectFileUpload,
   viewCotizacionPdf
-} from './modules/proveedores/proveedoresView.js';
+} from './modules/proveedores/proveedoresView.js?v=20261116_cf3';
 
 import {
   cleanPhoneForWhatsApp,
@@ -143,7 +143,7 @@ import {
   deleteCotizacion,
   setCotizacionGanadora,
   unsetCotizacionGanadora
-} from './modules/proveedores/cotizacionesService.js';
+} from './modules/proveedores/cotizacionesService.js?v=20261116_cf3';
 
 import {
   renderInsumosGenerales,
@@ -165,7 +165,7 @@ import {
   actualizarCostosConIASeleccionados,
   actualizarTodosLosInsumosSeleccionadosConIA,
   selectInsumoBaseRow
-} from './modules/insumosGenerales/insumosView.js';
+} from './modules/insumosGenerales/insumosView.js?v=20261116_cf3';
 
 import {
   exportData,
@@ -178,8 +178,8 @@ import {
   exportCatalogOpus,
   exportCatalogNeodata,
   exportCatalogCsv
-} from './modules/io/csvHandler.js';
-import { initPanelResizer } from './ui/resizer.js';
+} from './modules/io/csvHandler.js?v=20261116_cf3';
+import { initPanelResizer } from './ui/resizer.js?v=20261116_cf3';
 
 import {
   openImportModal,
@@ -192,7 +192,7 @@ import {
   onZoneSelectChange,
   calculateParsedBudgetTotal,
   loadCasaLauraOpusDirectly
-} from './modules/io/universalImporter.js';
+} from './modules/io/universalImporter.js?v=20261116_cf3';
 
 import {
   printTab1Catalog,
@@ -203,7 +203,7 @@ import {
   printInsumosGenerales,
   printCalendarioObraFormat,
   printEstimacionesFormat
-} from './modules/io/printService.js';
+} from './modules/io/printService.js?v=20261116_cf3';
 
 import {
   openMasterCatalogModal,
@@ -214,11 +214,11 @@ import {
   switchMasterCatalogTab,
   handleDeleteCatalog,
   refreshMasterCatalogList
-} from './modules/reference/masterCatalogModal.js';
+} from './modules/reference/masterCatalogModal.js?v=20261116_cf3';
 
-import { installPresetCatalog, installAllPresets } from './modules/reference/presetCatalogs.js';
+import { installPresetCatalog, installAllPresets } from './modules/reference/presetCatalogs.js?v=20261116_cf3';
 
-import { openReferenceDb } from './modules/reference/referenceDb.js';
+import { openReferenceDb } from './modules/reference/referenceDb.js?v=20261116_cf3';
 
 import {
   openSettingsModal,
@@ -245,7 +245,7 @@ import {
   closePlatformInfoModal,
   handlePlatformInfoEmpiezaGratis,
   handlePlatformInfoVerPlanes
-} from './ui/modalController.js';
+} from './ui/modalController.js?v=20261116_cf3';
 
 import {
   openTutorialHubModal,
@@ -253,20 +253,20 @@ import {
   launchTourFromHub,
   launchVideoFromHub,
   resetTourPreferencesFromHub
-} from './ui/tutorialHubModal.js';
+} from './ui/tutorialHubModal.js?v=20261116_cf3';
 
 import {
   startInteractiveTour,
   skipInteractiveTour,
   closeInteractiveTour,
   checkAndResumeTourOnLoad
-} from './ui/interactiveTour.js';
+} from './ui/interactiveTour.js?v=20261116_cf3';
 
 import {
   openVideoSimulatorModal,
   closeVideoSimulatorModal,
   toggleVoiceNarration
-} from './ui/videoSimulatorModal.js';
+} from './ui/videoSimulatorModal.js?v=20261116_cf3';
 
 import {
   openFirmasResponsablesModal,
@@ -280,7 +280,7 @@ import {
   previewPrintWithFirmasAction,
   quickAssignPersonToFirstEmptySlot,
   getFirmasPrintHtml
-} from './ui/firmasController.js';
+} from './ui/firmasController.js?v=20261116_cf3';
 
 import {
   initBranding,
@@ -301,7 +301,7 @@ import {
   resetLogoPosition,
   setLogoBgMode,
   applyAdjustedLogo
-} from './ui/brandingController.js';
+} from './ui/brandingController.js?v=20261116_cf3';
 
 import {
   STORAGE_KEY_THEME,
@@ -310,7 +310,7 @@ import {
   applyThemeMode,
   isNightMode,
   setThemeRenderCallback
-} from './ui/themeController.js';
+} from './ui/themeController.js?v=20261116_cf3';
 
 import {
   isTabLocked,
@@ -319,8 +319,8 @@ import {
   guardTabUnlocked,
   applyTabLocksToDOM,
   setTabLockRenderCallback
-} from './ui/tabLockController.js';
-import { hydrateProjectModulesFromCloud } from './core/cloudModulesSyncService.js';
+} from './ui/tabLockController.js?v=20261116_cf3';
+import { hydrateProjectModulesFromCloud } from './core/cloudModulesSyncService.js?v=20261116_cf3';
 
 import {
   setProjectChatDivision,
@@ -360,7 +360,7 @@ import {
   loadProjectChatMessages,
   resetDefaultProjectChatWithFeedback,
   generateSeedProjectChatMessages
-} from './modules/chat/projectChat.js';
+} from './modules/chat/projectChat.js?v=20261116_cf3';
 
 import {
   initPortal,
@@ -475,7 +475,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js';
+} from './modules/portal/portalController.js?v=20261116_cf3';
 
 import {
   openCubikarAdminModal,
@@ -494,7 +494,7 @@ import {
   isUserAdmin,
   isUserMasterAdmin,
   showAdminDualLoginModal
-} from './modules/admin/cubikarAdmin.js';
+} from './modules/admin/cubikarAdmin.js?v=20261116_cf3';
 import {
   openSubscriptionModal,
   closeSubscriptionModal,
@@ -503,7 +503,7 @@ import {
   renderSubscriptionCards,
   updateSubscriptionBadgesUI,
   getCurrentSubscription
-} from './modules/portal/subscriptionModal.js';
+} from './modules/portal/subscriptionModal.js?v=20261116_cf3';
 
 import {
   renderEstimacionesView,
@@ -550,9 +550,9 @@ import {
   handleSaveSpecialistPayment,
   confirmDeleteSpecialistPayment,
   exportPagosEspecialistasExcel
-} from './modules/estimaciones/estimacionesView.js';
+} from './modules/estimaciones/estimacionesView.js?v=20261116_cf3';
 
-// Exponer funciones públicas al objeto global window para compatibilidad total con eventos inline del HTML
+// Exponer funciones pÃºblicas al objeto global window para compatibilidad total con eventos inline del HTML
 Object.assign(window, {
   // Store & History
   undoAction,
@@ -735,7 +735,7 @@ Object.assign(window, {
     else unsetCotizacionGanadora(nodeId, cotId);
   },
   handleDeleteCotizacion: (nodeId, cotId) => {
-    if (confirm('¿Eliminar esta propuesta de cotización?')) {
+    if (confirm('Â¿Eliminar esta propuesta de cotizaciÃ³n?')) {
       deleteCotizacion(nodeId, cotId);
     }
   },
@@ -816,7 +816,7 @@ Object.assign(window, {
   loadCasaLauraOpusDirectly,
   reloadCasaLauraOpus: loadCasaLauraOpusDirectly,
 
-  // Master Catalog (Opción 1)
+  // Master Catalog (OpciÃ³n 1)
   openMasterCatalogModal,
   closeMasterCatalogModal,
   onMasterCatalogSearchInput,
@@ -831,7 +831,7 @@ Object.assign(window, {
   // Utilities
   showToast,
 
-  // Branding (Empresa, Proyecto, Ubicación y Logo interactivo)
+  // Branding (Empresa, Proyecto, UbicaciÃ³n y Logo interactivo)
   initBranding,
   updateCompanyName,
   syncCompanyName,
@@ -861,7 +861,7 @@ Object.assign(window, {
   printCalendarioObraFormat,
   printEstimacionesFormat,
 
-  // Firmas y Responsables para Impresión
+  // Firmas y Responsables para ImpresiÃ³n
   openFirmasResponsablesModal,
   closeFirmasResponsablesModal,
   addFirmaSlotAction,
@@ -990,7 +990,7 @@ Object.assign(window, {
   unsubscribeFromProjectRealtime,
   exportProjectToExcelAction,
 
-  // Información de la Plataforma
+  // InformaciÃ³n de la Plataforma
   openPlatformInfoModal,
   closePlatformInfoModal,
   handlePlatformInfoEmpiezaGratis,
@@ -1011,7 +1011,7 @@ Object.assign(window, {
   toggleVoiceNarration
 });
 
-// Asignaciones globales explícitas en window
+// Asignaciones globales explÃ­citas en window
 window.openPlatformInfoModal = openPlatformInfoModal;
 window.closePlatformInfoModal = closePlatformInfoModal;
 window.handlePlatformInfoEmpiezaGratis = handlePlatformInfoEmpiezaGratis;
@@ -1067,12 +1067,12 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Selección universal de filas en cualquier tabla del área de proyecto (mismo color y estilo que Catálogo Base)
+// SelecciÃ³n universal de filas en cualquier tabla del Ã¡rea de proyecto (mismo color y estilo que CatÃ¡logo Base)
 function handleWorkspaceTableRowSelection(e) {
   const target = e.target;
   if (!target || typeof target.closest !== 'function') return;
 
-  // Ignorar fuera del área de proyecto
+  // Ignorar fuera del Ã¡rea de proyecto
   if (!target.closest('#workspace-container')) return;
 
   // Soporte para filas divididas del Gantt (panel izquierdo y derecho)
@@ -1086,7 +1086,7 @@ function handleWorkspaceTableRowSelection(e) {
   const tr = target.closest('tbody tr');
   if (!tr) return;
 
-  // Ignorar filas vacías informativas de una sola celda con colspan
+  // Ignorar filas vacÃ­as informativas de una sola celda con colspan
   if (tr.children.length === 1 && tr.children[0].hasAttribute('colspan')) return;
 
   if (tr.dataset.nodeId) {
@@ -1110,7 +1110,7 @@ function handleWorkspaceTableRowSelection(e) {
     return;
   }
 
-  // Cualquier otra tabla dentro del área de proyecto
+  // Cualquier otra tabla dentro del Ã¡rea de proyecto
   const tbody = tr.parentElement;
   if (tbody) {
     tbody.querySelectorAll('tr.selected-row').forEach((r) => r.classList.remove('selected-row'));
@@ -1121,7 +1121,7 @@ function handleWorkspaceTableRowSelection(e) {
 document.addEventListener('click', handleWorkspaceTableRowSelection);
 document.addEventListener('focusin', handleWorkspaceTableRowSelection);
 
-// Sincronizar portapapeles compartido en tiempo real entre pestañas
+// Sincronizar portapapeles compartido en tiempo real entre pestaÃ±as
 window.addEventListener('storage', (e) => {
   if (e.key === STORAGE_KEY_CLIPBOARD) {
     syncClipboardFromStorage();
@@ -1133,7 +1133,7 @@ window.addEventListener('storage', (e) => {
   }
 });
 
-// Conectar callback de renderizado al cambiar el candado de bloqueo de pestaña
+// Conectar callback de renderizado al cambiar el candado de bloqueo de pestaÃ±a
 setTabLockRenderCallback((tabKey) => {
   updateUndoRedoButtons();
   if (tabKey === 'cat' || tabKey === 'alcances') {
@@ -1172,7 +1172,7 @@ setHistoryRenderCallback(() => {
   }
 });
 
-// Conectar callback de renderizado al cambiar entre Vista de Día y Modo Nocturno
+// Conectar callback de renderizado al cambiar entre Vista de DÃ­a y Modo Nocturno
 setThemeRenderCallback(() => {
   renderTAB1();
   const viewPresupuesto = document.getElementById('view-presupuesto');
@@ -1201,14 +1201,14 @@ setThemeRenderCallback(() => {
   }
 });
 
-// Sincronizar tema visual entre pestañas abiertas
+// Sincronizar tema visual entre pestaÃ±as abiertas
 window.addEventListener('storage', (e) => {
   if (e.key === STORAGE_KEY_THEME) {
     applyThemeMode(e.newValue === 'night' ? 'night' : 'day', { persist: false, notify: false, rerender: true });
   }
 });
 
-// Inicializar tema visual (Vista de Día por defecto o Modo Nocturno guardado)
+// Inicializar tema visual (Vista de DÃ­a por defecto o Modo Nocturno guardado)
 initThemeMode();
 try {
   initAuthListener((event, session, perfil) => {
@@ -1298,7 +1298,7 @@ function bootWorkspaceModules() {
   try {
     initGlobalRealtimeSync();
   } catch (e) {
-    console.warn('[Realtime] Aviso inicializando sincronización global:', e);
+    console.warn('[Realtime] Aviso inicializando sincronizaciÃ³n global:', e);
   }
 }
 
@@ -1311,8 +1311,8 @@ function renderSsoConnectingOverlay() {
       <div class="w-12 h-12 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto mb-4">
         <i class="fa-solid fa-spinner fa-spin text-xl"></i>
       </div>
-      <h2 class="text-lg font-extrabold tracking-tight">Conectando tu sesión Cubikar...</h2>
-      <p class="text-xs text-slate-400 mt-2">Cargando tus proyectos sin volver a iniciar sesión.</p>
+      <h2 class="text-lg font-extrabold tracking-tight">Conectando tu sesiÃ³n Cubikar...</h2>
+      <p class="text-xs text-slate-400 mt-2">Cargando tus proyectos sin volver a iniciar sesiÃ³n.</p>
     </div>
   `;
 }
@@ -1321,7 +1321,7 @@ try {
   initAppSwitcher('cubikar-app-switcher-mount', 'arq');
 } catch (_) {}
 
-// Inicialización de la aplicación al cargar el módulo (con soporte fluido de SSO entre subdominios)
+// InicializaciÃ³n de la aplicaciÃ³n al cargar el mÃ³dulo (con soporte fluido de SSO entre subdominios)
 if (hasPendingIncomingSsoSession()) {
   renderSsoConnectingOverlay();
   Promise.race([
@@ -1451,7 +1451,7 @@ setProjectChatRefreshCallback(() => {
   }
 });
 
-// Auto-activación inmediata de pestaña por parámetro de URL (ej. ?tab=seguimiento)
+// Auto-activaciÃ³n inmediata de pestaÃ±a por parÃ¡metro de URL (ej. ?tab=seguimiento)
 try {
   const pUrl = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const reqTab = pUrl ? pUrl.get('tab') : null;

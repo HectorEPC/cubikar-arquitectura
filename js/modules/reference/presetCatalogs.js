@@ -1,13 +1,13 @@
-// js/modules/reference/presetCatalogs.js
-// Gestor de Catálogos Pre-cargados del Sistema (Oficiales y Gobierno)
+﻿// js/modules/reference/presetCatalogs.js
+// Gestor de CatÃ¡logos Pre-cargados del Sistema (Oficiales y Gobierno)
 
-import { showToast } from '../../ui/notifications.js';
-import { saveReferenceCatalog, listReferenceCatalogs } from './referenceDb.js';
-import { flattenPresetData } from '../ai/localMatrixEngine.js';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { saveReferenceCatalog, listReferenceCatalogs } from './referenceDb.js?v=20261116_cf3';
+import { flattenPresetData } from '../ai/localMatrixEngine.js?v=20261116_cf3';
 
 let manifestCache = null;
 
-// Obtener el manifiesto de catálogos pre-construidos
+// Obtener el manifiesto de catÃ¡logos pre-construidos
 export async function getPresetCatalogManifest() {
   if (manifestCache) return manifestCache;
   try {
@@ -21,12 +21,12 @@ export async function getPresetCatalogManifest() {
   }
 }
 
-// Cargar un catálogo preset específico por su ID
+// Cargar un catÃ¡logo preset especÃ­fico por su ID
 export async function installPresetCatalog(presetId) {
   const manifest = await getPresetCatalogManifest();
   const preset = manifest.find(m => m.id === presetId);
   if (!preset) {
-    showToast(`No se encontró el catálogo preset "${presetId}"`, 'error');
+    showToast(`No se encontrÃ³ el catÃ¡logo preset "${presetId}"`, 'error');
     return false;
   }
 
@@ -53,7 +53,7 @@ export async function installPresetCatalog(presetId) {
       sourceFileName: preset.file
     }, itemsList);
 
-    showToast(`¡${preset.name} instalado con éxito (${itemsList.length.toLocaleString()} registros)!`, 'success');
+    showToast(`Â¡${preset.name} instalado con Ã©xito (${itemsList.length.toLocaleString()} registros)!`, 'success');
     
     if (window.refreshMasterCatalogList) {
       await window.refreshMasterCatalogList();
@@ -74,11 +74,11 @@ export async function installPresetCatalog(presetId) {
   }
 }
 
-// Cargar TODOS los catálogos oficiales y de Gobierno de una sola vez
+// Cargar TODOS los catÃ¡logos oficiales y de Gobierno de una sola vez
 export async function installAllPresets() {
   const manifest = await getPresetCatalogManifest();
   if (!manifest || manifest.length === 0) {
-    showToast('No se encontraron catálogos pre-cargados para instalar.', 'warning');
+    showToast('No se encontraron catÃ¡logos pre-cargados para instalar.', 'warning');
     return;
   }
 
@@ -108,7 +108,7 @@ export async function installAllPresets() {
       }
     }
 
-    showToast(`🎉 ¡Biblioteca completa instalada con éxito! ${totalInstalled.toLocaleString()} registros indexados.`, 'success');
+    showToast(`ðŸŽ‰ Â¡Biblioteca completa instalada con Ã©xito! ${totalInstalled.toLocaleString()} registros indexados.`, 'success');
 
     if (window.refreshMasterCatalogList) {
       await window.refreshMasterCatalogList();
@@ -118,8 +118,8 @@ export async function installAllPresets() {
     }
     renderPresetBadges();
   } catch (err) {
-    console.error('Error en instalación masiva:', err);
-    showToast(`Error durante la instalación masiva: ${err.message}`, 'error');
+    console.error('Error en instalaciÃ³n masiva:', err);
+    showToast(`Error durante la instalaciÃ³n masiva: ${err.message}`, 'error');
   } finally {
     if (mainBtn) {
       mainBtn.disabled = false;
@@ -128,7 +128,7 @@ export async function installAllPresets() {
   }
 }
 
-// Renderizar las tarjetas de presets en el modal del Catálogo Maestro
+// Renderizar las tarjetas de presets en el modal del CatÃ¡logo Maestro
 export async function renderPresetBadges() {
   const container = document.getElementById('master-cat-preset-grid');
   if (!container) return;
@@ -141,13 +141,13 @@ export async function renderPresetBadges() {
   manifest.forEach(preset => {
     const isInstalled = installedIds.has(preset.id);
     
-    // Iconos temáticos según categoría
+    // Iconos temÃ¡ticos segÃºn categorÃ­a
     let icon = 'fa-hard-hat';
     let colorClass = 'text-blue-600 bg-blue-50 border-blue-200';
-    if (preset.category.includes('Eléctrica')) {
+    if (preset.category.includes('ElÃ©ctrica')) {
       icon = 'fa-bolt';
       colorClass = 'text-amber-600 bg-amber-50 border-amber-200';
-    } else if (preset.category.includes('Hidráulica')) {
+    } else if (preset.category.includes('HidrÃ¡ulica')) {
       icon = 'fa-faucet-drip';
       colorClass = 'text-cyan-600 bg-cyan-50 border-cyan-200';
     } else if (preset.category.includes('Aire')) {

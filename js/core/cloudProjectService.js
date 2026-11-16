@@ -1,12 +1,12 @@
-// js/core/cloudProjectService.js
-// Servicio de persistencia y sincronización de Proyectos Arquitectónicos y Presupuestos con Supabase PostgreSQL
-// Diseñado para operar en segundo plano con alta resiliencia y sincronización multiusuario en la nube.
+﻿// js/core/cloudProjectService.js
+// Servicio de persistencia y sincronizaciÃ³n de Proyectos ArquitectÃ³nicos y Presupuestos con Supabase PostgreSQL
+// DiseÃ±ado para operar en segundo plano con alta resiliencia y sincronizaciÃ³n multiusuario en la nube.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js';
-import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js';
-import { getSettingsKey } from '../config/constants.js';
-import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js';
-import { showToast } from '../ui/notifications.js';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf3';
+import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf3';
+import { getSettingsKey } from '../config/constants.js?v=20261116_cf3';
+import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf3';
+import { showToast } from '../ui/notifications.js?v=20261116_cf3';
 
 function extractArqNodeMeta(node, conceptUuid) {
   if (!node || typeof node !== 'object') return null;
@@ -116,7 +116,7 @@ export async function resolveUserEmpresaId(sb, user) {
       return perfil.empresa_id;
     }
 
-    // Si aún no tiene empresa asignada, crear una por defecto
+    // Si aÃºn no tiene empresa asignada, crear una por defecto
     const { data: newEmpresa, error: empErr } = await sb
       .from('empresas')
       .insert({
@@ -146,17 +146,17 @@ export async function resolveUserEmpresaId(sb, user) {
 }
 
 /**
- * Sincronizar un proyecto completo (datos generales, colaboradores y catálogo de conceptos) hacia Supabase PostgreSQL
+ * Sincronizar un proyecto completo (datos generales, colaboradores y catÃ¡logo de conceptos) hacia Supabase PostgreSQL
  */
 export async function syncProjectToCloud(project, settings = {}, treeData = null) {
   const sb = getSupabaseClient();
   let user = getCurrentUser();
 
   if (!isSupabaseConfigured() || !sb) {
-    return { success: false, reason: 'Supabase no está configurado' };
+    return { success: false, reason: 'Supabase no estÃ¡ configurado' };
   }
 
-  // Si el usuario local no tiene un UUID válido, intentar obtener el usuario autenticado real de Supabase
+  // Si el usuario local no tiene un UUID vÃ¡lido, intentar obtener el usuario autenticado real de Supabase
   if (!user || !isValidUUID(user.id)) {
     try {
       const { data: { session } } = await sb.auth.getSession();
@@ -183,13 +183,13 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
   }
 
   if (!user?.id || !isValidUUID(user.id)) {
-    return { success: false, reason: 'Sin sesión activa en Supabase. Inicia sesión con tu correo y contraseña.' };
+    return { success: false, reason: 'Sin sesiÃ³n activa en Supabase. Inicia sesiÃ³n con tu correo y contraseÃ±a.' };
   }
 
   try {
     const empresaId = await resolveUserEmpresaId(sb, user);
 
-    // Asegurar UUID válido para PostgreSQL
+    // Asegurar UUID vÃ¡lido para PostgreSQL
     const projectId = isValidUUID(project.id) ? project.id : (project.cloudId && isValidUUID(project.cloudId) ? project.cloudId : generateUUID());
     project.cloudId = projectId;
 
@@ -211,10 +211,10 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
       owner_email: ownerEmail,
       creado_por: user.id,
       clave: (project.clave || project.id || '').slice(0, 50),
-      nombre: project.projectName || 'Proyecto sin título',
+      nombre: project.projectName || 'Proyecto sin tÃ­tulo',
       cliente: project.client || '',
       ubicacion: project.projectLocation || '',
-      tipo_obra: project.tipoObra || 'Diseño y Proyecto Ejecutivo',
+      tipo_obra: project.tipoObra || 'DiseÃ±o y Proyecto Ejecutivo',
       moneda: project.currency || settings?.currency || 'MXN',
       simbolo_moneda: project.currencySymbol || settings?.currencySymbol || '$',
       aplica_sobrecosto: Boolean(settings?.applySobrecosto ?? project.applySobrecosto),
@@ -305,20 +305,20 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
       }
     }
 
-    // 4. Si se proporcionó el árbol del catálogo, sincronizar partidas, conceptos, insumos y metadatos de arquitectura
+    // 4. Si se proporcionÃ³ el Ã¡rbol del catÃ¡logo, sincronizar partidas, conceptos, insumos y metadatos de arquitectura
     if (Array.isArray(treeData)) {
       await syncCatalogTreeToCloud(sb, projectId, treeData, { skipArqMeta: true });
     }
 
     return { success: true, projectId };
   } catch (err) {
-    console.error('[CloudProjectService] Excepción al sincronizar proyecto con la nube:', err);
+    console.error('[CloudProjectService] ExcepciÃ³n al sincronizar proyecto con la nube:', err);
     return { success: false, error: err };
   }
 }
 
 /**
- * Aplanar y sincronizar el árbol jerárquico a 'public.catalogo_conceptos' y 'public.insumos_apu'
+ * Aplanar y sincronizar el Ã¡rbol jerÃ¡rquico a 'public.catalogo_conceptos' y 'public.insumos_apu'
  */
 export async function syncCatalogTreeToCloud(sb, projectId, treeData, options = {}) {
   if (!sb || !projectId || !Array.isArray(treeData)) return;
@@ -428,7 +428,7 @@ export async function syncCatalogTreeToCloud(sb, projectId, treeData, options = 
     }
   }
 
-  // 3. Guardar insumos en lotes de 100 y depurar huérfanos
+  // 3. Guardar insumos en lotes de 100 y depurar huÃ©rfanos
   for (let i = 0; i < flatInsumos.length; i += BATCH_SIZE) {
     const chunk = flatInsumos.slice(i, i + BATCH_SIZE);
     const { error: insErr } = await sb
@@ -458,7 +458,7 @@ export async function syncCatalogTreeToCloud(sb, projectId, treeData, options = 
     }
   } catch (_) {}
 
-  // 4. Persistir campos específicos de Arquitectura (cotizaciones, costo_proveedor, importe_calculado, schedule, avancePorcentaje, IDs locales)
+  // 4. Persistir campos especÃ­ficos de Arquitectura (cotizaciones, costo_proveedor, importe_calculado, schedule, avancePorcentaje, IDs locales)
   if (!options?.skipArqMeta && isValidUUID(projectId)) {
     try {
       const arqNodesMeta = buildArqNodesMetaMap(treeData);
@@ -492,7 +492,7 @@ export async function fetchCloudProjects() {
   try {
     const myEmail = (user.email || '').toLowerCase().trim();
 
-    // Consulta con join a proyecto_colaboradores (sin filtro por empresa_id para permitir colaboración inter-cuentas)
+    // Consulta con join a proyecto_colaboradores (sin filtro por empresa_id para permitir colaboraciÃ³n inter-cuentas)
     const { data: cloudList, error } = await sb
       .from('proyectos')
       .select('*, proyecto_colaboradores(*)')
@@ -607,7 +607,7 @@ export async function fetchCloudProjects() {
           ownerPlanId: resolvedOwnerPlanId,
           presupuestoArq: cfg.presupuestoArq || null,
           projectLocation: cp.ubicacion || '',
-          tipoObra: cp.tipo_obra || 'Diseño y Proyecto Ejecutivo',
+          tipoObra: cp.tipo_obra || 'DiseÃ±o y Proyecto Ejecutivo',
           currency: cp.moneda || 'MXN',
           currencySymbol: cp.simbolo_moneda || '$',
           applySobrecosto: cp.aplica_sobrecosto,
@@ -626,13 +626,13 @@ export async function fetchCloudProjects() {
       })
       .filter(Boolean);
   } catch (err) {
-    console.error('[CloudProjectService] Excepción al consultar proyectos en la nube:', err);
+    console.error('[CloudProjectService] ExcepciÃ³n al consultar proyectos en la nube:', err);
     return [];
   }
 }
 
 /**
- * Descargar y reconstruir el árbol de catálogo desde Supabase PostgreSQL
+ * Descargar y reconstruir el Ã¡rbol de catÃ¡logo desde Supabase PostgreSQL
  */
 export async function loadProjectTreeFromCloud(projectId) {
   const sb = getSupabaseClient();
@@ -701,7 +701,7 @@ export async function loadProjectTreeFromCloud(projectId) {
       }
     }
 
-    // 3. Mapear conceptos restaurando IDs locales originales y campos específicos de Arquitectura
+    // 3. Mapear conceptos restaurando IDs locales originales y campos especÃ­ficos de Arquitectura
     const map = new Map();
     const roots = [];
 
@@ -763,7 +763,7 @@ export async function loadProjectTreeFromCloud(projectId) {
       map.set(c.id, node);
     });
 
-    // 4. Reconstruir la jerarquía de árbol
+    // 4. Reconstruir la jerarquÃ­a de Ã¡rbol
     concepts.forEach(c => {
       const node = map.get(c.id);
       if (c.parent_id && map.has(c.parent_id)) {
@@ -775,7 +775,7 @@ export async function loadProjectTreeFromCloud(projectId) {
 
     return roots;
   } catch (err) {
-    console.error('[CloudProjectService] Excepción al descargar árbol de conceptos:', err);
+    console.error('[CloudProjectService] ExcepciÃ³n al descargar Ã¡rbol de conceptos:', err);
     return null;
   }
 }
@@ -812,7 +812,7 @@ export async function addCollaboratorToCloud(projectId, email, role = 'editar', 
 
     return { success: true, data };
   } catch (err) {
-    console.error('[CloudProjectService] Excepción agregando colaborador:', err);
+    console.error('[CloudProjectService] ExcepciÃ³n agregando colaborador:', err);
     return { success: false, error: err };
   }
 }
@@ -877,7 +877,7 @@ export async function syncProjectMemberTabsToCloud(projectId, memberEmailOrMap, 
       .eq('id', targetUuid);
 
     if (error) {
-      console.warn('[CloudProjectService] Error actualizando pestañas de colaborador:', error.message);
+      console.warn('[CloudProjectService] Error actualizando pestaÃ±as de colaborador:', error.message);
       return { success: false, error };
     }
     return { success: true, memberTabs: nextTabs };
@@ -906,7 +906,7 @@ export async function removeCollaboratorFromCloud(projectId, email) {
 }
 
 /**
- * Actualizar una celda o concepto específico en Supabase (Persistencia de edición granular en vivo)
+ * Actualizar una celda o concepto especÃ­fico en Supabase (Persistencia de ediciÃ³n granular en vivo)
  */
 export async function updateCloudConcept(projectId, patchOrConcept) {
   const sb = getSupabaseClient();

@@ -1,5 +1,5 @@
-// js/modules/portal/subscriptionModal.js
-// Gestión integral de Planes de Suscripción del Usuario: Gratuita, Plus y Pro
+﻿// js/modules/portal/subscriptionModal.js
+// GestiÃ³n integral de Planes de SuscripciÃ³n del Usuario: Gratuita, Plus y Pro
 
 import {
   getCurrentUser,
@@ -11,14 +11,14 @@ import {
   addFeaturedProfile,
   getActiveWorkspaceData,
   getUserPlanId
-} from './projectService.js';
-import { showToast } from '../../ui/notifications.js';
-import { isNightMode } from '../../ui/themeController.js';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
+} from './projectService.js?v=20261116_cf3';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+import { isNightMode } from '../../ui/themeController.js?v=20261116_cf3';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf3';
 
 export const STORAGE_KEY_SUBSCRIPTION = 'adm_arq_subscription';
 
-// Migración de compatibilidad: Asegurar que el plan quede ligado a la cuenta que lo compró bajo adm_arq_subscription_
+// MigraciÃ³n de compatibilidad: Asegurar que el plan quede ligado a la cuenta que lo comprÃ³ bajo adm_arq_subscription_
 try {
   if (typeof localStorage !== 'undefined') {
     const legacyRaw = localStorage.getItem('adm_const_subscription');
@@ -50,7 +50,7 @@ export const SUBSCRIPTION_PLANS = [
     id: 'free',
     name: 'Gratuita',
     badge: 'INICIAL',
-    tagline: 'Ideal para conocer la plataforma y gestionar proyectos ejecutivos pequeños.',
+    tagline: 'Ideal para conocer la plataforma y gestionar proyectos ejecutivos pequeÃ±os.',
     monthlyPrice: 0,
     annualPrice: 0,
     originalMonthlyPrice: null,
@@ -71,23 +71,23 @@ export const SUBSCRIPTION_PLANS = [
       'Hasta 2 proyectos ejecutivos activos',
       'Hasta 15 conceptos entregables por obra',
       'Hasta 2 colaboradores incluidos bajo la misma cuenta',
-      '50 MB en servidor (con compresor de imágenes para PDF a ~150 KB por foto)',
-      'Árbol de Alcances (planos arquitectónicos, memorias y estudios)',
-      'Catálogo Base y Presupuesto de Honorarios esenciales',
+      '50 MB en servidor (con compresor de imÃ¡genes para PDF a ~150 KB por foto)',
+      'Ãrbol de Alcances (planos arquitectÃ³nicos, memorias y estudios)',
+      'CatÃ¡logo Base y Presupuesto de Honorarios esenciales',
       'Copiado de conceptos y partidas entre proyectos',
-      'Explosión básica de insumos de proyecto',
-      'Cronograma de Planeación con Diagrama de Gantt básico',
-      'Impresión institucional básica con carátula de proyecto',
-      'Subida de notas y cotizaciones básicas',
+      'ExplosiÃ³n bÃ¡sica de insumos de proyecto',
+      'Cronograma de PlaneaciÃ³n con Diagrama de Gantt bÃ¡sico',
+      'ImpresiÃ³n institucional bÃ¡sica con carÃ¡tula de proyecto',
+      'Subida de notas y cotizaciones bÃ¡sicas',
       'Importador universal (Excel, CSV, JSON y Opus)',
-      'Vista de Día y Modo Nocturno'
+      'Vista de DÃ­a y Modo Nocturno'
     ]
   },
   {
     id: 'plus',
     name: 'Plus',
-    badge: 'MÁS POPULAR',
-    tagline: 'Para arquitectos, despachos y proyectistas que coordinan equipo y entregas pre-construcción.',
+    badge: 'MÃS POPULAR',
+    tagline: 'Para arquitectos, despachos y proyectistas que coordinan equipo y entregas pre-construcciÃ³n.',
     monthlyPrice: 199,
     annualPrice: 159,
     originalMonthlyPrice: 499,
@@ -106,21 +106,21 @@ export const SUBSCRIPTION_PLANS = [
       storageMb: 1000
     },
     features: [
-      '100% DE LAS FUNCIONES Y MÓDULOS ACTIVOS',
+      '100% DE LAS FUNCIONES Y MÃ“DULOS ACTIVOS',
       'Hasta 15 proyectos ejecutivos activos',
       'Hasta 160 conceptos entregables por obra',
       'Hasta 5 colaboradores incluidos con roles (Editor, Escribir, Leer)',
       '1,000 MB (1 GB) de almacenamiento en servidor',
-      'Seguimiento de Revisiones de Planos (Pendiente, En Revisión, Aprobado)',
-      'Calendario de Planeación con Ruta Crítica (CPM) y Festivos oficiales de México',
+      'Seguimiento de Revisiones de Planos (Pendiente, En RevisiÃ³n, Aprobado)',
+      'Calendario de PlaneaciÃ³n con Ruta CrÃ­tica (CPM) y Festivos oficiales de MÃ©xico',
       'Programa Financiero de Proyecto y Curva "S"',
-      'Módulo de Cobranza de Honorarios con amortización al 100% e IVA',
-      'Módulo de Especialistas e Ingenierías Externas',
+      'MÃ³dulo de Cobranza de Honorarios con amortizaciÃ³n al 100% e IVA',
+      'MÃ³dulo de Especialistas e IngenierÃ­as Externas',
       'Control de Contratos y Pagos a Especialistas',
       'Resumen Ejecutivo de Flujo de Caja (Cash Flow)',
-      'Expediente Documental y Fotográfico (facturas PDF/XML y cotizaciones)',
+      'Expediente Documental y FotogrÃ¡fico (facturas PDF/XML y cotizaciones)',
       'Chat de Proyecto por Partida y Plano en tiempo real',
-      'Bloqueo y Seguridad de Pestañas con Contraseña',
+      'Bloqueo y Seguridad de PestaÃ±as con ContraseÃ±a',
       'Logotipo y Membrete Oficial de tu despacho en PDF y Excel (sin marcas de agua)',
       'Importador universal avanzado (Excel, CSV, JSON, Opus y Neodata)'
     ]
@@ -129,7 +129,7 @@ export const SUBSCRIPTION_PLANS = [
     id: 'pro',
     name: 'Pro',
     badge: 'EMPRESARIAL / MULTIDISCIPLINARIO',
-    tagline: 'Máxima capacidad y escala para firmas de arquitectura, ingenierías y gerencias.',
+    tagline: 'MÃ¡xima capacidad y escala para firmas de arquitectura, ingenierÃ­as y gerencias.',
     monthlyPrice: 499,
     annualPrice: 399,
     originalMonthlyPrice: 1099,
@@ -148,24 +148,24 @@ export const SUBSCRIPTION_PLANS = [
       storageMb: 2500
     },
     features: [
-      '100% DE LAS FUNCIONES Y MÓDULOS ACTIVOS CON MÁXIMA ESCALA',
+      '100% DE LAS FUNCIONES Y MÃ“DULOS ACTIVOS CON MÃXIMA ESCALA',
       'Hasta 30 proyectos ejecutivos activos',
       'Hasta 200 conceptos entregables por obra',
       'Hasta 20 colaboradores incluidos bajo la misma empresa',
       '2,500 MB (2.5 GB) de almacenamiento en servidor',
       'Seguimiento de Revisiones de Planos con firmas y peritajes',
-      'Calendario Ejecutivo con Ruta Crítica, Curva "S" y suspensiones',
+      'Calendario Ejecutivo con Ruta CrÃ­tica, Curva "S" y suspensiones',
       'Programa Financiero de Proyecto avanzado',
       'Cobranza de Honorarios Multi-Etapa con retenciones fiscales',
-      'Gestión Integral de Especialistas, Calculistas y DRO',
+      'GestiÃ³n Integral de Especialistas, Calculistas y DRO',
       'Control de Contratos, Anticipos y Saldos a Especialistas',
       'Flujo de Caja del Despacho (Cash Flow: Cobrado vs Pagado)',
-      'Expediente Documental y Generadores Fotográficos masivos',
+      'Expediente Documental y Generadores FotogrÃ¡ficos masivos',
       'Chat Colaborativo en tiempo real por partida',
-      'Bloqueo y Seguridad de Pestañas con Contraseña',
-      'Personalización corporativa total con firmas y membretes',
+      'Bloqueo y Seguridad de PestaÃ±as con ContraseÃ±a',
+      'PersonalizaciÃ³n corporativa total con firmas y membretes',
       'Importador y exportador institucional masivo (Opus y Neodata)',
-      'Soporte prioritario y sincronización respaldada en la nube'
+      'Soporte prioritario y sincronizaciÃ³n respaldada en la nube'
     ]
   }
 ];
@@ -283,7 +283,7 @@ export function saveSubscription(planId, billingCycle = activeBillingCycle) {
 
   try {
     if (typeof localStorage !== 'undefined') {
-      // Guardar caché local por cuenta; la fuente autoritativa en la nube es Stripe Webhook -> empresas
+      // Guardar cachÃ© local por cuenta; la fuente autoritativa en la nube es Stripe Webhook -> empresas
       const user = getCurrentUser();
       if (user?.email) {
         localStorage.setItem(`adm_arq_subscription_${user.email.toLowerCase().trim()}`, JSON.stringify(payload));
@@ -404,7 +404,7 @@ export function renderSubscriptionCards() {
     const hasDiscount = Boolean(origPrice && origPrice > price);
     const annualTotal = plan.annualPrice * 12;
 
-    // Estilos adaptativos según nivel de suscripción y modo visual (Día / Nocturno)
+    // Estilos adaptativos segÃºn nivel de suscripciÃ³n y modo visual (DÃ­a / Nocturno)
     let cardBorder = night ? 'border-slate-700/90 bg-slate-900/90' : 'border-slate-200 bg-white';
     let badgeClasses = night ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-200';
     let iconBoxClasses = night ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'bg-emerald-50 text-emerald-600 border border-emerald-200';
@@ -455,8 +455,8 @@ export function renderSubscriptionCards() {
     const billingSubtext = plan.id === 'free'
       ? 'Siempre gratis, sin tarjeta'
       : (isAnnual
-        ? `Facturado al año: $${annualTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN - Ahorras 20%`
-        : 'Facturación mensual flexible • Cancela cuando quieras');
+        ? `Facturado al aÃ±o: $${annualTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN - Ahorras 20%`
+        : 'FacturaciÃ³n mensual flexible â€¢ Cancela cuando quieras');
 
     return `
       <div class="relative rounded-2xl border-2 p-5 flex flex-col justify-between transition duration-200 ${cardBorder}" data-plan-card="${plan.id}">
@@ -480,12 +480,12 @@ export function renderSubscriptionCards() {
                   ? 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
                   : 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
               } flex items-center gap-1 shadow-2xs shrink-0">
-                <i class="fa-solid fa-fire text-[9px]"></i> ${isAnnual ? `${plan.discountBadge} • -20%` : plan.discountBadge}
+                <i class="fa-solid fa-fire text-[9px]"></i> ${isAnnual ? `${plan.discountBadge} â€¢ -20%` : plan.discountBadge}
               </span>
             ` : ''}
           </div>
 
-          <!-- Descripción corta -->
+          <!-- DescripciÃ³n corta -->
           <p class="text-xs leading-relaxed mb-4 ${night ? 'text-slate-300' : 'text-slate-600'}">
             ${plan.tagline}
           </p>
@@ -541,7 +541,7 @@ export function renderSubscriptionCards() {
           </div>
         </div>
 
-        <!-- Botón de Selección -->
+        <!-- BotÃ³n de SelecciÃ³n -->
         <div class="pt-3 border-t ${night ? 'border-slate-800' : 'border-slate-100'}">
           <button type="button"
                   ${isCurrent ? 'disabled' : `onclick="selectSubscriptionPlan('${plan.id}')"`}
@@ -567,7 +567,7 @@ export function openSubscriptionModal() {
     modal.classList.add('flex');
   }
 
-  // Sincronizar desde la nube por si la suscripción se actualizó en otro dispositivo
+  // Sincronizar desde la nube por si la suscripciÃ³n se actualizÃ³ en otro dispositivo
   try {
     syncSubscriptionFromCloud().then(cloudSub => {
       if (cloudSub) {
@@ -605,15 +605,15 @@ export async function openStripeCustomerPortal() {
   try {
     const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
     if (!sb || !isSupabaseConfigured()) {
-      showToast('Configura Supabase para administrar tu suscripción en Stripe.', 'warning');
+      showToast('Configura Supabase para administrar tu suscripciÃ³n en Stripe.', 'warning');
       return;
     }
     const { data: { session } } = await sb.auth.getSession();
     if (!session?.access_token) {
-      showToast('Inicia sesión para acceder al portal de facturación.', 'warning');
+      showToast('Inicia sesiÃ³n para acceder al portal de facturaciÃ³n.', 'warning');
       return;
     }
-    showToast('Abriendo portal seguro de facturación Stripe...', 'info');
+    showToast('Abriendo portal seguro de facturaciÃ³n Stripe...', 'info');
     const { data, error } = await sb.functions.invoke('create-portal-link', {
       body: { returnUrl: typeof window !== 'undefined' ? window.location.href : '' }
     });
@@ -621,7 +621,7 @@ export async function openStripeCustomerPortal() {
       window.location.href = data.url;
       return;
     }
-    showToast(data?.error || error?.message || 'No se encontró una suscripción de Stripe activa asociada a tu cuenta.', 'warning');
+    showToast(data?.error || error?.message || 'No se encontrÃ³ una suscripciÃ³n de Stripe activa asociada a tu cuenta.', 'warning');
   } catch (err) {
     showToast(err?.message || 'Error al abrir el portal de Stripe.', 'error');
   }
@@ -657,12 +657,12 @@ export async function selectSubscriptionPlan(planId) {
   try {
     const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
     if (!sb || !isSupabaseConfigured()) {
-      showToast('Conecta tu sesión de Supabase para activar un plan de pago.', 'warning');
+      showToast('Conecta tu sesiÃ³n de Supabase para activar un plan de pago.', 'warning');
       return;
     }
     const { data: { session } } = await sb.auth.getSession();
     if (!session?.access_token) {
-      showToast('Inicia sesión con tu cuenta antes de contratar un plan.', 'warning');
+      showToast('Inicia sesiÃ³n con tu cuenta antes de contratar un plan.', 'warning');
       return;
     }
 
