@@ -3112,14 +3112,13 @@ export async function logoutUser() {
     await signOut();
   } catch (_) {}
   try {
-    localStorage.removeItem(STORAGE_KEY_ACTIVE_WORKSPACE);
-    localStorage.removeItem('control_obra_active_workspace_v1');
-    localStorage.setItem('cubikar_remember_device', 'false');
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+    if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
   } catch (_) {}
   currentScopeFilter = 'owned';
   updatePortalHeaderUserArea(null);
   renderSidebarNotificationsUI();
-  showToast('Has cerrado sesión exitosamente.');
+  showToast('Has cerrado sesión y se limpió el caché local.');
 
   const isLocalhost = typeof window !== 'undefined' && (
     window.location.hostname === 'localhost' || 
