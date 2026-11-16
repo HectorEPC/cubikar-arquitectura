@@ -62,7 +62,7 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261115_cubikar_arq_v16';
+} from './projectService.js?v=20261115_cubikar_arq_v19_purge_fix';
 import { showToast } from '../../ui/notifications.js';
 import { persistLocalData, state, initStore } from '../../state/store.js';
 import { renderBrandingUI } from '../../ui/brandingController.js';
@@ -1447,12 +1447,21 @@ export function renderPortalDashboard() {
   const userPlanId = getUserPlanId(user);
   const userPlanLimits = getPlanLimits(userPlanId);
 
+  // Restaurar el modo de trabajo persistido si el usuario estaba en el espacio de un anfitrión
+  const activeWs = getActiveWorkspaceData();
+  const uEmail = (user.email || '').toLowerCase().trim();
+  if (activeWs && activeWs.ownerEmail && activeWs.ownerEmail !== uEmail) {
+    currentScopeFilter = `owner:${activeWs.ownerEmail}`;
+  }
+
   // Sincronizar y purgar proyectos eliminados del anfitrión si estamos en su espacio de trabajo
   try {
     if (typeof window !== 'undefined' && typeof window.syncHostWorkspaceProjects === 'function') {
       if (currentScopeFilter && currentScopeFilter.startsWith('owner:')) {
         const hEmail = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
-        window.syncHostWorkspaceProjects(hEmail);
+        window.syncHostWorkspaceProjects(hEmail).then((pruned) => {
+          if (pruned) refreshProjectsGridUI();
+        });
       }
       if (Array.isArray(invitersList) && invitersList.length > 0) {
         invitersList.forEach(inv => {
@@ -1956,6 +1965,25 @@ export function getFilteredProjectsList(allProjects) {
     } else if (currentScopeFilter.startsWith('owner:')) {
       const targetOwner = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
 
+      // Consultar manifiesto del anfitrión (en memoria o en sessionStorage)
+      let hostManifest = null;
+      if (typeof window !== 'undefined' && window.__hostActiveManifest && window.__hostActiveManifest[targetOwner] !== undefined) {
+        hostManifest = window.__hostActiveManifest[targetOwner];
+      } else {
+        try {
+          if (typeof sessionStorage !== 'undefined') {
+            const rawSession = sessionStorage.getItem(`cubikar_host_manifest_${targetOwner}`);
+            if (rawSession !== null) {
+              hostManifest = JSON.parse(rawSession);
+              if (typeof window !== 'undefined') {
+                if (!window.__hostActiveManifest) window.__hostActiveManifest = {};
+                window.__hostActiveManifest[targetOwner] = hostManifest;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       filtered = filtered.filter(p => {
         // CONFIRMACIÓN 1: El proyecto debe pertenecer efectivamente al anfitrión seleccionado
         const isHost = (p.ownerEmail || '').toLowerCase().trim() === targetOwner;
@@ -1971,16 +1999,13 @@ export function getFilteredProjectsList(allProjects) {
         const status = (myMem.status || '').toLowerCase().trim();
         if (status !== 'active' && status !== 'accepted') return false;
 
-        // Verificación de manifiesto activo del anfitrión (si está disponible)
-        if (typeof window !== 'undefined' && window.__hostActiveManifest && window.__hostActiveManifest[targetOwner]) {
-          const hostManifest = window.__hostActiveManifest[targetOwner];
-          if (Array.isArray(hostManifest)) {
-            const existsInHost = hostManifest.some(activeId => activeId === p.id || (p.cloudId && activeId === p.cloudId));
-            if (!existsInHost) {
-              markProjectDeleted(p.id);
-              if (p.cloudId) markProjectDeleted(p.cloudId);
-              return false;
-            }
+        // Verificación con el manifiesto autoritativo de Supabase
+        if (Array.isArray(hostManifest)) {
+          const existsInHost = hostManifest.some(activeId => activeId === p.id || (p.cloudId && activeId === p.cloudId));
+          if (!existsInHost) {
+            markProjectDeleted(p.id);
+            if (p.cloudId) markProjectDeleted(p.cloudId);
+            return false;
           }
         }
 
