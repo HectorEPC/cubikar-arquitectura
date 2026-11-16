@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf7';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf7';
+import { state } from '../../state/store.js?v=20261116_cf8';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf8';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf7';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf7';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf7';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf7';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf7';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf7';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf7';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf7';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf7';
+} from '../portal/projectService.js?v=20261116_cf8';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf8';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf8';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf8';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf8';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf8';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf8';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf8';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf8';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
