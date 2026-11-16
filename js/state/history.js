@@ -1,6 +1,7 @@
 import { state, persistLocalData } from './store.js';
 import { showToast } from '../ui/notifications.js';
 import { isTabLocked, guardTabUnlocked } from '../ui/tabLockController.js';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js';
 
 export let undoStack = [];
 export let redoStack = [];
@@ -11,6 +12,7 @@ export function setHistoryRenderCallback(cb) {
 }
 
 export function saveState() {
+  if (!canCurrentUserEditProject()) return;
   undoStack.push(JSON.stringify(state.treeData));
   if (undoStack.length > 20) undoStack.shift();
   redoStack = [];
@@ -19,27 +21,41 @@ export function saveState() {
 }
 
 export function updateUndoRedoButtons() {
-  const canUndo = undoStack.length > 0;
-  const canRedo = redoStack.length > 0;
-  const catLocked = isTabLocked('cat');
-  const insLocked = isTabLocked('insumos');
+  const canEdit = canCurrentUserEditProject();
+  const canUndo = canEdit && undoStack.length > 0;
+  const canRedo = canEdit && redoStack.length > 0;
+  const catLocked = isTabLocked('alcances');
+  const insLocked = isTabLocked('presupuesto');
 
-  // Actualizar botones de TAB1-CAT-BASE
+  // Actualizar botones de TAB1-CAT-BASE / Alcances
   const undoBtn = document.getElementById('btn-undo');
   const redoBtn = document.getElementById('btn-redo');
   if (undoBtn) undoBtn.disabled = !canUndo || catLocked;
   if (redoBtn) redoBtn.disabled = !canRedo || catLocked;
 
-  // Actualizar botones de INSUMOS GENERALES
+  // Actualizar botones de Presupuesto / Insumos
   const undoBtnIns = document.getElementById('btn-undo-insumos');
   const redoBtnIns = document.getElementById('btn-redo-insumos');
   if (undoBtnIns) undoBtnIns.disabled = !canUndo || insLocked;
   if (redoBtnIns) redoBtnIns.disabled = !canRedo || insLocked;
 }
 
+function getActiveHistoryTabKey() {
+  if (typeof document === 'undefined') return 'alcances';
+  const viewPresupuesto = document.getElementById('view-presupuesto');
+  const viewInsumos = document.getElementById('view-insumos');
+  const isPresupuestoVisible =
+    (viewPresupuesto && !viewPresupuesto.classList.contains('hidden')) ||
+    (viewInsumos && !viewInsumos.classList.contains('hidden'));
+  return isPresupuestoVisible ? 'presupuesto' : 'alcances';
+}
+
 export function undoAction() {
-  const viewInsumos = typeof document !== 'undefined' ? document.getElementById('view-insumos') : null;
-  const activeTabKey = (viewInsumos && !viewInsumos.classList.contains('hidden')) ? 'insumos' : 'cat';
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite deshacer cambios.', 'warning');
+    return;
+  }
+  const activeTabKey = getActiveHistoryTabKey();
   if (!guardTabUnlocked(activeTabKey)) return;
   if (undoStack.length === 0) return;
   redoStack.push(JSON.stringify(state.treeData));
@@ -52,8 +68,11 @@ export function undoAction() {
 }
 
 export function redoAction() {
-  const viewInsumos = typeof document !== 'undefined' ? document.getElementById('view-insumos') : null;
-  const activeTabKey = (viewInsumos && !viewInsumos.classList.contains('hidden')) ? 'insumos' : 'cat';
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite rehacer cambios.', 'warning');
+    return;
+  }
+  const activeTabKey = getActiveHistoryTabKey();
   if (!guardTabUnlocked(activeTabKey)) return;
   if (redoStack.length === 0) return;
   undoStack.push(JSON.stringify(state.treeData));

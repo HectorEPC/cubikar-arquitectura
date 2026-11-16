@@ -70,11 +70,11 @@ import { STORAGE_KEY_CLIPBOARD, getActiveProjectId } from './config/constants.js
 import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback } from './state/history.js';
 import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
-import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
-import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261116_cubikar_arq_v24_sync_fix';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261115_v10';
-import { getCurrentUser } from './modules/portal/projectService.js?v=20261116_cubikar_arq_v24_sync_fix';
-import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_v10';
+import { updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
+import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js';
+import { getCurrentUser } from './modules/portal/projectService.js';
+import { initAppSwitcher } from './ui/appSwitcher.js';
 
 import {
   findNodeById,
@@ -245,7 +245,7 @@ import {
   closePlatformInfoModal,
   handlePlatformInfoEmpiezaGratis,
   handlePlatformInfoVerPlanes
-} from './ui/modalController.js?v=20261114_09';
+} from './ui/modalController.js';
 
 import {
   openTutorialHubModal,
@@ -253,20 +253,20 @@ import {
   launchTourFromHub,
   launchVideoFromHub,
   resetTourPreferencesFromHub
-} from './ui/tutorialHubModal.js?v=20261115_cubikar_arq_v4';
+} from './ui/tutorialHubModal.js';
 
 import {
   startInteractiveTour,
   skipInteractiveTour,
   closeInteractiveTour,
   checkAndResumeTourOnLoad
-} from './ui/interactiveTour.js?v=20261115_cubikar_arq_v4';
+} from './ui/interactiveTour.js';
 
 import {
   openVideoSimulatorModal,
   closeVideoSimulatorModal,
   toggleVoiceNarration
-} from './ui/videoSimulatorModal.js?v=20261114_09';
+} from './ui/videoSimulatorModal.js';
 
 import {
   openFirmasResponsablesModal,
@@ -320,6 +320,7 @@ import {
   applyTabLocksToDOM,
   setTabLockRenderCallback
 } from './ui/tabLockController.js';
+import { hydrateProjectModulesFromCloud } from './core/cloudModulesSyncService.js';
 
 import {
   setProjectChatDivision,
@@ -421,6 +422,7 @@ import {
   deleteUserAccount,
   deleteCurrentUserAccountAction,
   logoutUser,
+  logoutAllDevices,
   toggleUserDropdown,
   closeUserDropdown,
   togglePortalUserDropdown,
@@ -473,7 +475,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261116_cubikar_arq_v24_sync_fix';
+} from './modules/portal/portalController.js';
 
 import {
   openCubikarAdminModal,
@@ -932,6 +934,7 @@ Object.assign(window, {
   deleteUserAccount,
   deleteCurrentUserAccountAction,
   logoutUser,
+  logoutAllDevices,
   toggleUserDropdown,
   closeUserDropdown,
   togglePortalUserDropdown,
@@ -1274,6 +1277,21 @@ function bootWorkspaceModules() {
     } catch (e) {
       console.warn('[Realtime] Aviso al conectar canal de obra:', e);
     }
+    try {
+      hydrateProjectModulesFromCloud(activePId).then((changed) => {
+        if (changed) {
+          applyTabLocksToDOM();
+          renderProjectChatDock();
+          renderSidebarNotificationsUI();
+          const viewSeguimiento = document.getElementById('view-seguimiento');
+          if (viewSeguimiento && !viewSeguimiento.classList.contains('hidden')) renderSeguimientoView();
+          const viewCalendario = document.getElementById('view-calendario');
+          if (viewCalendario && !viewCalendario.classList.contains('hidden')) renderCalendarioObra();
+          const viewEstimaciones = document.getElementById('view-estimaciones');
+          if (viewEstimaciones && !viewEstimaciones.classList.contains('hidden')) renderEstimacionesView();
+        }
+      }).catch(() => {});
+    } catch (_) {}
   }
 
   // Inicializar canal WebSocket global para invitaciones y proyectos en tiempo real
@@ -1408,6 +1426,10 @@ window.togglePresupuestoSubtituloExpand = togglePresupuestoSubtituloExpand;
 window.agruparPresupuestoConceptos = agruparPresupuestoConceptos;
 window.desagruparPresupuestoConceptos = desagruparPresupuestoConceptos;
 window.renderSeguimientoView = renderSeguimientoView;
+window.logoutAllDevices = logoutAllDevices;
+window.renderHeaderCollaborators = renderHeaderCollaborators;
+window.renderAllTabAssignedMembers = renderAllTabAssignedMembers;
+window.updateNavigationTabsAccess = updateNavigationTabsAccess;
 
 setProjectChatRefreshCallback(() => {
   renderTAB1();

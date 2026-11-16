@@ -44,10 +44,37 @@ function extractJsonFromText(text) {
   }
 }
 
+function isAllowedOrigin(rawOrigin) {
+  if (!rawOrigin) return true;
+  try {
+    const parsed = new URL(rawOrigin);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === 'cubikar.app' ||
+      host.endsWith('.cubikar.app') ||
+      host.endsWith('.pages.dev') ||
+      host === 'cubikar-jj8j.vercel.app' ||
+      host.endsWith('.vercel.app') ||
+      host === 'localhost' ||
+      host === '127.0.0.1'
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
+  const reqOrigin = req.headers.origin || req.headers.referer || '';
+  const originAllowed = isAllowedOrigin(reqOrigin);
+
   // Solo admitir método POST y preflight OPTIONS
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.headers.origin && originAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', 'https://arq.cubikar.app');
+    }
+    res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Gemini-Key');
     return res.status(200).end();
@@ -59,18 +86,12 @@ export default async function handler(req, res) {
   }
 
   // 1. Verificación de Origen (CORS / Anti-Leeching)
-  const origin = req.headers.origin || req.headers.referer || '';
-  const isAllowedOrigin = !origin ||
-    origin.includes('cubikar-jj8j.vercel.app') ||
-    origin.includes('vercel.app') ||
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1');
-
-  if (!isAllowedOrigin) {
+  if (!originAllowed) {
     return res.status(403).json({ success: false, error: 'Acceso no autorizado desde este origen.' });
   }
 
-  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://arq.cubikar.app');
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Gemini-Key');
 
@@ -183,14 +204,14 @@ Instrucciones prioritarias con Google Search:
 }
 \`\`\``;
 
-  // 6. Modelos de respaldo con y sin Search Grounding
+  // 6. Modelos reales de respaldo con y sin Search Grounding
   const attempts = [
+    { model: 'gemini-2.5-flash', tools: [{ googleSearch: {} }] },
+    { model: 'gemini-2.5-flash', tools: null },
     { model: 'gemini-2.0-flash', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.0-flash', tools: null },
     { model: 'gemini-1.5-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-1.5-flash', tools: null },
-    { model: 'gemini-2.5-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-3.8-flash', tools: [{ googleSearch: {} }] }
+    { model: 'gemini-1.5-flash', tools: null }
   ];
 
   let lastError = '';
@@ -284,5 +305,64 @@ Instrucciones prioritarias con Google Search:
     success: false,
     error: `No se pudo generar la matriz con Google IA: ${lastError}`,
     debugErrors
+  });
+}
+
+export async function onRequest(context) {
+  const { request, env } = context;
+  globalThis.process = globalThis.process || { env: {} };
+  globalThis.process.env = { ...(globalThis.process.env || {}), ...(env || {}) };
+
+  const headersObj = {};
+  request.headers.forEach((value, key) => {
+    headersObj[key.toLowerCase()] = value;
+  });
+
+  let body = {};
+  if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS') {
+    const rawText = await request.text().catch(() => '');
+    if (rawText) {
+      try {
+        body = JSON.parse(rawText);
+      } catch {
+        body = {};
+      }
+    }
+  }
+
+  let statusCode = 200;
+  const resHeaders = new Headers({ 'Content-Type': 'application/json; charset=utf-8' });
+  let responseBody = '';
+
+  const req = {
+    method: request.method,
+    url: request.url,
+    headers: headersObj,
+    body,
+    socket: { remoteAddress: headersObj['cf-connecting-ip'] || '127.0.0.1' }
+  };
+
+  const res = {
+    setHeader(k, v) {
+      resHeaders.set(k, String(v));
+    },
+    status(code) {
+      statusCode = code;
+      return this;
+    },
+    json(data) {
+      responseBody = JSON.stringify(data);
+      return this;
+    },
+    end(txt = '') {
+      responseBody = txt || '';
+      return this;
+    }
+  };
+
+  await handler(req, res);
+  return new Response(statusCode === 204 || request.method === 'OPTIONS' ? null : responseBody, {
+    status: statusCode,
+    headers: resHeaders
   });
 }

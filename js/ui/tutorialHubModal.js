@@ -2,8 +2,8 @@
 // Modal centralizado "Centro de Tutoriales y Aprendizaje" para cubikar Arquitectura
 // Permite al usuario elegir entre el Tour Guiado en Vivo interactivo o el Reproductor Web de Video-Simulación Animada.
 
-import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261115_cubikar_arq_v4';
-import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261115_cubikar_arq_v4';
+import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js';
+import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js';
 
 let isTutorialHubOpen = false;
 
@@ -46,14 +46,14 @@ export function launchTourFromHub(preferredTourId = 'master') {
     tourId = 'portal';
 
     if (!viewPortal || viewPortal.classList.contains('hidden')) {
-      const viewSeguimiento = document.getElementById('view-seguimiento') || document.getElementById('view-compras');
-      const viewBitacora = document.getElementById('view-bitacora');
+      const viewSeguimiento = document.getElementById('view-seguimiento');
+      const viewEstimaciones = document.getElementById('view-estimaciones');
       const viewAlcances = document.getElementById('view-alcances');
 
       if (viewSeguimiento && !viewSeguimiento.classList.contains('hidden')) {
-        tourId = 'compras';
-      } else if (viewBitacora && !viewBitacora.classList.contains('hidden')) {
-        tourId = 'bitacora';
+        tourId = 'seguimiento';
+      } else if (viewEstimaciones && !viewEstimaciones.classList.contains('hidden')) {
+        tourId = 'estimaciones';
       } else if (viewAlcances && !viewAlcances.classList.contains('hidden')) {
         tourId = 'master';
       } else {

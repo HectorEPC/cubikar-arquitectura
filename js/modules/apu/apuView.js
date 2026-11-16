@@ -1,11 +1,12 @@
 import { state, persistLocalData } from '../../state/store.js';
 import { formatMoney, formatQty, getCurrencySymbol, round2, round5, formatMatrixQty, getInsumoRowColorClass } from '../../core/formatters.js';
-import { getFactorSobrecosto } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor } from '../../core/calculations.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js';
 import { updateModalIfOpen } from './matrizModal.js';
 import { getExactOpusInsumosForClave } from '../io/casaLauraData.js';
 import { isTabLocked } from '../../ui/tabLockController.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
 
 // Renderizar tabla Matriz APU del concepto seleccionado
 let selectedApuInsumoIdx = null;
@@ -62,7 +63,7 @@ export function renderAPUInsumos(node) {
   let sumMat = 0, sumMO = 0, sumHerr = 0, sumEq = 0, sumMaq = 0, sumSub = 0;
 
   let visibleCount = 0;
-  const isCatLocked = isTabLocked('cat');
+  const isCatLocked = isTabLocked('cat') || !canCurrentUserEditProject();
 
 
   node.insumos.forEach((ins, idx) => {
@@ -161,7 +162,7 @@ export function renderAPUInsumos(node) {
     node.costoDirecto = totalCD;
   }
 
-  const factor = getFactorSobrecosto();
+  const factor = getEjecutivoCostPlusFactor();
   const totalPU = round2(totalCD * factor);
   const sobrecostoAmount = round2(totalPU - totalCD);
 

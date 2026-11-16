@@ -130,11 +130,22 @@ export function initStore() {
     // Si el proyecto está activo, siempre sincronizar con la versión autoritativa más reciente de Supabase PostgreSQL
     if (activePId) {
       loadProjectTreeFromCloud(activePId).then(cloudTree => {
-        if (Array.isArray(cloudTree) && cloudTree.length > 0) {
-          clearLegacyUnquotedDefaultPrices(cloudTree);
+        if (Array.isArray(cloudTree)) {
+          if (cloudTree.length > 0) {
+            clearLegacyUnquotedDefaultPrices(cloudTree);
+          }
+          try {
+            const rawS = localStorage.getItem(getSettingsKey(activePId));
+            if (rawS) {
+              const parsedS = JSON.parse(rawS);
+              if (parsedS?.presupuestoArq) {
+                state.settings.presupuestoArq = parsedS.presupuestoArq;
+              }
+            }
+          } catch (_) {}
           const currentJson = JSON.stringify(state.treeData || []);
           const incomingJson = JSON.stringify(cloudTree);
-          if (currentJson !== incomingJson) {
+          if (currentJson !== incomingJson && (cloudTree.length > 0 || !savedData)) {
             state.treeData = cloudTree;
             localStorage.setItem(getStorageKey(activePId), incomingJson);
             if (typeof window !== 'undefined') {

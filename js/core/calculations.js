@@ -67,6 +67,7 @@ export function getUtilidadDespachoPct(settings = state.settings) {
 
 // Multiplicador completo Cost-Plus desde Costo Base (con gastos operativos del despacho + utilidad del despacho)
 export function getEjecutivoCostPlusFactor(settings = state.settings) {
+  if (settings?.applySobrecosto === false) return 1;
   const gastosFactor = getDespachoGastosFactor(settings);
   const utilDecimal = getUtilidadDespachoPct(settings) / 100;
   return utilDecimal < 0.99 ? (gastosFactor / (1 - utilDecimal)) : (gastosFactor * (1 + utilDecimal));
@@ -210,7 +211,7 @@ export function calculateProrrateoCascade(nodes) {
   // Paso 2: Calcular importes recursivamente
   function processNode(node, inheritedBudget = null) {
     const isParent = Array.isArray(node.children) && node.children.length > 0;
-    const cant = Math.max(0.0001, Number(node.cantidad) || 1);
+    const cant = node.cantidad !== undefined && node.cantidad !== '' ? Number(node.cantidad) : 1;
 
     if (inheritedBudget !== null && inheritedBudget !== undefined) {
       // Cascada Top-Down desde el presupuesto del padre
@@ -277,8 +278,8 @@ export function calculateProrrateoCascade(nodes) {
 export function getEffectivePrecioUnitario(node) {
   if (!node) return 0;
   if (node.importe_calculado !== undefined && node.importe_calculado !== null) {
-    const cant = Math.max(0.0001, Number(node.cantidad) || 1);
-    return round2(node.importe_calculado / cant);
+    const cant = node.cantidad !== undefined && node.cantidad !== '' ? Number(node.cantidad) : 1;
+    return cant > 0 ? round2(node.importe_calculado / cant) : round2(node.precioUnitario || 0);
   }
   if (hasOwnCotizaciones(node)) {
     const winner = getOwnWinnerCotizacion(node);
@@ -329,7 +330,7 @@ export function calculateParentDirectTotal(node) {
   if (!node.children || !Array.isArray(node.children) || node.children.length === 0) {
     const cdVal = (node.costoDirecto !== undefined && node.costoDirecto > 0)
       ? node.costoDirecto
-      : (node.importe_calculado !== undefined ? node.importe_calculado / (cant > 0 ? cant : 1) : (node.precioUnitario || 0));
+      : (node.importe_calculado !== undefined && node.importe_calculado !== null ? node.importe_calculado / (cant > 0 ? cant : 1) : (node.precioUnitario || 0));
     return round2(cant * round2(cdVal || 0));
   }
 

@@ -4,6 +4,8 @@ import { showToast } from '../../ui/notifications.js';
 import { calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js';
 import { recalculateClaves } from '../catalog/treeService.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
 
 // Abrir modal interactivo de selección de formato de exportación
 export function openExportModal() {
@@ -492,6 +494,15 @@ export function exportData() {
 
 // Importación y parsing de archivo CSV con reconstrucción de árbol jerárquico
 export function importData(event) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite importar catálogos.', 'warning');
+    if (event?.target) event.target.value = '';
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) {
+    if (event?.target) event.target.value = '';
+    return;
+  }
   const file = event.target?.files?.[0];
   if (!file) return;
 
@@ -529,7 +540,6 @@ export function importData(event) {
         return fields;
       }
 
-      saveState();
       const parsedTree = [];
       const stack = []; // Stack con { level, node }
 
@@ -541,7 +551,8 @@ export function importData(event) {
         const clave = cols[1] || '';
         const desc = cols[2] || 'Concepto importado';
         const unid = cols[3] || 'pza';
-        const cant = Math.round(((parseFloat(cols[4]) || 1) + Number.EPSILON) * 100) / 100;
+        const rawCant = cols[4] !== undefined && cols[4] !== '' && !isNaN(Number(cols[4])) ? Number(cols[4]) : 1;
+        const cant = Math.round((rawCant + Number.EPSILON) * 100) / 100;
         const pu = Math.round(((parseFloat(cols[5]) || 0) + Number.EPSILON) * 100) / 100;
         const isSel = (cols[7] || '').toLowerCase().includes('s');
 
@@ -569,7 +580,10 @@ export function importData(event) {
           }
 
           if (stack.length > 0) {
-            stack[stack.length - 1].node.children.push(newNode);
+            const parent = stack[stack.length - 1].node;
+            parent.precioUnitario = 0;
+            parent.costoDirecto = 0;
+            parent.children.push(newNode);
           } else {
             parsedTree.push(newNode);
           }
@@ -577,6 +591,7 @@ export function importData(event) {
         }
       }
 
+      saveState();
       state.treeData = parsedTree;
       recalculateClaves(state.treeData);
       persistLocalData();

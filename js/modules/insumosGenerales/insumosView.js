@@ -2,7 +2,7 @@ import { state, persistLocalData } from '../../state/store.js';
 import { saveState } from '../../state/history.js';
 import { showToast } from '../../ui/notifications.js';
 import { formatMoney, formatQty, formatMatrixQty, getCurrencySymbol, round2, round5 } from '../../core/formatters.js';
-import { getFactorSobrecosto, updateGrandTotal } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor, updateGrandTotal } from '../../core/calculations.js';
 import { getConsolidatedDataMap, normalizeInsumoText, getInsumoConsolidationKey } from './insumosConsolidator.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { findNodeById } from '../catalog/treeService.js';
@@ -168,7 +168,7 @@ export function toggleSelectAllInsumos(tipo, isChecked) {
 
 // Propagar el nuevo costo unitario a todas las matrices APU del proyecto que contengan el insumo (incluyendo nodos seleccionados y no seleccionados)
 function propagateInsumoCostToAllMatrices(key, parsedCosto, itemGroup = null) {
-  const factor = getFactorSobrecosto();
+  const factor = getEjecutivoCostPlusFactor();
   const touchedNodes = new Set();
 
   if (itemGroup && Array.isArray(itemGroup.sources)) {
@@ -208,7 +208,10 @@ function propagateInsumoCostToAllMatrices(key, parsedCosto, itemGroup = null) {
       node.isMatrixCustomized = true;
       const cd = round2(node.insumos.reduce((s, i) => s + round2(round5(i.cantidad || 0) * round2(i.costoUnitario || 0)), 0));
       node.costoDirecto = cd;
-      node.precioUnitario = round2(cd * factor);
+      const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c.isGanador));
+      if (!hasWinnerQuote) {
+        node.precioUnitario = round2(cd * factor);
+      }
     }
   });
 
@@ -427,12 +430,16 @@ export function ejecutarCombinacionInsumos() {
     });
   }
 
-  // 3. Recalcular costos directos y precios unitarios en todos los nodos afectados
+  // 3. Recalcular costos directos y precios unitarios Cost-Plus en todos los nodos afectados
+  const costPlusFactor = getEjecutivoCostPlusFactor();
   affectedNodes.forEach(node => {
     if (Array.isArray(node.insumos)) {
       const cd = round2(node.insumos.reduce((sum, i) => sum + round2(round5(i.cantidad || 0) * round2(i.costoUnitario || 0)), 0));
       node.costoDirecto = cd;
-      node.precioUnitario = round2(cd * getFactorSobrecosto());
+      const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c.isGanador));
+      if (!hasWinnerQuote) {
+        node.precioUnitario = round2(cd * costPlusFactor);
+      }
     }
   });
 

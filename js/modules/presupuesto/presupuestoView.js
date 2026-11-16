@@ -6,7 +6,9 @@ import { findNodeById } from '../catalog/treeService.js';
 import { formatMoney, getCurrencyCode } from '../../core/formatters.js';
 import { showToast } from '../../ui/notifications.js';
 import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
+import { getActiveProjectId } from '../../config/constants.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js';
 
 import {
   getProjectPresupuestoConfig,
@@ -173,7 +175,7 @@ export function renderPresupuestoView() {
 
   const cfg = getProjectPresupuestoConfig();
   const resumen = calcularResumenPresupuesto();
-  const locked = isTabLocked('presupuesto');
+  const locked = isTabLocked('presupuesto') || !canCurrentUserEditProject(getActiveProjectId());
 
   container.innerHTML = `
     <div class="bg-white rounded-lg shadow border border-slate-200 flex flex-col h-full overflow-hidden">
@@ -297,8 +299,9 @@ export function renderPresupuestoView() {
 // ---------------------------------------------------------------------------
 
 export function togglePresupuestoSelectNode(nodeId, isChecked) {
-  if (isTabLocked('presupuesto')) {
-    showToast('La pestaña de Presupuesto está bloqueada.', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('presupuesto')) {
+    showToast('La pestaña de Presupuesto está bloqueada o en modo solo lectura.', 'warning');
+    renderPresupuestoView();
     return;
   }
   const tree = state.treeData || [];
@@ -350,8 +353,9 @@ export function togglePresupuestoSelectNode(nodeId, isChecked) {
 }
 
 export function togglePresupuestoSelectAll(isChecked) {
-  if (isTabLocked('presupuesto')) {
-    showToast('La pestaña de Presupuesto está bloqueada.', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('presupuesto')) {
+    showToast('La pestaña de Presupuesto está bloqueada o en modo solo lectura.', 'warning');
+    renderPresupuestoView();
     return;
   }
   const tree = state.treeData || [];

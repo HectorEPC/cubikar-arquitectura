@@ -13,7 +13,7 @@ if %ERRORLEVEL% equ 0 (
     echo ====================================================
     echo    EXITO: Cubikar Arquitectura se subio correctamente.
     echo ====================================================
-    echo Vercel actualizara la aplicacion automaticamente.
+    echo Cloudflare Pages actualizara automaticamente el despliegue en produccion.
 ) else (
     echo.
     echo ====================================================

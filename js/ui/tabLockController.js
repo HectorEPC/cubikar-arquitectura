@@ -5,7 +5,9 @@
 
 import { getActiveProjectId } from '../config/constants.js';
 import { showToast } from './notifications.js';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js';
 import { isEstimacionLocked, toggleActiveEstimacionLockState, setEstimacionLocked } from '../modules/estimaciones/estimacionesModel.js';
+import { scheduleCronogramaCloudSync } from '../core/cloudModulesSyncService.js';
 
 const STORAGE_KEY_TAB_LOCKS_PREFIX = 'adm_arq_tab_locks_';
 
@@ -57,6 +59,7 @@ export function saveProjectTabLocks(locks, projectId = null) {
       calendario: Boolean(locks?.calendario)
     };
     localStorage.setItem(getTabLocksStorageKey(projectId), JSON.stringify(clean));
+    scheduleCronogramaCloudSync(projectId);
     return clean;
   } catch (err) {
     console.warn('Error al guardar bloqueo de pestañas:', err);
@@ -65,6 +68,9 @@ export function saveProjectTabLocks(locks, projectId = null) {
 }
 
 export function isTabLocked(tabKey) {
+  if (!canCurrentUserEditProject(getActiveProjectId())) {
+    return true;
+  }
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
   if (key === 'estimaciones') {
     return isEstimacionLocked();
@@ -73,8 +79,18 @@ export function isTabLocked(tabKey) {
   return Boolean(locks[key]);
 }
 
+export function isActiveTabLocked(tabKey = 'alcances') {
+  return isTabLocked(tabKey);
+}
+
 export function setTabLocked(tabKey, locked, { notify = true, rerender = true } = {}) {
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
+  if (!canCurrentUserEditProject()) {
+    if (notify) {
+      showToast('🔒 Modo solo lectura: no tienes permisos para bloquear o desbloquear pestañas.', 'warning');
+    }
+    return isTabLocked(key);
+  }
   const isLocked = Boolean(locked);
 
   if (key === 'estimaciones') {
@@ -104,6 +120,10 @@ export function setTabLocked(tabKey, locked, { notify = true, rerender = true } 
 
 export function toggleTabLock(tabKey) {
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo solo lectura: no tienes permisos para bloquear o desbloquear pestañas.', 'warning');
+    return isTabLocked(key);
+  }
   if (key === 'estimaciones') {
     const { locked, est } = toggleActiveEstimacionLockState();
     if (typeof lockRenderCallback === 'function') {
@@ -124,6 +144,10 @@ export function toggleTabLock(tabKey) {
 }
 
 export function guardTabUnlocked(tabKey, customMessage = null) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo solo lectura: tu rol no permite modificar este proyecto.', 'warning');
+    return false;
+  }
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
   if (!isTabLocked(key)) return true;
   const label = TAB_LABELS[key] || key;
@@ -165,6 +189,7 @@ export function applyTabLocksToDOM() {
 
   const locks = loadProjectTabLocks();
   const estLocked = isEstimacionLocked();
+  const readOnly = !canCurrentUserEditProject();
 
   // 1. Botones de bloqueo estáticos
   updateStaticLockButtonUI('btn-lock-alcances', locks.alcances, 'Alcances');
@@ -173,32 +198,36 @@ export function applyTabLocksToDOM() {
   updateStaticLockButtonUI('btn-lock-insumos', locks.presupuesto, 'Presupuesto');
   updateStaticLockButtonUI('btn-lock-seguimiento', locks.seguimiento, 'Seguimiento');
 
-  // 2. data-tab-locked en contenedores
-  const viewAlcances = document.getElementById('view-alcances') || document.getElementById('view-cat');
-  if (viewAlcances && typeof viewAlcances.setAttribute === 'function') {
-    viewAlcances.setAttribute('data-tab-locked', locks.alcances ? 'true' : 'false');
-  }
-  const viewPresupuesto = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
-  if (viewPresupuesto && typeof viewPresupuesto.setAttribute === 'function') {
-    viewPresupuesto.setAttribute('data-tab-locked', locks.presupuesto ? 'true' : 'false');
-  }
+  // 2. data-tab-locked en contenedores (soportando ambos IDs #view-presupuesto y #view-insumos)
+  ['view-alcances', 'view-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && typeof el.setAttribute === 'function') {
+      el.setAttribute('data-tab-locked', (locks.alcances || readOnly) ? 'true' : 'false');
+    }
+  });
+  ['view-presupuesto', 'view-insumos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && typeof el.setAttribute === 'function') {
+      el.setAttribute('data-tab-locked', (locks.presupuesto || readOnly) ? 'true' : 'false');
+    }
+  });
   const viewSeguimiento = document.getElementById('view-seguimiento');
   if (viewSeguimiento && typeof viewSeguimiento.setAttribute === 'function') {
-    viewSeguimiento.setAttribute('data-tab-locked', locks.seguimiento ? 'true' : 'false');
+    viewSeguimiento.setAttribute('data-tab-locked', (locks.seguimiento || readOnly) ? 'true' : 'false');
   }
   const viewCalendario = document.getElementById('view-calendario');
   if (viewCalendario && typeof viewCalendario.setAttribute === 'function') {
-    viewCalendario.setAttribute('data-tab-locked', locks.calendario ? 'true' : 'false');
+    viewCalendario.setAttribute('data-tab-locked', (locks.calendario || readOnly) ? 'true' : 'false');
   }
   const viewEstimaciones = document.getElementById('view-estimaciones');
   if (viewEstimaciones && typeof viewEstimaciones.setAttribute === 'function') {
-    viewEstimaciones.setAttribute('data-tab-locked', estLocked ? 'true' : 'false');
+    viewEstimaciones.setAttribute('data-tab-locked', (estLocked || readOnly) ? 'true' : 'false');
   }
 
-  // 3. Bloquear campos de encabezado en Alcances
-  const headerInputs = ['header-project-name', 'header-project-location', 'select-all-checkbox'];
+  // 3. Bloquear campos de encabezado en Alcances (mantener select-all-checkbox habilitado para consulta)
+  const headerInputs = ['header-project-name', 'header-project-location'];
   headerInputs.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.disabled = locks.alcances;
+    if (el) el.disabled = locks.alcances || readOnly;
   });
 }

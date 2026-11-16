@@ -7,6 +7,7 @@ import { getActiveProjectId, getStorageKey } from '../../config/constants.js';
 import { getHierarchyColor } from '../../core/colors.js';
 import { hasOwnCotizaciones, getEffectivePrecioUnitario } from '../../core/calculations.js';
 import { getProjectById } from '../portal/projectService.js';
+import { scheduleCronogramaCloudSync } from '../../core/cloudModulesSyncService.js';
 
 // Colores modernos por partida para las barras del cronograma Gantt
 export const PARTIDA_COLORS = [
@@ -102,9 +103,10 @@ export function getScheduleSettings(projectId = null) {
     respectWorkdays: true,
     justifyConcepts: false
   };
+  const arqKey = 'calendario_arq_cfg_' + pid;
   const key = 'calendario_cfg_' + pid;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(arqKey) || localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -142,11 +144,16 @@ export function resetGanttTodayDate() {
 }
 
 export function saveScheduleSettings(cfg) {
-  const key = 'calendario_cfg_' + (getActiveProjectId() || 'default');
+  const pid = getActiveProjectId() || 'default';
+  const arqKey = 'calendario_arq_cfg_' + pid;
+  const key = 'calendario_cfg_' + pid;
   try {
-    const current = getScheduleSettings();
+    const current = getScheduleSettings(pid);
     const updated = Object.assign({}, current, cfg);
-    localStorage.setItem(key, JSON.stringify(updated));
+    const json = JSON.stringify(updated);
+    localStorage.setItem(arqKey, json);
+    localStorage.setItem(key, json);
+    scheduleCronogramaCloudSync(pid);
     return updated;
   } catch (e) {
     return cfg;
@@ -187,9 +194,11 @@ export function getMexicanHolidaysForYear(year = 2026) {
 
 // Configuración de jornada laboral, días festivos y lluvias persistente por proyecto
 export function getWorkdaysSettings() {
-  const key = 'calendario_workdays_' + (getActiveProjectId() || 'default');
+  const pid = getActiveProjectId() || 'default';
+  const arqKey = 'calendario_arq_workdays_' + pid;
+  const key = 'calendario_workdays_' + pid;
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(arqKey) || localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -210,14 +219,19 @@ export function getWorkdaysSettings() {
 }
 
 export function saveWorkdaysSettings(cfg) {
-  const key = 'calendario_workdays_' + (getActiveProjectId() || 'default');
+  const pid = getActiveProjectId() || 'default';
+  const arqKey = 'calendario_arq_workdays_' + pid;
+  const key = 'calendario_workdays_' + pid;
   try {
     const dataToSave = {
       nonWorkingDaysOfWeek: Array.isArray(cfg?.nonWorkingDaysOfWeek) ? cfg.nonWorkingDaysOfWeek : [0],
       festivos: Array.isArray(cfg?.festivos) ? cfg.festivos : [],
       lluvias: Array.isArray(cfg?.lluvias) ? cfg.lluvias : []
     };
-    localStorage.setItem(key, JSON.stringify(dataToSave));
+    const json = JSON.stringify(dataToSave);
+    localStorage.setItem(arqKey, json);
+    localStorage.setItem(key, json);
+    scheduleCronogramaCloudSync(pid);
     return dataToSave;
   } catch (e) {
     return cfg;

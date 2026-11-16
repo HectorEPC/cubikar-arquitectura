@@ -2,6 +2,7 @@
 // Pestaña Seguimiento (Asignación de Responsables, Estatus, Archivos y % Avance Real Ponderado)
 
 import { state, persistLocalData } from '../../state/store.js';
+import { getActiveProjectId } from '../../config/constants.js';
 import { showToast } from '../../ui/notifications.js';
 import { isTabLocked } from '../../ui/tabLockController.js';
 import {
@@ -12,10 +13,24 @@ import {
   getProjectMembers,
   getRegisteredUsersList,
   getStoredInvitations,
-  getStoredPlanInvitations
+  getStoredPlanInvitations,
+  canCurrentUserEditProject
 } from '../portal/projectService.js';
-import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
+import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js';
 import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js';
+import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js';
+
+function persistSeguimientoCloudSummary() {
+  const pid = getActiveProjectId() || getActiveOrFallbackProjectId();
+  if (!pid || typeof localStorage === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(`adm_arq_seguimiento_${pid}`);
+    const prev = raw ? JSON.parse(raw) : { general: {}, notas: [] };
+    prev.updatedAt = new Date().toISOString();
+    localStorage.setItem(`adm_arq_seguimiento_${pid}`, JSON.stringify(prev));
+    scheduleBitacoraCloudSync(pid);
+  } catch (_) {}
+}
 
 export const ESTATUS_OPTIONS = [
   {
@@ -908,7 +923,7 @@ export function renderSeguimientoView() {
     seguimientoFilterStatus,
     seguimientoFilterResponsable
   );
-  const locked = isTabLocked('seguimiento');
+  const locked = isTabLocked('seguimiento') || !canCurrentUserEditProject(getActiveProjectId());
 
   const deliverablesLabel = stats.totalEntregables === 1 ? 'entregable' : 'entregables';
   const deliverablesBadgeText = hasActiveFilter
@@ -1280,8 +1295,8 @@ export function onSeguimientoMemberInvited(email) {
 }
 
 export function toggleResponsableEmailOnNode(nodeId, emailVal, { keepPopoverOpen = true, forceAdd = false } = {}) {
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1319,6 +1334,7 @@ export function toggleResponsableEmailOnNode(nodeId, emailVal, { keepPopoverOpen
 
   update(state.treeData || []);
   persistLocalData();
+  persistSeguimientoCloudSummary();
   renderSeguimientoView();
 
   if (keepPopoverOpen && lowerTarget) {
@@ -1343,8 +1359,8 @@ export function toggleResponsablePopover(event, triggerBtn) {
   if (event && typeof event.stopPropagation === 'function') {
     event.stopPropagation();
   }
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1451,8 +1467,8 @@ export function toggleResponsablePopover(event, triggerBtn) {
 }
 
 export function setConceptAndSubconceptosStatus(nodeId, nextStatus) {
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1477,6 +1493,7 @@ export function setConceptAndSubconceptosStatus(nodeId, nextStatus) {
 
   walk(node);
   persistLocalData();
+  persistSeguimientoCloudSummary();
   renderSeguimientoView();
 
   const opt = ESTATUS_OPTIONS.find(o => o.id === nextStatus);
@@ -1488,8 +1505,8 @@ export function toggleEstatusPopover(event, triggerBtn) {
   if (event && typeof event.stopPropagation === 'function') {
     event.stopPropagation();
   }
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1557,8 +1574,8 @@ export function toggleSubconceptosEstatusPopover(event, triggerBtn) {
   if (event && typeof event.stopPropagation === 'function') {
     event.stopPropagation();
   }
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1778,7 +1795,7 @@ export function toggleSeguimientoNodeExpand(nodeId, event = null) {
   const node = findNodeById(state.treeData || [], nodeId);
   if (!node || !Array.isArray(node.children) || node.children.length === 0) return;
   node.expanded = node.expanded === false;
-  if (!isTabLocked('seguimiento')) {
+  if (canCurrentUserEditProject(getActiveProjectId()) && !isTabLocked('seguimiento')) {
     persistLocalData();
   }
   renderSeguimientoView();
@@ -1795,15 +1812,15 @@ export function setAllSeguimientoExpanded(expandedState) {
     });
   }
   walkSet(state.treeData || []);
-  if (!isTabLocked('seguimiento')) {
+  if (canCurrentUserEditProject(getActiveProjectId()) && !isTabLocked('seguimiento')) {
     persistLocalData();
   }
   renderSeguimientoView();
 }
 
 export function onAvanceBarClick(event, barEl) {
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
   if (!barEl) return;
@@ -1823,8 +1840,8 @@ export function onAvanceBarClick(event, barEl) {
 }
 
 export function updateEntregableSeguimiento(nodeId, field, val) {
-  if (isTabLocked('seguimiento')) {
-    showToast('🔒 La pestaña "Seguimiento" está bloqueada (solo consulta).', 'warning');
+  if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1879,6 +1896,7 @@ export function updateEntregableSeguimiento(nodeId, field, val) {
     return;
   }
   persistLocalData();
+  persistSeguimientoCloudSummary();
   renderSeguimientoView();
 }
 

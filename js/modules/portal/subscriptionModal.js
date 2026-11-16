@@ -14,21 +14,21 @@ import {
 } from './projectService.js';
 import { showToast } from '../../ui/notifications.js';
 import { isNightMode } from '../../ui/themeController.js';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 
-export const STORAGE_KEY_SUBSCRIPTION = 'adm_const_subscription';
+export const STORAGE_KEY_SUBSCRIPTION = 'adm_arq_subscription';
 
-// Migración de compatibilidad: Asegurar que el plan quede ligado a la cuenta que lo compró
-// y eliminar la clave global compartida para que no se filtre a otras cuentas ni a nuevos registros.
+// Migración de compatibilidad: Asegurar que el plan quede ligado a la cuenta que lo compró bajo adm_arq_subscription_
 try {
   if (typeof localStorage !== 'undefined') {
-    const legacyRaw = localStorage.getItem(STORAGE_KEY_SUBSCRIPTION);
-    if (legacyRaw) {
-      const curr = getCurrentUser();
-      const em = (curr?.email || '').toLowerCase().trim();
-      if (em && !localStorage.getItem(`adm_const_subscription_${em}`)) {
-        localStorage.setItem(`adm_const_subscription_${em}`, legacyRaw);
+    const legacyRaw = localStorage.getItem('adm_const_subscription');
+    const curr = getCurrentUser();
+    const em = (curr?.email || '').toLowerCase().trim();
+    if (em && !localStorage.getItem(`adm_arq_subscription_${em}`)) {
+      const legacyUserRaw = localStorage.getItem(`adm_const_subscription_${em}`) || legacyRaw;
+      if (legacyUserRaw) {
+        localStorage.setItem(`adm_arq_subscription_${em}`, legacyUserRaw);
       }
-      localStorage.removeItem(STORAGE_KEY_SUBSCRIPTION);
     }
   }
 } catch (_) {}
@@ -181,7 +181,8 @@ export function getCurrentSubscription() {
     const user = getCurrentUser();
     if (user?.email && typeof localStorage !== 'undefined') {
       const cleanEmail = user.email.toLowerCase().trim();
-      const raw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+      const raw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+        || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
       if (raw) {
         const parsed = JSON.parse(raw);
         const validPlan = getPlanById(parsed?.planId);
@@ -212,6 +213,65 @@ export function getCurrentSubscription() {
   };
 }
 
+export async function syncSubscriptionFromCloud(targetEmail = null) {
+  try {
+    const sb = getSupabaseClient();
+    if (!sb || !isSupabaseConfigured()) return null;
+
+    const user = getCurrentUser();
+    const email = (targetEmail || user?.email || '').toLowerCase().trim();
+    if (!email) return null;
+
+    const { data: { user: authUser } } = await sb.auth.getUser();
+    if (authUser && (authUser.email || '').toLowerCase().trim() === email) {
+      let resolvedPlanId = null;
+      const resolvedCycle = authUser.user_metadata?.subscription?.billingCycle === 'annual' ? 'annual' : 'monthly';
+      let resolvedUpdatedAt = new Date().toISOString();
+
+      try {
+        const { data: perfil } = await sb
+          .from('perfiles')
+          .select('empresa_id, empresas(id, plan, plan_arq, acceso_arq, estado_suscripcion, periodo_fin_arq, periodo_fin)')
+          .eq('id', authUser.id)
+          .maybeSingle();
+        const emp = perfil?.empresas;
+        if (emp) {
+          const candidatePlan = emp.plan_arq || emp.plan || 'free';
+          const statusOk = !emp.estado_suscripcion || emp.estado_suscripcion === 'active' || emp.estado_suscripcion === 'trialing';
+          resolvedPlanId = (candidatePlan !== 'free' && !statusOk) ? 'free' : candidatePlan;
+        }
+      } catch (_) {}
+
+      if (!resolvedPlanId && authUser.user_metadata?.subscription?.planId) {
+        resolvedPlanId = authUser.user_metadata.subscription.planId;
+        resolvedUpdatedAt = authUser.user_metadata.subscription.updatedAt || resolvedUpdatedAt;
+      }
+
+      if (resolvedPlanId) {
+        const validPlan = getPlanById(resolvedPlanId);
+        const resolved = {
+          planId: validPlan.id,
+          billingCycle: resolvedCycle,
+          updatedAt: resolvedUpdatedAt
+        };
+        localStorage.setItem(`adm_arq_subscription_${email}`, JSON.stringify(resolved));
+        if (user && (user.email || '').toLowerCase().trim() === email) {
+          user.subscription = resolved;
+          saveCurrentUser(user);
+          updateSubscriptionBadgesUI();
+          if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
+            try { window.refreshProjectsGridUI(); } catch (_) {}
+          }
+        }
+        return resolved;
+      }
+    }
+  } catch (e) {
+    console.warn('[Subscription ARQ] Error al sincronizar desde la nube:', e);
+  }
+  return null;
+}
+
 export function saveSubscription(planId, billingCycle = activeBillingCycle) {
   const validPlan = getPlanById(planId);
   const normalizedCycle = billingCycle === 'annual' ? 'annual' : 'monthly';
@@ -223,10 +283,10 @@ export function saveSubscription(planId, billingCycle = activeBillingCycle) {
 
   try {
     if (typeof localStorage !== 'undefined') {
-      // Guardar de forma estricta y permanente para el usuario específico que compró el plan
+      // Guardar caché local por cuenta; la fuente autoritativa en la nube es Stripe Webhook -> empresas
       const user = getCurrentUser();
       if (user?.email) {
-        localStorage.setItem(`adm_const_subscription_${user.email.toLowerCase().trim()}`, JSON.stringify(payload));
+        localStorage.setItem(`adm_arq_subscription_${user.email.toLowerCase().trim()}`, JSON.stringify(payload));
       }
     }
   } catch (e) {}
@@ -506,6 +566,19 @@ export function openSubscriptionModal() {
     modal.classList.remove('hidden');
     modal.classList.add('flex');
   }
+
+  // Sincronizar desde la nube por si la suscripción se actualizó en otro dispositivo
+  try {
+    syncSubscriptionFromCloud().then(cloudSub => {
+      if (cloudSub) {
+        renderSubscriptionCards();
+        updateSubscriptionBadgesUI();
+        if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
+          try { window.refreshProjectsGridUI(); } catch (_) {}
+        }
+      }
+    }).catch(() => {});
+  } catch (_) {}
 }
 
 export function closeSubscriptionModal() {
@@ -515,18 +588,61 @@ export function closeSubscriptionModal() {
     modal.classList.add('hidden');
     modal.classList.remove('flex');
   }
+  try {
+    updateSubscriptionBadgesUI();
+    if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
+      window.refreshProjectsGridUI();
+    }
+  } catch (_) {}
 }
 
 export function setSubscriptionBillingCycle(cycle) {
   activeBillingCycle = cycle === 'annual' ? 'annual' : 'monthly';
-  const current = getCurrentSubscription();
-  saveSubscription(current.planId, activeBillingCycle);
   renderSubscriptionCards();
 }
 
-export function selectSubscriptionPlan(planId) {
+export async function openStripeCustomerPortal() {
+  try {
+    const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+    if (!sb || !isSupabaseConfigured()) {
+      showToast('Configura Supabase para administrar tu suscripción en Stripe.', 'warning');
+      return;
+    }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) {
+      showToast('Inicia sesión para acceder al portal de facturación.', 'warning');
+      return;
+    }
+    showToast('Abriendo portal seguro de facturación Stripe...', 'info');
+    const { data, error } = await sb.functions.invoke('create-portal-link', {
+      body: { returnUrl: typeof window !== 'undefined' ? window.location.href : '' }
+    });
+    if (!error && data?.url) {
+      window.location.href = data.url;
+      return;
+    }
+    showToast(data?.error || error?.message || 'No se encontró una suscripción de Stripe activa asociada a tu cuenta.', 'warning');
+  } catch (err) {
+    showToast(err?.message || 'Error al abrir el portal de Stripe.', 'error');
+  }
+}
+
+export async function selectSubscriptionPlan(planId) {
+  const cycle = activeBillingCycle === 'annual' ? 'annual' : 'monthly';
+
   if (planId === 'free') {
-    saveSubscription('free', activeBillingCycle);
+    const current = getCurrentSubscription();
+    if (current.planId !== 'free') {
+      try {
+        const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+        const sessionResp = sb ? await sb.auth.getSession() : null;
+        if (sessionResp?.data?.session?.access_token) {
+          await openStripeCustomerPortal();
+          return;
+        }
+      } catch (_) {}
+    }
+    saveSubscription('free', cycle);
     renderSubscriptionCards();
     updateSubscriptionBadgesUI();
     try {
@@ -538,25 +654,52 @@ export function selectSubscriptionPlan(planId) {
     return;
   }
 
-  const cycle = activeBillingCycle === 'annual' ? 'annual' : 'monthly';
-  const checkoutUrl = STRIPE_PAYMENT_LINKS[planId]?.[cycle];
-
-  if (checkoutUrl) {
-    showToast('Redirigiendo a la pasarela de pago segura de Stripe...', 'info');
-    setTimeout(() => {
-      window.location.href = checkoutUrl;
-    }, 350);
-    return;
-  }
-
-  const plan = getPlanById(planId);
-  saveSubscription(plan.id, activeBillingCycle);
-  renderSubscriptionCards();
-  updateSubscriptionBadgesUI();
   try {
-    if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
-      window.refreshProjectsGridUI();
+    const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+    if (!sb || !isSupabaseConfigured()) {
+      showToast('Conecta tu sesión de Supabase para activar un plan de pago.', 'warning');
+      return;
     }
-  } catch (_) {}
-    showToast(`\u{2728} Suscripci\u{00F3}n actualizada al plan ${plan.name}`);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) {
+      showToast('Inicia sesión con tu cuenta antes de contratar un plan.', 'warning');
+      return;
+    }
+
+    showToast('Redirigiendo a la pasarela de pago segura de Stripe...', 'info');
+    const cleanBase = typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}`
+      : '';
+    const { data, error } = await sb.functions.invoke('create-checkout', {
+      body: {
+        planId,
+        billingCycle: cycle,
+        producto: 'arq',
+        successUrl: cleanBase ? `${cleanBase}?pago=exitoso` : undefined,
+        cancelUrl: cleanBase ? `${cleanBase}?pago=cancelado` : undefined
+      }
+    });
+
+    if (!error && data?.url) {
+      window.location.href = data.url;
+      return;
+    }
+
+    const msg = data?.error || error?.message || 'No se pudo iniciar Stripe Checkout.';
+    console.warn('[Stripe Checkout ARQ]', msg);
+    showToast(`No se pudo iniciar el pago con Stripe: ${msg}`, 'error');
+  } catch (err) {
+    console.warn('[Stripe Checkout ARQ Error]', err);
+    showToast(err?.message || 'Error al conectar con Stripe Checkout.', 'error');
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.getCurrentSubscription = getCurrentSubscription;
+  window.syncSubscriptionFromCloud = syncSubscriptionFromCloud;
+  window.updateSubscriptionBadgesUI = updateSubscriptionBadgesUI;
+  window.openSubscriptionModal = openSubscriptionModal;
+  window.closeSubscriptionModal = closeSubscriptionModal;
+  window.openStripeCustomerPortal = openStripeCustomerPortal;
+  window.openCustomerPortal = openStripeCustomerPortal;
 }

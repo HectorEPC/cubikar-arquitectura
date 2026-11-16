@@ -3,7 +3,9 @@
 
 import { STORAGE_KEY_USER } from '../config/constants.js';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount } from '../modules/portal/projectService.js';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js';
+
+export { enforceGlobalSessionRevocation };
 import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js';
 import {
   writeSharedSsoCookie,
@@ -14,7 +16,7 @@ import {
   scrubSsoHashParams,
   hasPendingIncomingSso,
   getLastSignOutTimestamp
-} from './ssoHelper.js?v=20261114_11';
+} from './ssoHelper.js';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -558,7 +560,8 @@ export async function mountGoogleSignInButton({
 /**
  * Cierre de sesión seguro
  */
-export async function signOut() {
+export async function signOut(options = {}) {
+  const scope = options?.scope === 'global' ? 'global' : 'local';
   activeGoogleNoncePair = null;
   clearCachedUserProfiles();
   const current = getCurrentUser();
@@ -571,18 +574,22 @@ export async function signOut() {
       window.google.accounts.id.disableAutoSelect();
     }
   } catch (_) {}
-  clearLocalSupabaseTokens();
-  saveCurrentUser(null);
   const sb = getSupabaseClient();
   if (sb) {
+    if (scope === 'global') {
+      try {
+        await sb.auth.signOut({ scope: 'global' });
+      } catch (_) {}
+    }
     try {
       await sb.auth.signOut({ scope: 'local' });
     } catch (_) {}
-    try {
-      await sb.auth.signOut({ scope: 'global' });
-    } catch (_) {}
   }
+  clearLocalSupabaseTokens();
+  saveCurrentUser(null);
 }
+
+export const signOutUser = signOut;
 
 /**
  * Recuperación de contraseña por Email
@@ -631,6 +638,12 @@ export async function fetchUserProfile(userId, forceRefresh = false) {
             id,
             nombre,
             plan,
+            plan_arq,
+            acceso_arq,
+            periodo_fin_arq,
+            plan_const,
+            acceso_const,
+            periodo_fin_const,
             estado_suscripcion,
             logo_url
           )
@@ -674,15 +687,66 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
   const fallbackAvatar = buildFallbackAvatarSvg(resolvedName, user.email);
 
   let userSub = null;
-  const userSubRaw = typeof localStorage !== 'undefined' ? localStorage.getItem(`adm_const_subscription_${cleanEmail}`) : null;
-  if (userSubRaw) {
-    try {
-      userSub = JSON.parse(userSubRaw);
-    } catch (_) {}
+  const metaSub = user.user_metadata?.subscription;
+  const existingCycle = metaSub?.billingCycle === 'annual' ? 'annual' : 'monthly';
+
+  // 1. Prioridad máxima: Plan autoritativo en tabla empresas de Supabase (plan_arq || plan)
+  if (perfil?.empresas) {
+    const emp = perfil.empresas;
+    const dbPlan = emp.plan_arq || emp.plan || 'free';
+    const statusOk = !emp.estado_suscripcion || emp.estado_suscripcion === 'active' || emp.estado_suscripcion === 'trialing';
+    const effectiveDbPlan = (dbPlan !== 'free' && !statusOk) ? 'free' : dbPlan;
+    if (effectiveDbPlan !== 'free' || emp.estado_suscripcion === 'canceled' || emp.estado_suscripcion === 'inactive') {
+      userSub = {
+        planId: effectiveDbPlan,
+        billingCycle: existingCycle,
+        updatedAt: new Date().toISOString()
+      };
+    }
   }
+
+  // 2. Metadatos en Supabase Auth si aún no se resolvió desde empresas
+  if ((!userSub || userSub.planId === 'free') && metaSub && typeof metaSub === 'object' && metaSub.planId && metaSub.planId !== 'free') {
+    userSub = {
+      planId: metaSub.planId,
+      billingCycle: existingCycle,
+      updatedAt: metaSub.updatedAt || new Date().toISOString()
+    };
+  }
+
+  // 3. Caché local aislada de ADM_ARQ (con fallback de migración solo lectura)
+  if ((!userSub || userSub.planId === 'free') && typeof localStorage !== 'undefined') {
+    const userSubRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+      || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+    if (userSubRaw) {
+      try {
+        const parsed = JSON.parse(userSubRaw);
+        if (parsed?.planId && parsed.planId !== 'free') {
+          userSub = parsed;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 4. Administrador Maestro oficial
+  if ((!userSub || userSub.planId === 'free') && (cleanEmail === 'hepc.90@gmail.com' || cleanEmail === 'admin.general@constructora.com')) {
+    userSub = {
+      planId: 'pro',
+      billingCycle: 'monthly',
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  // 5. Fallback final a Gratuito
   if (!userSub) {
     userSub = { planId: 'free', billingCycle: 'monthly', updatedAt: null };
   }
+
+  try {
+    if (typeof localStorage !== 'undefined' && cleanEmail) {
+      localStorage.setItem(`adm_arq_subscription_${cleanEmail}`, JSON.stringify(userSub));
+    }
+  } catch (_) {}
 
   const resolvedRole = perfil?.rol || existingSameUser?.role || 'admin';
   const localUser = {
@@ -694,7 +758,7 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
     role: resolvedRole,
     roleLabel: resolveUserRoleLabel({ roleLabel: existingSameUser?.roleLabel, role: resolvedRole, isAuthenticated: true }),
     empresaId: perfil?.empresa_id || existingSameUser?.empresaId || null,
-    plan: userSub?.planId || perfil?.empresas?.plan || 'free',
+    plan: userSub?.planId || perfil?.empresas?.plan_arq || perfil?.empresas?.plan || 'free',
     estadoSuscripcion: perfil?.empresas?.estado_suscripcion || 'trialing',
     user_metadata: user.user_metadata ? { ...user.user_metadata } : (existingSameUser?.user_metadata || {})
   };
@@ -702,6 +766,12 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
   try {
     saveRegisteredUserAccount(localUser);
     markSessionOpen(localUser.email || localUser);
+    if (typeof window !== 'undefined' && typeof window.updateSubscriptionBadgesUI === 'function') {
+      window.updateSubscriptionBadgesUI();
+    }
+    if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
+      window.refreshProjectsGridUI();
+    }
     setTimeout(() => {
       try {
         restoreUserCollaborationFromCloud(user);
@@ -877,6 +947,7 @@ export async function hydrateIncomingSsoSession() {
  * Listener global de eventos de autenticación
  */
 export function initAuthListener(onAuthChangeCallback) {
+  enforceGlobalSessionRevocation();
   const sb = getSupabaseClient();
   if (!sb) return;
 

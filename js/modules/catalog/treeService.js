@@ -488,7 +488,19 @@ export function moverNode(id, direction, e) {
   }
 
   recalculateClaves(state.treeData);
-  persistLocalData(true, { changeType: 'row_moved', highlightId: id, changeDescription: 'orden de filas' });
+  const newCtx = findNodeContext(state.treeData, id);
+  persistLocalData(true, {
+    changeType: 'row_moved',
+    highlightId: id,
+    changeDescription: 'orden de filas',
+    patch: {
+      type: 'move_node',
+      id,
+      direction,
+      targetParentId: newCtx?.parent?.id || null,
+      newIndex: newCtx ? newCtx.index : 0
+    }
+  });
   renderTAB1();
 
   if (state.activeSelectedId === id) {

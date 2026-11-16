@@ -1,5 +1,5 @@
 import { printCalendarioObraFormat } from '../io/printService.js';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
+import { renderTabAssignedAvatars } from '../portal/portalController.js';
 // js/modules/calendario/calendarioView.js
 // Renderizador y controlador de la pestaña CALENDARIO DE OBRA
 // Diseño ejecutivo de alta fidelidad, interactivo y sincronizado 100% con Catálogo Base
@@ -9,6 +9,8 @@ import { formatCurrency, formatNumber } from '../../core/formatters.js';
 import { showToast } from '../../ui/notifications.js';
 import { isNightMode } from '../../ui/themeController.js';
 import { isTabLocked, guardTabUnlocked, applyTabLocksToDOM } from '../../ui/tabLockController.js';
+import { getActiveProjectId } from '../../config/constants.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
 import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js';
 import {
   extractScheduleItems,
@@ -1910,7 +1912,7 @@ export function syncGanttScroll() {
 // ARRASTRE Y REDIMENSIONAMIENTO DE BARRAS DE GANTT (MOVER, ESTIRAR Y REDUCIR)
 // ------------------------------------------
 export function initGanttBarDrag() {
-  if (isTabLocked('calendario')) return;
+  if (isTabLocked('calendario') || !canCurrentUserEditProject(getActiveProjectId())) return;
   const timelinePanel = document.getElementById('gantt-timeline-panel');
   if (!timelinePanel || !timelinePanel.querySelectorAll) return;
 

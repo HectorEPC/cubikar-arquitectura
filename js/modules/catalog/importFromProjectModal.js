@@ -5,10 +5,11 @@ import { state, persistLocalData } from '../../state/store.js';
 import { saveState } from '../../state/history.js';
 import { showToast } from '../../ui/notifications.js';
 import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js';
-import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser } from '../portal/projectService.js';
+import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
 import { recalculateClaves } from './treeService.js';
 import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js';
-import { getFactorSobrecosto, round2 } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js';
 import { formatMoney, getCurrencySymbol } from '../../core/formatters.js';
 
 let activeSourceProjectId = null;
@@ -350,9 +351,10 @@ function updateImportSelectionCounter() {
   }
 }
 
-// Helper para renovar IDs y recalcular PU con sobrecosto del proyecto destino
+// Helper para renovar IDs y recalcular PU con modelo Cost-Plus del proyecto destino
 function renewNodeDeep(n) {
   n.id = '_' + Math.random().toString(36).substr(2, 9);
+  delete n.uuid;
   n.selected = true;
 
   if (Array.isArray(n.insumos)) {
@@ -361,8 +363,15 @@ function renewNodeDeep(n) {
     n.insumos = [];
   }
 
-  if (n.costoDirecto !== undefined && n.costoDirecto !== null) {
-    const factor = getFactorSobrecosto();
+  if (Array.isArray(n.cotizaciones)) {
+    n.cotizaciones = JSON.parse(JSON.stringify(n.cotizaciones));
+  }
+
+  const winnerQuote = getOwnWinnerCotizacion(n);
+  if (winnerQuote) {
+    n.precioUnitario = round2(winnerQuote.monto || n.precioUnitario || 0);
+  } else if (n.costoDirecto !== undefined && n.costoDirecto !== null && Number(n.costoDirecto) > 0) {
+    const factor = getEjecutivoCostPlusFactor();
     n.precioUnitario = round2(n.costoDirecto * factor);
   }
 
@@ -373,6 +382,11 @@ function renewNodeDeep(n) {
 
 // Copiar y pegar un solo concepto al instante
 export function quickCopyPasteSingleConcept(nodeId) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite copiar conceptos a este proyecto.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   const flattened = flattenConcepts(activeSourceTreeData);
   const found = flattened.find(i => i.node.id === nodeId);
   if (!found) return;
@@ -416,6 +430,11 @@ export function quickCopyPasteSingleConcept(nodeId) {
 
 // Importar todos los conceptos seleccionados con sus matrices APU
 export function importSelectedConceptsToCurrentProject() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite importar conceptos a este proyecto.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   if (selectedConceptIds.size === 0) {
     showToast('Selecciona al menos un concepto para copiar.', 'warning');
     return;

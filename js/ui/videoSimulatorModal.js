@@ -5,7 +5,7 @@
 // cursor virtual animado con clic ripple sobre elementos reales,
 // narración fluida por voz natural en español con oraciones completas y subtítulos sincronizados.
 
-import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261115_cubikar_arq_v4';
+import { renderModuleVisualScene } from './realisticSimulatorShell.js';
 
 let isVideoModalOpen = false;
 let currentModuleId = 1;

@@ -1,5 +1,5 @@
 import { printEstimacionesFormat } from '../io/printService.js';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261115_cubikar_arq_v14';
+import { renderTabAssignedAvatars } from '../portal/portalController.js';
 // js/modules/estimaciones/estimacionesView.js
 // Renderizador y controlador de eventos para la pestaña ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con Catálogo Base, con soporte multiestimaciones,
@@ -38,6 +38,7 @@ import {
   getCashFlowSummary
 } from './estimacionesModel.js';
 import { guardTabUnlocked, applyTabLocksToDOM, toggleTabLock } from '../../ui/tabLockController.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
 import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js';
 
 let estimacionesSearchTerm = '';
@@ -1879,7 +1880,7 @@ export function openEstimacionConceptPhotosModal(conceptId) {
           <div class="min-w-0">
             <h3 class="text-sm font-bold text-white truncate">Reporte Fotográfico en la Nube — ${activeEst.nombre}</h3>
             <p class="text-[11px] text-indigo-200 truncate">
-              Clave <strong>${row.clave}</strong> • Cant. Eje: <strong>${Number(row.cantEje || 0).toFixed(2)} ${row.unidad}</strong> (Sin ocupar espacio en servidor)
+              Clave <strong>${row.clave}</strong> • Avance: <strong>${Number(row.cantEje || 0).toFixed(2)}%</strong> (Sin ocupar espacio en servidor)
             </p>
           </div>
         </div>
@@ -1895,7 +1896,7 @@ export function openEstimacionConceptPhotosModal(conceptId) {
         <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
           <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono">
             <span>Partida: <strong class="text-slate-700 font-sans">${row.partidaNombre || 'General'}</strong></span>
-            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Cant. Eje: ${Number(row.cantEje || 0).toFixed(2)} ${row.unidad}</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Avance: ${Number(row.cantEje || 0).toFixed(2)}%</span>
           </div>
           <p class="text-xs font-semibold text-slate-800 leading-snug">${row.descripcion}</p>
         </div>
@@ -2117,6 +2118,7 @@ export function toggleSpecialistHistory(nodeId) {
 }
 
 export function promptEditSpecialistProveedor(nodeId, currentName = '') {
+  if (!canCurrentUserEditProject() || !guardTabUnlocked('estimaciones')) return;
   if (!currentName) {
     const contracts = getSpecialistsContractsData();
     const c = contracts.find(x => String(x.nodeId) === String(nodeId));
@@ -2130,6 +2132,7 @@ export function promptEditSpecialistProveedor(nodeId, currentName = '') {
 }
 
 export function openRegistrarPagoModal(nodeId = null, paymentId = null) {
+  if (!canCurrentUserEditProject() || !guardTabUnlocked('estimaciones')) return;
   const allContracts = getSpecialistsContractsData();
   if (allContracts.length === 0) {
     showToast('Aún no hay conceptos o especialidades con cotizaciones registradas en Alcances', 'warning');
@@ -2253,7 +2256,7 @@ export function openRegistrarPagoModal(nodeId = null, paymentId = null) {
             <button type="button" onclick="setPaymentModalAmountPct(50)" class="px-2 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-300 font-bold text-[10.5px] transition cursor-pointer">
               50%
             </button>
-            <button type="button" onclick="setPaymentModalAmountDirect(${selectedContract.saldoPendiente})" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-black text-[10.5px] transition cursor-pointer" title="Liquidar saldo restante pendiente">
+            <button type="button" id="spec-modal-btn-saldo" onclick="setPaymentModalAmountDirect(${selectedContract.saldoPendiente})" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-black text-[10.5px] transition cursor-pointer" title="Liquidar saldo restante pendiente">
               100% Saldo (${formatCurrency(selectedContract.saldoPendiente, currencySymbol)})
             </button>
           </div>
@@ -2412,6 +2415,13 @@ export function onSpecialistModalNodeChanged(newNodeId) {
       </div>
     `;
   }
+
+  const saldoBtn = document.getElementById('spec-modal-btn-saldo');
+  if (saldoBtn) {
+    const nextSaldo = Math.max(0, Number(contract.saldoPendiente) || 0);
+    saldoBtn.setAttribute('onclick', `setPaymentModalAmountDirect(${nextSaldo})`);
+    saldoBtn.textContent = `100% Saldo (${formatCurrency(nextSaldo, currencySymbol)})`;
+  }
 }
 
 export function setPaymentModalAmountPct(pct) {
@@ -2436,6 +2446,7 @@ export function setPaymentModalConcept(text) {
 }
 
 export function handleSaveSpecialistPayment() {
+  if (!guardTabUnlocked('estimaciones')) return;
   const selectNode = document.getElementById('spec-modal-select-node');
   const nodeId = selectNode ? selectNode.value : activePaymentModalNodeId;
   if (!nodeId) {
@@ -2476,6 +2487,7 @@ export function handleSaveSpecialistPayment() {
 }
 
 export function confirmDeleteSpecialistPayment(nodeId, paymentId, montoFormatted = '') {
+  if (!guardTabUnlocked('estimaciones')) return;
   const msg = montoFormatted
     ? `¿Eliminar el pago de ${montoFormatted}? Esta acción actualizará los saldos en tiempo real.`
     : '¿Eliminar este pago? Esta acción actualizará los saldos en tiempo real.';

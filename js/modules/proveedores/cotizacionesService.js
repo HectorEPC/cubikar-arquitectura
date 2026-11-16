@@ -5,6 +5,8 @@ import { showToast } from '../../ui/notifications.js';
 import { formatMoney } from '../../core/formatters.js';
 import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js';
 import { renderCotizacionesSidePanel } from './proveedoresView.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -172,7 +174,22 @@ export function getCotizaciones(nodeId) {
  * @param {Object} data 
  * @returns {Object|null}
  */
+function guardCotizacionMutation() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite modificar cotizaciones ni proveedores.', 'warning');
+    return false;
+  }
+  if (typeof document !== 'undefined') {
+    const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
+    if (viewPres && !viewPres.classList.contains('hidden')) {
+      return guardTabUnlocked('presupuesto');
+    }
+  }
+  return guardTabUnlocked('alcances');
+}
+
 export function addCotizacion(nodeId, data) {
+  if (!guardCotizacionMutation()) return null;
   const status = getCotizacionHierarchyStatus(nodeId);
   const node = status.node;
   if (!node) {
@@ -256,6 +273,7 @@ export function addCotizacion(nodeId, data) {
  * @param {Object} data 
  */
 export function updateCotizacion(nodeId, cotId, data) {
+  if (!guardCotizacionMutation()) return;
   const node = findNodeById(state.treeData, nodeId);
   if (!node || !Array.isArray(node.cotizaciones)) return;
 
@@ -325,6 +343,7 @@ export function updateCotizacion(nodeId, cotId, data) {
  * @param {string} cotId 
  */
 export function deleteCotizacion(nodeId, cotId) {
+  if (!guardCotizacionMutation()) return;
   const node = findNodeById(state.treeData, nodeId);
   if (!node || !Array.isArray(node.cotizaciones)) return;
 
@@ -351,6 +370,7 @@ export function deleteCotizacion(nodeId, cotId) {
  * @param {string} cotId 
  */
 export function setCotizacionGanadora(nodeId, cotId) {
+  if (!guardCotizacionMutation()) return;
   const node = findNodeById(state.treeData, nodeId);
   if (!node || !Array.isArray(node.cotizaciones)) return;
 
@@ -397,6 +417,7 @@ export function setCotizacionGanadora(nodeId, cotId) {
  * @param {string} cotId 
  */
 export function unsetCotizacionGanadora(nodeId, cotId) {
+  if (!guardCotizacionMutation()) return;
   const node = findNodeById(state.treeData, nodeId);
   if (!node || !Array.isArray(node.cotizaciones)) return;
 

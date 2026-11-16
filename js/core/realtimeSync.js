@@ -156,6 +156,34 @@ export function applyTreePatch(tree, patch) {
   }
 
   if (type === 'move_node') {
+    if (patch.targetParentId !== undefined || patch.newIndex !== undefined) {
+      let movedNode = null;
+      function extractNode(nodes) {
+        const idx = nodes.findIndex(n => n.id === patch.id);
+        if (idx !== -1) {
+          movedNode = nodes.splice(idx, 1)[0];
+          return true;
+        }
+        for (let n of nodes) {
+          if (Array.isArray(n.children) && extractNode(n.children)) return true;
+        }
+        return false;
+      }
+      if (!extractNode(tree) || !movedNode) return false;
+      let targetList = tree;
+      if (patch.targetParentId) {
+        const parentNode = findNodeById(tree, patch.targetParentId);
+        if (!parentNode) return false;
+        if (!Array.isArray(parentNode.children)) parentNode.children = [];
+        parentNode.expanded = true;
+        targetList = parentNode.children;
+      }
+      const insertIdx = typeof patch.newIndex === 'number'
+        ? Math.max(0, Math.min(patch.newIndex, targetList.length))
+        : targetList.length;
+      targetList.splice(insertIdx, 0, movedNode);
+      return true;
+    }
     function moveInArray(nodes) {
       const idx = nodes.findIndex(n => n.id === patch.id);
       if (idx !== -1) {
@@ -183,7 +211,7 @@ export function applyTreePatch(tree, patch) {
   if (type === 'update_color') {
     const node = findNodeById(tree, patch.id);
     if (node) {
-      node.customColor = patch.color;
+      node.color = patch.color;
       return true;
     }
   }
@@ -233,14 +261,21 @@ export function subscribeToProjectRealtime(projectId) {
     return;
   }
 
-  // Evitar suscripciones duplicadas al mismo proyecto
-  if (activeChannel && currentSubscribedProjectId === projectId) {
+  const allProjects = getProjectsList();
+  const proj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+  const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || '').trim());
+  const canonicalCloudId = (proj?.cloudId && isUuid(proj.cloudId))
+    ? String(proj.cloudId).trim()
+    : (isUuid(proj?.id) ? String(proj.id).trim() : String(projectId).trim());
+
+  // Evitar suscripciones duplicadas al mismo proyecto (por ID local o cloudId)
+  if (activeChannel && (currentSubscribedProjectId === projectId || currentSubscribedProjectId === canonicalCloudId)) {
     return;
   }
 
   unsubscribeFromProjectRealtime();
   currentSubscribedProjectId = projectId;
-  const channelName = `obra_${projectId}`;
+  const channelName = `obra_${canonicalCloudId}`;
 
   activeChannel = sb.channel(channelName, {
     config: {
@@ -293,21 +328,23 @@ export function subscribeToProjectRealtime(projectId) {
     }
   });
 
-  // 2. Escuchar cambios de base de datos en 'catalogo_conceptos' (Postgres CDC)
-  activeChannel.on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'catalogo_conceptos',
-      filter: `proyecto_id=eq.${projectId}`
-    },
-    (payload) => {
-      if (payload?.new) {
-        handleIncomingConceptUpdate(payload.new);
+  // 2. Escuchar cambios de base de datos en 'catalogo_conceptos' (Postgres CDC solo si hay UUID válido)
+  if (isUuid(canonicalCloudId)) {
+    activeChannel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'catalogo_conceptos',
+        filter: `proyecto_id=eq.${canonicalCloudId}`
+      },
+      (payload) => {
+        if (payload?.new) {
+          handleIncomingConceptUpdate(payload.new);
+        }
       }
-    }
-  );
+    );
+  }
 
   // 3. Escuchar cambios en matrices de insumos APU
   activeChannel.on(
@@ -322,48 +359,64 @@ export function subscribeToProjectRealtime(projectId) {
     }
   );
 
-  // 3B. Escuchar mensajes de chat directos en 'chat_mensajes' (Postgres CDC para sincronización 100% garantizada)
-  activeChannel.on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'chat_mensajes',
-      filter: `proyecto_id=eq.${projectId}`
-    },
-    (payload) => {
-      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-        const row = payload.new;
-        if (!row || (row.proyecto_id && String(row.proyecto_id).startsWith('__'))) return;
-        const msg = row.payload_json && typeof row.payload_json === 'object' && row.payload_json.id
-          ? row.payload_json
-          : {
-              id: String(row.id || '').replace(`${projectId}__`, '').replace(`${projectId}::`, ''),
-              text: row.mensaje || '',
-              authorName: row.autor_nombre || 'Colaborador',
-              authorEmail: row.autor_email || '',
-              authorAvatar: row.autor_avatar_url || row.autor_avatar || '',
-              createdAt: row.created_at || new Date().toISOString()
-            };
-        handleIncomingChatMessage({
-          projectId: row.proyecto_id || projectId,
-          author: {
-            email: row.autor_email || msg.authorEmail || '',
-            name: row.autor_nombre || msg.authorName || 'Colaborador',
-            avatar: row.autor_avatar_url || msg.authorAvatar || ''
-          },
-          message: msg
-        });
-      } else if (payload.eventType === 'DELETE' && payload.old?.id) {
-        const rawOldId = String(payload.old.id || '');
-        const cleanMsgId = rawOldId.replace(`${projectId}__`, '').replace(`${projectId}::`, '');
-        handleIncomingChatDelete({
-          projectId: payload.old.proyecto_id || projectId,
-          messageId: cleanMsgId
-        });
+  // 3B. Escuchar mensajes de chat directos en 'chat_mensajes' (Postgres CDC)
+  const handleChatCdcPayload = (payload) => {
+    const stripPrefix = (rawVal) => String(rawVal || '').replace(/^.*?(?:__|::)/, '');
+    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+      const row = payload.new;
+      if (!row || (row.proyecto_id && String(row.proyecto_id).startsWith('__'))) return;
+      const rawJson = (row.payload_json && typeof row.payload_json === 'object')
+        ? row.payload_json
+        : ((row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : null);
+      const cleanMsgId = stripPrefix(rawJson?.id || row.id);
+      if (
+        rawJson?.senderSessionId === LOCAL_CLIENT_SESSION_ID ||
+        isRecentlyPushedLocally(cleanMsgId) ||
+        isRecentlyPushedLocally(row.id)
+      ) {
+        return;
       }
+      const msg = rawJson && (rawJson.id || cleanMsgId)
+        ? { ...rawJson, id: cleanMsgId }
+        : {
+            id: cleanMsgId,
+            text: row.mensaje || row.texto || '',
+            authorName: row.autor_nombre || 'Colaborador',
+            authorEmail: row.autor_email || '',
+            authorAvatar: row.autor_avatar_url || row.autor_avatar || '',
+            createdAt: row.created_at || row.creado_en || new Date().toISOString()
+          };
+      handleIncomingChatMessage({
+        projectId: row.proyecto_id || canonicalCloudId || projectId,
+        senderSessionId: msg.senderSessionId || null,
+        author: {
+          email: row.autor_email || msg.authorEmail || '',
+          name: row.autor_nombre || msg.authorName || 'Colaborador',
+          avatar: row.autor_avatar_url || row.autor_avatar || msg.authorAvatar || ''
+        },
+        message: msg
+      });
+    } else if (payload.eventType === 'DELETE' && payload.old?.id) {
+      handleIncomingChatDelete({
+        projectId: payload.old.proyecto_id || canonicalCloudId || projectId,
+        messageId: stripPrefix(payload.old.id)
+      });
     }
-  );
+  };
+
+  const chatCdcIds = Array.from(new Set([canonicalCloudId, projectId].filter(Boolean)));
+  chatCdcIds.forEach((cid) => {
+    activeChannel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chat_mensajes',
+        filter: `proyecto_id=eq.${cid}`
+      },
+      handleChatCdcPayload
+    );
+  });
 
   // 4. Sincronización de presencia de usuarios (quién está en la obra)
   activeChannel.on('presence', { event: 'sync' }, () => {
@@ -378,7 +431,7 @@ export function subscribeToProjectRealtime(projectId) {
 
   activeChannel.subscribe(async (status) => {
     if (status === 'SUBSCRIBED') {
-      console.info(`[Realtime] Conectado al canal WebSocket de la obra: ${projectId}`);
+      console.info(`[Realtime] Conectado al canal WebSocket de la obra: ${canonicalCloudId}`);
       hydrateProjectChatFromCloud(projectId);
       const user = getCurrentUser();
       if (user) {
@@ -421,6 +474,7 @@ export function broadcastProjectMutation({
 
   const sendPayload = () => {
     let safeTreeData = null;
+    let treeTooLarge = false;
     // Si viene un parche granular (edición de celda, cantidad, precio, etc.), NO enviamos el árbol completo por red
     // para evitar saturar el ancho de banda y congelar la UI de los demás usuarios.
     if (!patch && Array.isArray(treeData)) {
@@ -428,6 +482,8 @@ export function broadcastProjectMutation({
         const raw = JSON.stringify(treeData);
         if (raw.length < 180000) {
           safeTreeData = treeData;
+        } else {
+          treeTooLarge = true;
         }
       } catch (_) {}
     }
@@ -435,6 +491,7 @@ export function broadcastProjectMutation({
     const payload = {
       projectId: pId,
       treeData: safeTreeData,
+      treeTooLarge,
       patch: patch || null,
       settings: settings && typeof settings === 'object' ? settings : null,
       summary: {
@@ -534,18 +591,37 @@ export function handleIncomingProjectUpdate(data) {
   }
 
   const projectId = data.projectId;
+  if (
+    (typeof isProjectMarkedDeleted === 'function' && (isProjectMarkedDeleted(projectId) || (data.project?.cloudId && isProjectMarkedDeleted(data.project.cloudId))))
+  ) {
+    return;
+  }
+
+  const isAuthorizedProject = (p) => {
+    if (!p) return false;
+    const oEmail = (p.ownerEmail || '').toLowerCase().trim();
+    if (oEmail === myEmail) return true;
+    return Array.isArray(p.members) && p.members.some(m => (m?.email || '').toLowerCase().trim() === myEmail && m.status !== 'rejected');
+  };
+
   const currentPId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
 
   const allProjects = getProjectsList();
   let projIdx = allProjects.findIndex(p => p.id === projectId || (p.cloudId && p.cloudId === projectId));
 
-  // Si el proyecto no está aún en la lista pero fue emitido por un colaborador o anfitrión, agregarlo
-  if (projIdx < 0 && data.project && data.project.id) {
+  // Solo aceptar un proyecto nuevo por realtime si pertenece explícitamente al usuario actual
+  if (projIdx < 0) {
+    if (!data.project || !data.project.id || !isAuthorizedProject(data.project)) {
+      return;
+    }
     allProjects.unshift(data.project);
     projIdx = 0;
   }
 
   let proj = projIdx >= 0 ? allProjects[projIdx] : null;
+  if (proj && !isAuthorizedProject(proj) && currentPId !== projectId && currentPId !== proj.id && currentPId !== proj.cloudId) {
+    return;
+  }
 
   // Actualizar resumen en la lista de proyectos
   if (proj) {
@@ -559,7 +635,7 @@ export function handleIncomingProjectUpdate(data) {
     saveProjectsList(allProjects);
   }
 
-  const isCurrentActive = Boolean(currentPId && (currentPId === projectId || (proj && proj.cloudId === currentPId)));
+  const isCurrentActive = Boolean(currentPId && (currentPId === projectId || (proj && (currentPId === proj.id || currentPId === proj.cloudId))));
 
   // 1. Aplicar mutación al árbol local (memoria y localStorage)
   let treeMutated = false;
@@ -589,6 +665,22 @@ export function handleIncomingProjectUpdate(data) {
       state.treeData = JSON.parse(JSON.stringify(data.treeData));
       treeMutated = true;
     }
+  } else if (data.treeTooLarge && !data.patch && typeof window !== 'undefined' && typeof window.loadProjectTreeFromCloud === 'function') {
+    window.loadProjectTreeFromCloud(projectId).then((cloudTree) => {
+      if (Array.isArray(cloudTree)) {
+        try {
+          localStorage.setItem(getStorageKey(projectId), JSON.stringify(cloudTree));
+        } catch (_) {}
+        if (isCurrentActive) {
+          state.treeData = JSON.parse(JSON.stringify(cloudTree));
+          if (typeof window.recalculateClaves === 'function') {
+            try { window.recalculateClaves(state.treeData); } catch (_) {}
+          }
+          if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
+          if (typeof window.renderTAB1 === 'function') window.renderTAB1();
+        }
+      }
+    }).catch(() => {});
   }
 
   if (data.settings && typeof data.settings === 'object') {
@@ -642,11 +734,41 @@ export function handleIncomingProjectUpdate(data) {
   }
 }
 
+const LOCAL_CLIENT_SESSION_ID = (typeof crypto !== 'undefined' && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : `sess-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const recentLocalConceptPushes = new Map();
+
+function markLocalConceptPush(id) {
+  const key = String(id || '').trim();
+  if (!key) return;
+  recentLocalConceptPushes.set(key, Date.now());
+  if (recentLocalConceptPushes.size > 100) {
+    const now = Date.now();
+    for (const [k, ts] of recentLocalConceptPushes.entries()) {
+      if (now - ts > 15000) recentLocalConceptPushes.delete(k);
+    }
+  }
+}
+
+function isRecentlyPushedLocally(id, windowMs = 6000) {
+  const key = String(id || '').trim();
+  if (!key) return false;
+  const ts = recentLocalConceptPushes.get(key);
+  if (!ts) return false;
+  if (Date.now() - ts <= windowMs) return true;
+  recentLocalConceptPushes.delete(key);
+  return false;
+}
+
 /**
  * Emitir broadcast instantáneo a otros usuarios conectados a la misma obra
  */
 export function broadcastConceptChange(concept) {
   if (!activeChannel || !concept) return;
+
+  markLocalConceptPush(concept.id);
+  if (concept.uuid) markLocalConceptPush(concept.uuid);
 
   const currentUser = getCurrentUser();
   const payload = {
@@ -659,6 +781,7 @@ export function broadcastConceptChange(concept) {
     costoDirecto: concept.costoDirecto,
     autor: currentUser?.name || 'Colaborador',
     autorId: currentUser?.id || null,
+    senderSessionId: LOCAL_CLIENT_SESSION_ID,
     timestamp: Date.now()
   };
 
@@ -677,14 +800,20 @@ function handleIncomingConceptUpdate(data) {
   const currentUser = getCurrentUser();
 
   // Si el cambio fue emitido por nosotros mismos, ignorar
+  if (data.senderSessionId && data.senderSessionId === LOCAL_CLIENT_SESSION_ID) {
+    return;
+  }
   if (data.autorId && currentUser && data.autorId === currentUser.id) {
+    return;
+  }
+  if (isRecentlyPushedLocally(data.id)) {
     return;
   }
 
   function findAndMutate(nodes) {
     if (!Array.isArray(nodes)) return false;
     for (let node of nodes) {
-      if (node.id === data.id || (data.clave && node.clave === data.clave)) {
+      if (node.id === data.id || (node.uuid && node.uuid === data.id) || (data.clave && node.clave === data.clave)) {
         if (data.cantidad !== undefined) node.cantidad = Number(data.cantidad) || 0;
         if (data.precioUnitario !== undefined) node.precioUnitario = Number(data.precioUnitario) || 0;
         if (data.precio_unitario !== undefined) node.precioUnitario = Number(data.precio_unitario) || 0;
@@ -722,7 +851,14 @@ function handleIncomingConceptUpdate(data) {
  */
 export async function pushConceptUpdateToSupabase(concept) {
   const sb = getSupabaseClient();
-  if (!isSupabaseConfigured() || !sb || !concept?.id) return;
+  if (!isSupabaseConfigured() || !sb || !concept) return;
+
+  const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || '').trim());
+  const rawId = (concept.uuid && isUuid(concept.uuid)) ? String(concept.uuid).trim() : String(concept.id || '').trim();
+  if (!isUuid(rawId)) return;
+
+  markLocalConceptPush(rawId);
+  if (concept.id && concept.id !== rawId) markLocalConceptPush(concept.id);
 
   try {
     const { error } = await sb
@@ -734,7 +870,7 @@ export async function pushConceptUpdateToSupabase(concept) {
         costo_directo: concept.costoDirecto,
         updated_at: new Date().toISOString()
       })
-      .eq('id', concept.id);
+      .eq('id', rawId);
 
     if (error) {
       console.warn('[Realtime] Aviso al actualizar concepto en Supabase:', error.message);
@@ -855,6 +991,26 @@ export function initGlobalRealtimeSync() {
     (payload) => {
       if (payload?.old?.id) {
         handleIncomingProjectDeleted({ projectId: payload.old.id });
+      }
+    }
+  );
+
+  // 12B. Escuchar lápidas en public.proyectos_eliminados (CDC garantizada entre múltiples PCs)
+  globalSyncChannel.on(
+    'postgres_changes',
+    {
+      event: '*',
+      schema: 'public',
+      table: 'proyectos_eliminados'
+    },
+    (payload) => {
+      const row = payload?.new;
+      if (row?.proyecto_id) {
+        handleIncomingProjectDeleted({
+          projectId: row.proyecto_id,
+          deletedBy: row.deleted_by_email || '',
+          ownerEmail: row.owner_email || ''
+        });
       }
     }
   );
@@ -1250,62 +1406,72 @@ export function handleIncomingProjectDeleted(data) {
   const currentUser = getCurrentUser();
   if (!currentUser || !currentUser.email) return;
 
-  const myEmail = currentUser.email.toLowerCase().trim();
-  const deletedBy = (data.deletedBy || '').toLowerCase().trim();
+  const projectId = String(data.projectId).trim();
+  const currentPId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
+  const allProjects = getProjectsList();
+  const targetProj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+  const idsToPurge = Array.from(new Set([projectId, targetProj?.id, targetProj?.cloudId].filter(Boolean)));
 
-  // Si fue emitido por nosotros mismos, ignorar (ya se procesó en deleteProject)
-  if (deletedBy && deletedBy === myEmail) {
+  const allAlreadyMarked = typeof isProjectMarkedDeleted === 'function' && idsToPurge.every(id => isProjectMarkedDeleted(id));
+  const stillInList = allProjects.some(p => idsToPurge.includes(p.id) || (p.cloudId && idsToPurge.includes(p.cloudId)));
+  const isCurrentOpen = Boolean(currentPId && idsToPurge.includes(currentPId));
+  if (allAlreadyMarked && !stillInList && !isCurrentOpen) {
     return;
   }
 
-  const projectId = data.projectId;
-  const currentPId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
-
   // 1. Marcar como eliminado localmente para que getProjectsList() nunca lo vuelva a incluir
-  if (typeof markProjectDeleted === 'function') {
-    markProjectDeleted(projectId);
-  } else {
-    try {
-      const raw = localStorage.getItem('cubikar_deleted_projects_v1');
-      let list = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(list)) list = [];
-      if (!list.includes(projectId)) {
-        list.push(projectId);
-        localStorage.setItem('cubikar_deleted_projects_v1', JSON.stringify(list));
-      }
-    } catch (_) {}
-  }
+  idsToPurge.forEach((pid) => {
+    if (typeof markProjectDeleted === 'function') {
+      markProjectDeleted(pid);
+    } else {
+      try {
+        const raw = localStorage.getItem('cubikar_deleted_projects_v1');
+        let list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) list = [];
+        if (!list.includes(pid)) {
+          list.push(pid);
+          localStorage.setItem('cubikar_deleted_projects_v1', JSON.stringify(list));
+        }
+      } catch (_) {}
+    }
+  });
 
   // 2. Limpiar de la lista en memoria y localStorage
-  const allProjects = getProjectsList();
-  const filtered = allProjects.filter(p => p.id !== projectId && p.cloudId !== projectId);
+  const filtered = allProjects.filter(p => !idsToPurge.includes(p.id) && !(p.cloudId && idsToPurge.includes(p.cloudId)));
   if (filtered.length !== allProjects.length) {
     saveProjectsList(filtered);
   }
 
   // 3. Limpiar almacenamiento asociado
-  try {
-    localStorage.removeItem(getSettingsKey(projectId));
-    localStorage.removeItem(getStorageKey(projectId));
-    localStorage.removeItem(`estimaciones_data_${projectId}`);
-    localStorage.removeItem(resolveChatStorageKey(projectId));
-    localStorage.removeItem(`adm_arq_chat_${projectId}`);
-    localStorage.removeItem(`control_obra_chat_${projectId}`);
-    localStorage.removeItem(`adm_arq_signatures_${projectId}`);
-    localStorage.removeItem(`adm_arq_bitacora_${projectId}`);
-    localStorage.removeItem(`adm_arq_expenses_${projectId}`);
-    localStorage.removeItem(`adm_arq_suppliers_${projectId}`);
-  } catch (_) {}
+  idsToPurge.forEach((pid) => {
+    try {
+      localStorage.removeItem(getSettingsKey(pid));
+      localStorage.removeItem(getStorageKey(pid));
+      localStorage.removeItem(`estimaciones_data_${pid}`);
+      localStorage.removeItem(`expenses_control_${pid}`);
+      localStorage.removeItem(`calendario_cfg_${pid}`);
+      localStorage.removeItem(`calendario_workdays_${pid}`);
+      localStorage.removeItem(resolveChatStorageKey(pid));
+      localStorage.removeItem(`adm_arq_project_chat_${pid}`);
+      localStorage.removeItem(`adm_const_project_chat_${pid}`);
+      localStorage.removeItem(`adm_arq_chat_${pid}`);
+      localStorage.removeItem(`control_obra_chat_${pid}`);
+      localStorage.removeItem(`adm_arq_signatures_${pid}`);
+      localStorage.removeItem(`adm_arq_bitacora_${pid}`);
+      localStorage.removeItem(`adm_arq_expenses_${pid}`);
+      localStorage.removeItem(`adm_arq_suppliers_${pid}`);
+    } catch (_) {}
+  });
 
   // Purgar invitaciones pendientes de este proyecto para que la campana se limpie de inmediato
   try {
     const curInvs = getStoredInvitations();
-    const cleanedInvs = curInvs.filter(i => i.projectId !== projectId);
+    const cleanedInvs = curInvs.filter(i => !idsToPurge.includes(i.projectId));
     if (cleanedInvs.length !== curInvs.length) {
       saveStoredInvitations(cleanedInvs);
     }
     const curPlanInvs = getStoredPlanInvitations();
-    const cleanedPlan = curPlanInvs.filter(pi => pi.projectId !== projectId);
+    const cleanedPlan = curPlanInvs.filter(pi => !idsToPurge.includes(pi.projectId));
     if (cleanedPlan.length !== curPlanInvs.length) {
       saveStoredPlanInvitations(cleanedPlan);
     }
@@ -1315,15 +1481,13 @@ export function handleIncomingProjectDeleted(data) {
   if (currentUser.user_metadata?.cubikar_cloud_state_v2) {
     const cs = currentUser.user_metadata.cubikar_cloud_state_v2;
     let modified = false;
-    if (Array.isArray(cs.collaboratedProjects)) {
-      const prevLen = cs.collaboratedProjects.length;
-      cs.collaboratedProjects = cs.collaboratedProjects.filter(p => p.id !== projectId && p.cloudId !== projectId);
-      if (cs.collaboratedProjects.length !== prevLen) modified = true;
+    if (Array.isArray(cs.collaboratedProjects) && cs.collaboratedProjects.length > 0) {
+      cs.collaboratedProjects = [];
+      modified = true;
     }
-    if (Array.isArray(cs.ownedProjects)) {
-      const prevLen = cs.ownedProjects.length;
-      cs.ownedProjects = cs.ownedProjects.filter(p => p.id !== projectId && p.cloudId !== projectId);
-      if (cs.ownedProjects.length !== prevLen) modified = true;
+    if (Array.isArray(cs.ownedProjects) && cs.ownedProjects.length > 0) {
+      cs.ownedProjects = [];
+      modified = true;
     }
     if (modified) {
       saveCurrentUser(currentUser);
@@ -1334,9 +1498,9 @@ export function handleIncomingProjectDeleted(data) {
   }
 
   // 5. Si el usuario estaba dentro de este proyecto, expulsarlo cordialmente al portal
-  if (currentPId && (currentPId === projectId)) {
+  if (isCurrentOpen) {
     if (typeof showToast === 'function') {
-      showToast('⚠️ Este proyecto fue eliminado por su propietario.', 'warning');
+      showToast('⚠️ Este proyecto fue eliminado.', 'warning');
     }
     setTimeout(() => {
       if (typeof window.exitProjectToPortal === 'function') {
@@ -1344,7 +1508,7 @@ export function handleIncomingProjectDeleted(data) {
       } else {
         window.location.reload();
       }
-    }, 1200);
+    }, 600);
   }
 
   // 6. Refrescar interfaz del dashboard de proyectos inmediatamente
@@ -1555,11 +1719,12 @@ function handlePeerSyncRequest({ email }) {
   }
 }
 
-function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
+async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
   const currentUser = getCurrentUser();
   if (!currentUser || !currentUser.email) return;
 
-  if (targetEmail.toLowerCase().trim() !== currentUser.email.toLowerCase().trim()) return;
+  const myEmail = currentUser.email.toLowerCase().trim();
+  if (String(targetEmail || '').toLowerCase().trim() !== myEmail) return;
 
   let changed = false;
 
@@ -1577,20 +1742,68 @@ function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
     }
   }
 
-  // Mergear proyectos (nuevos o actualizados por colaboradores)
+  // Mergear proyectos filtrando lápidas locales y en la nube (sin resurrección)
   if (Array.isArray(projects) && projects.length > 0) {
+    const incomingIds = Array.from(new Set(
+      projects.flatMap(p => [p?.id, p?.cloudId]).filter(Boolean).map(v => String(v).trim())
+    ));
+    const cloudDeletedSet = new Set();
+    try {
+      const sb = getSupabaseClient();
+      if (sb && isSupabaseConfigured() && incomingIds.length > 0) {
+        const { data: delRows } = await sb
+          .from('proyectos_eliminados')
+          .select('proyecto_id')
+          .in('proyecto_id', incomingIds);
+        if (Array.isArray(delRows)) {
+          delRows.forEach(r => {
+            if (r?.proyecto_id) cloudDeletedSet.add(String(r.proyecto_id).trim());
+          });
+        }
+      }
+    } catch (_) {}
+
+    let lastSignoutTs = 0;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        lastSignoutTs = Number(localStorage.getItem('cubikar_last_signout_ts') || 0) || 0;
+      }
+    } catch (_) {}
+
     const currentProjs = getProjectsList();
     let projChanged = false;
     projects.forEach(p => {
-      const idx = currentProjs.findIndex(cp => cp.id === p.id);
+      if (!p || !p.id) return;
+      const pIdStr = String(p.id).trim();
+      const cIdStr = p.cloudId ? String(p.cloudId).trim() : '';
+
+      if (cloudDeletedSet.has(pIdStr) || (cIdStr && cloudDeletedSet.has(cIdStr))) {
+        if (typeof markProjectDeleted === 'function') {
+          markProjectDeleted(pIdStr);
+          if (cIdStr) markProjectDeleted(cIdStr);
+        }
+        return;
+      }
+      if (typeof isProjectMarkedDeleted === 'function' && (isProjectMarkedDeleted(pIdStr) || (cIdStr && isProjectMarkedDeleted(cIdStr)))) {
+        return;
+      }
+
+      const idx = currentProjs.findIndex(cp => cp.id === p.id || (cIdStr && (cp.id === cIdStr || cp.cloudId === cIdStr)));
+      const incomingUpdated = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+
+      // Si pertenece a la misma cuenta y no existe localmente, no reinyectar si es anterior al último cierre/purga
+      const pOwner = (p.ownerEmail || '').toLowerCase().trim();
+      if (idx < 0 && pOwner === myEmail && lastSignoutTs > 0 && incomingUpdated > 0 && incomingUpdated < lastSignoutTs) {
+        return;
+      }
+
       if (idx < 0) {
         currentProjs.unshift(p);
         projChanged = true;
       } else {
         const localProj = currentProjs[idx];
         const localUpdated = localProj.updatedAt ? new Date(localProj.updatedAt).getTime() : 0;
-        const incomingUpdated = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
-        if (incomingUpdated >= localUpdated || (Array.isArray(p.treeData) && p.treeData.length > 0)) {
+        if (incomingUpdated > localUpdated) {
           currentProjs[idx] = Object.assign({}, localProj, p);
           projChanged = true;
         }
@@ -1645,9 +1858,6 @@ function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
         window.syncUserCollaborationToCloud(currentUser);
       }
     } catch (_) {}
-    if (typeof window.renderSidebarNotificationsUI === 'function') {
-      window.renderSidebarNotificationsUI();
-    }
     if (typeof window.refreshProjectsGridUI === 'function') {
       window.refreshProjectsGridUI();
     }
@@ -1675,13 +1885,21 @@ export function handleIncomingChatMessage(data) {
   const currentUser = getCurrentUser();
   if (!currentUser || !currentUser.email) return;
 
-  const myEmail = currentUser.email.toLowerCase().trim();
-  const authorEmail = (data.author?.email || data.message?.authorEmail || '').toLowerCase().trim();
+  const cleanMsgId = String(data.message.id || '').replace(/^.*?(?:__|::)/, '');
+  if (!cleanMsgId) return;
+  data.message = { ...data.message, id: cleanMsgId };
 
-  // Si fue emitido por nosotros mismos, ignorar (ya se guardó y renderizó localmente)
-  if (authorEmail && authorEmail === myEmail) {
+  // Ignorar ecos de la misma sesión
+  if (
+    data.senderSessionId === LOCAL_CLIENT_SESSION_ID ||
+    data.message.senderSessionId === LOCAL_CLIENT_SESSION_ID ||
+    isRecentlyPushedLocally(cleanMsgId)
+  ) {
     return;
   }
+
+  const myEmail = currentUser.email.toLowerCase().trim();
+  const authorEmail = (data.author?.email || data.message?.authorEmail || '').toLowerCase().trim();
 
   const projectId = data.projectId;
   const currentPId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
@@ -1699,7 +1917,7 @@ export function handleIncomingChatMessage(data) {
 
   const effectivePid = proj?.id || projectId;
 
-  // 1. Guardar mensaje en el almacenamiento local de este proyecto
+  // 1. Guardar mensaje en el almacenamiento local de este proyecto deduplicando por ID normalizado
   const chatKey = resolveChatStorageKey(effectivePid);
   let messages = [];
   try {
@@ -1710,24 +1928,16 @@ export function handleIncomingChatMessage(data) {
     messages = [];
   }
 
-  // Deduplicar por id
-  const existsIdx = messages.findIndex(m => m.id === data.message.id);
-  if (existsIdx === -1) {
+  const existsIdx = messages.findIndex(m => String(m?.id || '').replace(/^.*?(?:__|::)/, '') === cleanMsgId);
+  const isAlreadyPresent = existsIdx !== -1;
+
+  if (!isAlreadyPresent) {
     messages.push(data.message);
     try {
       localStorage.setItem(chatKey, JSON.stringify(messages));
     } catch (_) {}
   } else {
-    const prev = messages[existsIdx];
-    messages[existsIdx] = {
-      ...data.message,
-      isRead: Boolean(prev.isRead || data.message.isRead),
-      dismissed: Boolean(prev.dismissed || data.message.dismissed),
-      readBy: Array.isArray(prev.readBy) && prev.readBy.length > 0 ? prev.readBy : (data.message.readBy || [])
-    };
-    try {
-      localStorage.setItem(chatKey, JSON.stringify(messages));
-    } catch (_) {}
+    return;
   }
 
   // 2. Actualizar campana de notificaciones inmediatamente
@@ -1740,7 +1950,6 @@ export function handleIncomingChatMessage(data) {
     if (typeof window !== 'undefined' && typeof window.renderProjectChatDock === 'function') {
       window.renderProjectChatDock();
     }
-    // Auto-scroll si el contenedor de mensajes existe
     if (typeof document !== 'undefined') {
       setTimeout(() => {
         const listEl = document.getElementById('project-chat-messages-list');
@@ -1748,12 +1957,13 @@ export function handleIncomingChatMessage(data) {
       }, 50);
     }
 
-    // Mostrar toast informativo si el mensaje menciona al usuario
-    const mentions = Array.isArray(data.message.mentions) ? data.message.mentions : [];
-    const myHandle = (currentUser.name || currentUser.email).replace(/\s+/g, '');
-    const isMentioned = mentions.some(m => m.toLowerCase().includes(myHandle.toLowerCase()) || m.toLowerCase().includes(myEmail));
-    if (isMentioned) {
-      showToast(`💬 ${data.author?.name || 'Un colaborador'} te mencionó en el chat`, 'info');
+    if (authorEmail !== myEmail) {
+      const mentions = Array.isArray(data.message.mentions) ? data.message.mentions : [];
+      const myHandle = (currentUser.name || currentUser.email).replace(/\s+/g, '');
+      const isMentioned = mentions.some(m => m.toLowerCase().includes(myHandle.toLowerCase()) || m.toLowerCase().includes(myEmail));
+      if (isMentioned) {
+        showToast(`💬 ${data.author?.name || 'Un colaborador'} te mencionó en el chat`, 'info');
+      }
     }
   }
 }
@@ -1763,25 +1973,36 @@ export function handleIncomingChatDelete(data) {
   const currentUser = getCurrentUser();
   if (!currentUser || !currentUser.email) return;
 
-  const myEmail = currentUser.email.toLowerCase().trim();
-  const authorEmail = (data.authorEmail || '').toLowerCase().trim();
-  if (authorEmail && authorEmail === myEmail) return;
-
   const projectId = data.projectId;
-  const chatKey = resolveChatStorageKey(projectId);
-  try {
-    const raw = localStorage.getItem(chatKey);
-    if (raw) {
-      let messages = JSON.parse(raw);
-      if (Array.isArray(messages)) {
-        const next = messages.filter(m => m.id !== data.messageId);
-        localStorage.setItem(chatKey, JSON.stringify(next));
+  const allProjects = getProjectsList();
+  const proj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+  const effectivePid = proj?.id || projectId;
+
+  const keysToClean = Array.from(new Set([resolveChatStorageKey(effectivePid), resolveChatStorageKey(projectId)]));
+  let removed = false;
+  keysToClean.forEach((chatKey) => {
+    try {
+      const raw = localStorage.getItem(chatKey);
+      if (raw) {
+        const messages = JSON.parse(raw);
+        if (Array.isArray(messages)) {
+          const next = messages.filter(m => String(m?.id) !== String(data.messageId));
+          if (next.length !== messages.length) {
+            localStorage.setItem(chatKey, JSON.stringify(next));
+            removed = true;
+          }
+        }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  });
+
+  if (typeof window !== 'undefined' && typeof window.renderSidebarNotificationsUI === 'function') {
+    try { window.renderSidebarNotificationsUI(); } catch (_) {}
+  }
 
   const currentPId = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
-  if (currentPId && currentPId === projectId) {
+  const isCurrentActive = Boolean(currentPId && (currentPId === projectId || currentPId === effectivePid || (proj && (currentPId === proj.id || currentPId === proj.cloudId))));
+  if (removed && isCurrentActive) {
     if (typeof window !== 'undefined' && typeof window.renderProjectChatDock === 'function') {
       window.renderProjectChatDock();
     }
@@ -1792,6 +2013,11 @@ export function broadcastChatMessage(projectId, message) {
   const pId = projectId || currentSubscribedProjectId || (typeof getActiveProjectId === 'function' ? getActiveProjectId() : null);
   if (!pId || !message) return;
 
+  const cleanMsgId = String(message.id || '').replace(/^.*?(?:__|::)/, '');
+  message.id = cleanMsgId;
+  message.senderSessionId = LOCAL_CLIENT_SESSION_ID;
+  markLocalConceptPush(cleanMsgId);
+
   const currentUser = getCurrentUser();
   const author = {
     id: currentUser?.id || null,
@@ -1801,19 +2027,26 @@ export function broadcastChatMessage(projectId, message) {
   };
 
   const allProjects = getProjectsList();
-  const proj = allProjects.find(p => p.id === pId);
+  const proj = allProjects.find(p => p.id === pId || p.cloudId === pId);
   const ownerEmail = (proj?.ownerEmail || currentUser?.email || '').toLowerCase().trim();
+  const effectiveBroadcastPid = proj?.cloudId || pId;
 
   const payload = {
-    projectId: pId,
+    projectId: effectiveBroadcastPid,
     ownerEmail,
+    senderSessionId: LOCAL_CLIENT_SESSION_ID,
     author,
     message,
     timestamp: new Date().toISOString()
   };
 
   // 1. Broadcast en canal de la obra activa
-  if (activeChannel && currentSubscribedProjectId === pId) {
+  const isSubscribedMatch = activeChannel && (
+    currentSubscribedProjectId === pId ||
+    currentSubscribedProjectId === effectiveBroadcastPid ||
+    (proj && (currentSubscribedProjectId === proj.id || currentSubscribedProjectId === proj.cloudId))
+  );
+  if (isSubscribedMatch) {
     try {
       const res = activeChannel.send({
         type: 'broadcast',
@@ -1841,7 +2074,7 @@ export function broadcastChatMessage(projectId, message) {
     } catch (_) {}
   }
 
-  // 3. Persistir en la cuenta del usuario anfitrión (DB y cloud state)
+  // 3. Persistir en Supabase y cuenta del anfitrión
   persistChatMessageToHostCloud(pId, message, proj);
 }
 
@@ -1850,14 +2083,23 @@ export function broadcastChatDelete(projectId, messageId) {
   if (!pId || !messageId) return;
 
   const currentUser = getCurrentUser();
+  const allProjects = getProjectsList();
+  const proj = allProjects.find(p => p.id === pId || p.cloudId === pId);
+  const effectiveBroadcastPid = proj?.cloudId || pId;
+
   const payload = {
-    projectId: pId,
+    projectId: effectiveBroadcastPid,
     messageId,
     authorEmail: currentUser?.email || '',
     timestamp: new Date().toISOString()
   };
 
-  if (activeChannel && currentSubscribedProjectId === pId) {
+  const isSubscribedMatch = activeChannel && (
+    currentSubscribedProjectId === pId ||
+    currentSubscribedProjectId === effectiveBroadcastPid ||
+    (proj && (currentSubscribedProjectId === proj.id || currentSubscribedProjectId === proj.cloudId))
+  );
+  if (isSubscribedMatch) {
     try {
       const res = activeChannel.send({
         type: 'broadcast',
@@ -1894,13 +2136,24 @@ export async function persistChatMessageToHostCloud(projectId, message, proj) {
   const ownerEmail = (targetProj?.ownerEmail || message?.ownerEmail || getCurrentUser()?.email || '').toLowerCase().trim();
   if (!projectId || !message) return;
 
+  const cleanMsgId = String(message.id || '').replace(/^.*?(?:__|::)/, '');
+  message.id = cleanMsgId;
+  message.senderSessionId = LOCAL_CLIENT_SESSION_ID;
+  markLocalConceptPush(cleanMsgId);
+
+  const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || '').trim());
+  const canonicalPid = (targetProj?.cloudId && isUuid(targetProj.cloudId))
+    ? String(targetProj.cloudId).trim()
+    : (isUuid(targetProj?.id) ? String(targetProj.id).trim() : String(projectId).trim());
+
   // 1. Guardar en tabla Supabase 'chat_mensajes' usando columnas exactas del esquema
   if (sb && typeof sb.from === 'function') {
     try {
-      const rowId = `${projectId}__${message.id}`;
-      await sb.from('chat_mensajes').upsert({
+      const rowId = `${canonicalPid}__${cleanMsgId}`;
+      markLocalConceptPush(rowId);
+      const { error } = await sb.from('chat_mensajes').upsert({
         id: rowId,
-        proyecto_id: projectId,
+        proyecto_id: canonicalPid,
         autor_nombre: message.authorName || 'Colaborador',
         autor_email: message.authorEmail || getCurrentUser()?.email || '',
         autor_avatar_url: message.authorAvatar || '',
@@ -1910,7 +2163,12 @@ export async function persistChatMessageToHostCloud(projectId, message, proj) {
         payload_json: message,
         created_at: message.createdAt || new Date().toISOString()
       }, { onConflict: 'id' });
-    } catch (_) {}
+      if (error) {
+        console.warn('[Realtime] Error al persistir mensaje en chat_mensajes:', error.message || error);
+      }
+    } catch (err) {
+      console.warn('[Realtime] Excepción al persistir mensaje en chat_mensajes:', err);
+    }
   }
 
   // 2. Si el usuario actual es el anfitrión, respaldar en su estado en la nube
@@ -1928,11 +2186,21 @@ export async function deleteChatMessageFromHostCloud(projectId, messageId) {
   const sb = getSupabaseClient();
   if (!sb || !projectId || !messageId) return;
   try {
-    await Promise.allSettled([
-      sb.from('chat_mensajes').delete().eq('id', `${projectId}__${messageId}`),
-      sb.from('chat_mensajes').delete().eq('id', `${projectId}::${messageId}`)
-    ]);
-  } catch (_) {}
+    const allProjects = getProjectsList();
+    const targetProj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+    const idCandidates = Array.from(new Set([projectId, targetProj?.id, targetProj?.cloudId].filter(Boolean)));
+    const rowIds = [String(messageId)];
+    idCandidates.forEach((cid) => {
+      rowIds.push(`${cid}__${messageId}`);
+      rowIds.push(`${cid}::${messageId}`);
+    });
+    const { error } = await sb.from('chat_mensajes').delete().in('id', Array.from(new Set(rowIds)));
+    if (error) {
+      console.warn('[Realtime] Error al eliminar mensaje en chat_mensajes:', error.message || error);
+    }
+  } catch (err) {
+    console.warn('[Realtime] Excepción al eliminar mensaje en chat_mensajes:', err);
+  }
 }
 
 export async function hydrateProjectChatFromCloud(projectId) {
@@ -1940,14 +2208,24 @@ export async function hydrateProjectChatFromCloud(projectId) {
   if (!sb || !projectId || typeof sb.from !== 'function') return;
   if (String(projectId).startsWith('__')) return;
   try {
+    const allProjects = getProjectsList();
+    const targetProj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+    const effectivePid = targetProj?.id || projectId;
+    const idsToQuery = Array.from(new Set([effectivePid, projectId, targetProj?.cloudId].filter(v => v && !String(v).startsWith('__'))));
+
     const { data, error } = await sb
       .from('chat_mensajes')
       .select('*')
-      .eq('proyecto_id', projectId)
+      .in('proyecto_id', idsToQuery)
       .order('created_at', { ascending: true });
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      const chatKey = resolveChatStorageKey(projectId);
+    if (error) {
+      console.warn('[Realtime] Aviso hidratando chat_mensajes:', error.message || error);
+      return;
+    }
+
+    if (Array.isArray(data) && data.length > 0) {
+      const chatKey = resolveChatStorageKey(effectivePid);
       let localMessages = [];
       try {
         const raw = localStorage.getItem(chatKey);
@@ -1957,31 +2235,39 @@ export async function hydrateProjectChatFromCloud(projectId) {
 
       const map = new Map();
       localMessages.forEach(m => {
-        if (m && m.id) map.set(m.id, m);
+        if (m && m.id) {
+          const normId = String(m.id).replace(/^.*?(?:__|::)/, '');
+          map.set(normId, { ...m, id: normId });
+        }
       });
       data.forEach(row => {
         if (!row || (row.id && String(row.id).startsWith('__'))) return;
-        const cleanId = String(row.id || '').replace(`${projectId}__`, '').replace(`${projectId}::`, '');
-        const msg = (row.payload_json && typeof row.payload_json === 'object' && row.payload_json.id)
-          ? { ...row.payload_json, id: row.payload_json.id || cleanId }
+        const rawJson = (row.payload_json && typeof row.payload_json === 'object')
+          ? row.payload_json
+          : ((row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : null);
+        const cleanId = String(rawJson?.id || row.id || '').replace(/^.*?(?:__|::)/, '');
+        if (!cleanId) return;
+        const msg = rawJson
+          ? { ...rawJson, id: cleanId }
           : {
               id: cleanId,
-              text: row.mensaje || '',
+              text: row.mensaje || row.texto || '',
               authorName: row.autor_nombre || 'Colaborador',
               authorEmail: row.autor_email || '',
-              authorAvatar: row.autor_avatar_url || '',
-              time: row.created_at ? new Date(row.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''
+              authorAvatar: row.autor_avatar_url || row.autor_avatar || '',
+              time: (row.created_at || row.creado_en) ? new Date(row.created_at || row.creado_en).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''
             };
-        const prev = map.get(msg.id);
+        const prev = map.get(cleanId);
         if (prev) {
-          map.set(msg.id, {
+          map.set(cleanId, {
             ...msg,
+            id: cleanId,
             isRead: Boolean(prev.isRead || msg.isRead),
             dismissed: Boolean(prev.dismissed || msg.dismissed),
             readBy: Array.isArray(prev.readBy) && prev.readBy.length > 0 ? prev.readBy : (msg.readBy || [])
           });
         } else {
-          map.set(msg.id, msg);
+          map.set(cleanId, msg);
         }
       });
 
@@ -2001,7 +2287,9 @@ export async function hydrateProjectChatFromCloud(projectId) {
         }
       }
     }
-  } catch (_) {}
+  } catch (err) {
+    console.warn('[Realtime] Error hidratando chat desde Supabase:', err);
+  }
 }
 
 if (typeof window !== 'undefined') {

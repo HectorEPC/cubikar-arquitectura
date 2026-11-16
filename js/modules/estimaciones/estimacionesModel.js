@@ -6,10 +6,19 @@ import { state } from '../../state/store.js';
 import { getActiveProjectId, getStorageKey } from '../../config/constants.js';
 import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js';
 import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { showToast } from '../../ui/notifications.js';
+import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js';
 
+const STORAGE_KEY_ARQ_PREFIX = 'estimaciones_arq_data_';
 const STORAGE_KEY_PREFIX = 'estimaciones_data_';
 
 export function getEstimacionesStorageKeyForProject(projectId = null) {
+  const pId = projectId || getActiveProjectId();
+  return `${STORAGE_KEY_ARQ_PREFIX}${pId}`;
+}
+
+function getEstimacionesLegacyKeyForProject(projectId = null) {
   const pId = projectId || getActiveProjectId();
   return `${STORAGE_KEY_PREFIX}${pId}`;
 }
@@ -62,16 +71,17 @@ function getDefaultEstimacionesState() {
 // Cargar estado de estimaciones desde localStorage
 export function loadEstimacionesData() {
   try {
-    const raw = localStorage.getItem(getEstimacionesStorageKey());
+    const raw = localStorage.getItem(getEstimacionesStorageKey())
+      || localStorage.getItem(getEstimacionesLegacyKeyForProject());
     if (raw) {
       const data = JSON.parse(raw);
       if (Array.isArray(data.estimaciones) && data.estimaciones.length > 0) {
         if (!data.activeEstimacionId || !data.estimaciones.some(e => e.id === data.activeEstimacionId)) {
           data.activeEstimacionId = data.estimaciones[0].id;
         }
-        if (typeof data.anticipoPct !== 'number' || isNaN(data.anticipoPct)) {
-          data.anticipoPct = 30; // Predeterminado 30%
-        }
+        data.anticipoPct = (data.anticipoPct !== undefined && data.anticipoPct !== null && !isNaN(Number(data.anticipoPct)))
+          ? Number(data.anticipoPct)
+          : 30;
         if (typeof data.ivaPct !== 'number' || isNaN(data.ivaPct)) {
           data.ivaPct = 16; // Predeterminado 16%
         }
@@ -93,7 +103,11 @@ export function loadEstimacionesData() {
 // Guardar estado de estimaciones en localStorage
 export function saveEstimacionesData(data) {
   try {
-    localStorage.setItem(getEstimacionesStorageKey(), JSON.stringify(data));
+    const pId = getActiveProjectId();
+    const json = JSON.stringify(data);
+    localStorage.setItem(getEstimacionesStorageKeyForProject(pId), json);
+    localStorage.setItem(getEstimacionesLegacyKeyForProject(pId), json);
+    scheduleEstimacionesCloudSync(pId);
   } catch (e) {
     console.error('Error al guardar datos de estimaciones:', e);
   }
@@ -642,7 +656,7 @@ export function getEstimacionesCalculatedData() {
   // ============================================================
   // CÁLCULO DE ANTICIPO Y AMORTIZACIÓN PROGRESIVA HASTA EL 100%
   // ============================================================
-  const anticipoPct = typeof estData.anticipoPct === 'number' ? estData.anticipoPct : 30;
+  const anticipoPct = estData.anticipoPct !== undefined && estData.anticipoPct !== null ? Number(estData.anticipoPct) : 30;
   const totalAnticipoContratado = Math.round(((grandTotalBase * (anticipoPct / 100)) + Number.EPSILON) * 100) / 100;
 
   // Ordenar cronológicamente todas las estimaciones para simular la amortización estricta acumulada
@@ -748,7 +762,8 @@ export function calculateProjectTotalEstimacionesSummary(projectId, fallbackTota
   let estimaciones = [];
   try {
     if (typeof localStorage !== 'undefined') {
-      const rawEst = localStorage.getItem(getEstimacionesStorageKeyForProject(projectId));
+      const rawEst = localStorage.getItem(getEstimacionesStorageKeyForProject(projectId))
+        || localStorage.getItem(getEstimacionesLegacyKeyForProject(projectId));
       if (rawEst) {
         const parsedEst = JSON.parse(rawEst);
         if (Array.isArray(parsedEst?.estimaciones)) {
@@ -988,6 +1003,10 @@ export function getSpecialistsContractsData() {
 
 // Registrar un nuevo pago a un especialista
 export function addSpecialistPayment(nodeId, paymentData) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite registrar pagos a especialistas.', 'warning');
+    return null;
+  }
   const data = loadEstimacionesData();
   if (!data.specialists) data.specialists = {};
   if (!data.specialists[nodeId]) {
@@ -1025,6 +1044,10 @@ export function addSpecialistPayment(nodeId, paymentData) {
 
 // Actualizar un pago existente
 export function updateSpecialistPayment(nodeId, paymentId, paymentData) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite modificar pagos a especialistas.', 'warning');
+    return false;
+  }
   const data = loadEstimacionesData();
   const spec = data.specialists?.[nodeId];
   if (!spec || !Array.isArray(spec.pagos)) return false;
@@ -1045,6 +1068,10 @@ export function updateSpecialistPayment(nodeId, paymentId, paymentData) {
 
 // Eliminar un pago
 export function deleteSpecialistPayment(nodeId, paymentId) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite eliminar pagos a especialistas.', 'warning');
+    return false;
+  }
   const data = loadEstimacionesData();
   const spec = data.specialists?.[nodeId];
   if (!spec || !Array.isArray(spec.pagos)) return false;
@@ -1055,6 +1082,10 @@ export function deleteSpecialistPayment(nodeId, paymentId) {
 
 // Asignar o actualizar el nombre del proveedor para una especialidad
 export function updateSpecialistProveedor(nodeId, proveedorName) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite editar el proveedor de la especialidad.', 'warning');
+    return false;
+  }
   const data = loadEstimacionesData();
   if (!data.specialists) data.specialists = {};
   if (!data.specialists[nodeId]) {

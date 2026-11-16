@@ -236,7 +236,8 @@ export function calculateUserMetrics(user) {
   const userProjects = allProjects.filter(p => (p.ownerEmail || '').toLowerCase().trim() === cleanEmail);
   const uniqueCollaborators = new Set();
   userProjects.forEach(p => {
-    (p.collaborators || []).forEach(c => {
+    const membersList = Array.isArray(p.members) ? p.members : (Array.isArray(p.collaborators) ? p.collaborators : []);
+    membersList.forEach(c => {
       const email = typeof c === 'string' ? c : c?.email;
       if (email && email.toLowerCase().trim() !== cleanEmail) {
         uniqueCollaborators.add(email.toLowerCase().trim());
@@ -340,7 +341,7 @@ let adminFilterCycle = 'all';
 
 
 // =========================================================================
-// SELECCIÃ“N Y ELIMINACIÃ“N DE USUARIOS
+// SELECCIÓN Y ELIMINACIÓN DE USUARIOS
 // =========================================================================
 
 export let selectedAdminUserEmails = new Set();
@@ -402,13 +403,13 @@ export function updateAdminDeleteButtonUI() {
 export function deleteSelectedAdminUsers() {
   const targets = Array.from(selectedAdminUserEmails).filter(e => !isUserMasterAdmin(e));
   if (targets.length === 0) {
-    showToast('Selecciona al menos un usuario para eliminar (el Administrador Maestro estÃ¡ protegido).', 'warning');
+    showToast('Selecciona al menos un usuario para eliminar (el Administrador Maestro está protegido).', 'warning');
     return;
   }
 
   const msg = targets.length === 1
-    ? `Â¿EstÃ¡s seguro de que deseas eliminar permanentemente al usuario "${targets[0]}"?\n\nEsta acciÃ³n eliminarÃ¡ su cuenta, proyectos y datos asociados.`
-    : `Â¿EstÃ¡s seguro de que deseas eliminar permanentemente a los ${targets.length} usuarios seleccionados?\n\nEsta acciÃ³n eliminarÃ¡ sus cuentas, proyectos y datos asociados.`;
+    ? `¿Estás seguro de que deseas eliminar permanentemente al usuario "${targets[0]}"?\n\nEsta acción eliminará su cuenta, proyectos y datos asociados.`
+    : `¿Estás seguro de que deseas eliminar permanentemente a los ${targets.length} usuarios seleccionados?\n\nEsta acción eliminará sus cuentas, proyectos y datos asociados.`;
 
   if (!confirm(msg)) {
     return;
@@ -430,7 +431,7 @@ export function deleteSelectedAdminUsers() {
   const selectAll = document.getElementById('admin-select-all-checkbox');
   if (selectAll) selectAll.checked = false;
 
-  showToast(`Â¡${deletedCount} usuario(s) eliminado(s) correctamente!`, 'success');
+  showToast(`¡${deletedCount} usuario(s) eliminado(s) correctamente!`, 'success');
   renderCubikarAdminTable();
 }
 
@@ -575,7 +576,7 @@ export function renderCubikarAdminTable() {
 
     return `
       <tr class="transition-colors border-b border-slate-800 text-xs text-slate-200 select-text ${rowHighlightClass}">
-        <!-- 0. Casilla de SelecciÃ³n -->
+        <!-- 0. Casilla de Selección -->
         <td class="px-2.5 py-2.5 text-center border-r border-slate-800/80">
           ${isUserMasterAdmin(row.correo) ? `
             <span class="text-amber-400/50 text-xs" title="Administrador Maestro protegido (No eliminable)"><i class="fa-solid fa-lock"></i></span>
@@ -894,9 +895,73 @@ export function exportCubikarDatabaseToExcel() {
 // 9. FILTROS Y EVENTOS GLOBALES
 // =========================================================================
 
+let adminSearchDebounceTimer = null;
+
 export function setAdminTableSearch(text) {
   adminTableFilterText = text || '';
-  renderCubikarAdminTable();
+  if (adminSearchDebounceTimer) clearTimeout(adminSearchDebounceTimer);
+  adminSearchDebounceTimer = setTimeout(() => {
+    adminSearchDebounceTimer = null;
+    renderCubikarAdminTable();
+  }, 300);
+}
+
+export function copySupabaseSqlScript() {
+  const sqlScript = `-- ============================================================================
+-- SCRIPT SQL PARA SUPABASE (CUBIKAR ARQUITECTURA)
+-- Crea las tablas de usuarios, planes y proyectos con políticas RLS seguras
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.cubikar_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  sexo TEXT DEFAULT 'Masculino',
+  dob TEXT,
+  role TEXT DEFAULT 'usuario',
+  plan_id TEXT DEFAULT 'free',
+  billing_cycle TEXT DEFAULT 'monthly',
+  tokens_ia BIGINT DEFAULT 0,
+  storage_mb NUMERIC(10,2) DEFAULT 0,
+  bandwidth_mb NUMERIC(10,2) DEFAULT 0,
+  sessions_30d INT DEFAULT 1,
+  last_login TIMESTAMPTZ DEFAULT now(),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.cubikar_coadmins (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  added_by TEXT DEFAULT 'hepc.90@gmail.com',
+  added_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.cubikar_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cubikar_coadmins ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Acceso total para Admin Master" ON public.cubikar_users;
+CREATE POLICY "Acceso total para Admin Master" ON public.cubikar_users
+  FOR ALL USING (
+    (auth.jwt() ->> 'email') = 'hepc.90@gmail.com'
+    OR (auth.jwt() ->> 'email') = email
+  );
+
+DROP POLICY IF EXISTS "Acceso co-admins para Admin Master" ON public.cubikar_coadmins;
+CREATE POLICY "Acceso co-admins para Admin Master" ON public.cubikar_coadmins
+  FOR ALL USING (
+    (auth.jwt() ->> 'email') = 'hepc.90@gmail.com'
+  );`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(sqlScript).then(() => {
+      showToast('✅ Script SQL para Supabase copiado al portapapeles.', 'success');
+    }).catch(() => {
+      showToast('No se pudo copiar automáticamente.', 'warning');
+    });
+  } else {
+    showToast('Copiado al portapapeles no disponible en este navegador.', 'warning');
+  }
 }
 
 export function setAdminFilterActivity(val) {
@@ -925,6 +990,7 @@ if (typeof window !== 'undefined') {
   window.closeMarketRatesModal = closeMarketRatesModal;
   window.saveMarketRatesFromModal = saveMarketRatesFromModal;
   window.exportCubikarDatabaseToExcel = exportCubikarDatabaseToExcel;
+  window.copySupabaseSqlScript = copySupabaseSqlScript;
   window.setAdminTableSearch = setAdminTableSearch;
   window.setAdminFilterActivity = setAdminFilterActivity;
   window.setAdminFilterPlan = setAdminFilterPlan;

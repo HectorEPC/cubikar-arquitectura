@@ -64,7 +64,7 @@
           </button>
 
           <!-- Quick Notifications (Menciones del Chat de Obra en todos los proyectos) -->
-          <div class="relative flex items-center" id="portal-notifications-wrapper">
+          <div class="hidden relative flex items-center" id="portal-notifications-wrapper">
             <button type="button" id="btn-portal-notifications" onclick="toggleMentionNotificationsPopover(event)"
                     class="relative p-2 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition cursor-pointer group"
                     title="Notificaciones de menciones (@Usuario) en el Chat de Obra">
@@ -3708,7 +3708,7 @@
 
           <button type="button" id="btn-admin-delete-selected" onclick="deleteSelectedAdminUsers()" 
                   class="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs transition flex items-center gap-1.5 cursor-not-allowed shadow-md opacity-60"
-                  disabled title="Selecciona una o mÃ¡s casillas de usuarios para eliminar">
+                  disabled title="Selecciona una o más casillas de usuarios para eliminar">
             <i class="fa-solid fa-trash-can"></i>
             <span id="btn-admin-delete-text">Eliminar</span>
           </button>
@@ -4450,6 +4450,6 @@
       setInterval(purgeInvalidScopeOptions, 300);
     })();
   </script>
-  <script type="module" src="js/app.js?v=20261116_cubikar_arq_v24_sync_fix"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

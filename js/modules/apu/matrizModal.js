@@ -5,7 +5,7 @@ import { state, persistLocalData } from '../../state/store.js';
 import { saveState } from '../../state/history.js';
 import { showToast } from '../../ui/notifications.js';
 import { formatMoney, formatQty, getCurrencySymbol, round2, round5, formatMatrixQty, getInsumoRowColorClass } from '../../core/formatters.js';
-import { getFactorSobrecosto } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor } from '../../core/calculations.js';
 import { findNodeById } from '../catalog/treeService.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { renderAPUInsumos, renderInsumosUnitarios } from './apuView.js';
@@ -283,7 +283,7 @@ export function renderModalMatriz(node) {
     node.costoDirecto = totalCD;
   }
 
-  const factor = getFactorSobrecosto();
+  const factor = getEjecutivoCostPlusFactor();
   const totalPU = round2(totalCD * factor);
   const sobrecostoAmount = round2(totalPU - totalCD);
   const conceptoCantidad = round2(node.cantidad || 0);

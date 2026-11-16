@@ -4,7 +4,6 @@ import { saveState, updateUndoRedoButtons } from '../state/history.js';
 import { showToast } from './notifications.js';
 import { formatQty, round2, round5 } from '../core/formatters.js';
 import {
-  getFactorSobrecosto,
   getDespachoGastosBreakdown,
   getNominaOficinaBreakdown,
   getUtilidadDespachoPct,
@@ -20,7 +19,9 @@ import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoM
 import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js';
 import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js';
 import { renderBrandingUI } from './brandingController.js';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261115_cubikar_arq_v14';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js';
+import { getActiveProjectId } from '../config/constants.js';
 import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js';
 
 // Modo de destino del modal Google IA: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)
@@ -566,6 +567,10 @@ export function updateFasarPreview() {
 }
 
 export function saveSettings() {
+  if (!canCurrentUserEditProject(getActiveProjectId())) {
+    showToast('🔒 Modo solo lectura: no tienes permisos para guardar ajustes del proyecto.', 'warning');
+    return;
+  }
   const cfg = getProjectPresupuestoConfig();
 
   state.settings.applySobrecosto = document.getElementById('cfg-apply-sobrecosto')?.checked ?? false;
@@ -635,17 +640,20 @@ export function saveSettings() {
   if (projName) state.settings.projectName = projName;
   const projLoc = (document.getElementById('cfg-project-location')?.value || '').trim();
   if (projLoc) state.settings.projectLocation = projLoc;
-  const compSub = (document.getElementById('cfg-company-subtitle')?.value || '').trim();
-  state.settings.companySubtitle = compSub;
+  const compSubEl = document.getElementById('cfg-company-subtitle');
+  if (compSubEl) {
+    state.settings.companySubtitle = (compSubEl.value || '').trim() || state.settings.companySubtitle || '';
+  }
   renderBrandingUI();
   persistSettings();
   updateSobrecostoBadge();
 
-  // Recalcular precios unitarios de conceptos heredados con insumos APU si existen
-  const factor = getFactorSobrecosto();
+  // Recalcular precios unitarios de conceptos heredados con insumos APU si existen (Cost-Plus)
+  const factor = getEjecutivoCostPlusFactor();
   function applyFactorRecursive(nodes) {
     nodes.forEach(n => {
-      if (n.insumos && n.insumos.length > 0) {
+      const hasWinnerQuote = Array.isArray(n.cotizaciones) && n.cotizaciones.some(c => Boolean(c.isGanador));
+      if (!hasWinnerQuote && n.insumos && n.insumos.length > 0) {
         const cd = round2(n.insumos.reduce((s, i) => s + round2(round5(i.cantidad || 0) * round2(i.costoUnitario || 0)), 0));
         n.costoDirecto = cd;
         n.precioUnitario = round2(cd * factor);
@@ -994,6 +1002,108 @@ export function initUniversalModalBackdrop() {
 // Inicializar listener inmediatamente
 initUniversalModalBackdrop();
 
+let floatingOutsideCloseBound = false;
+let lastFloatingPointerDownTarget = null;
+
+function isFloatingPopoverVisible(el) {
+  if (!el || !el.isConnected || el.classList.contains('hidden')) return false;
+  if (typeof getComputedStyle === 'function') {
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+  }
+  const rect = typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null;
+  return Boolean(rect && rect.width > 0 && rect.height > 0);
+}
+
+function isTargetOrOriginInsidePopoverSelector(target, downTarget, selector) {
+  const toElement = (node) => (node instanceof Element ? node : node?.parentElement || null);
+  const check = (node) => {
+    const el = toElement(node);
+    return Boolean(el && el.closest(selector));
+  };
+  return check(target) || check(downTarget);
+}
+
+function isClickInsideFloatingElement(target, downTarget, containerEl) {
+  if (!containerEl) return false;
+  return (target instanceof Node && containerEl.contains(target)) ||
+    (downTarget instanceof Node && containerEl.contains(downTarget));
+}
+
+const SINGLE_POPOVER_CLOSE_RULES = [
+  {
+    isOpen: () =>
+      isFloatingPopoverVisible(document.getElementById('portal-notifications-popover')) ||
+      isFloatingPopoverVisible(document.getElementById('sidebar-notifications-popover')),
+    allowedSelector: '#portal-notifications-wrapper, #sidebar-notifications-wrapper',
+    close: () => window.closeMentionNotificationsPopover?.()
+  },
+  {
+    isOpen: () => isFloatingPopoverVisible(document.getElementById('workspace-user-dropdown')),
+    allowedSelector: '#user-menu-wrapper',
+    close: () => window.closeUserDropdown?.()
+  },
+  {
+    isOpen: () => isFloatingPopoverVisible(document.getElementById('portal-user-dropdown')),
+    allowedSelector: '#portal-user-menu-wrapper',
+    close: () => window.closePortalUserDropdown?.()
+  },
+  {
+    isOpen: () =>
+      isFloatingPopoverVisible(document.getElementById('project-chat-dock')),
+    allowedSelector: '#project-chat-dock, #sidebar-project-chat-wrapper, #btn-sidebar-project-chat, [onclick*="openProjectChatForPartida"], [onclick*="toggleProjectChatDock"]',
+    close: () => window.toggleProjectChatDock?.(false)
+  }
+];
+
+function closeOpenNonModalPopovers(target, downTarget) {
+  SINGLE_POPOVER_CLOSE_RULES.forEach((rule) => {
+    if (rule.isOpen() && !isTargetOrOriginInsidePopoverSelector(target, downTarget, rule.allowedSelector)) {
+      rule.close();
+    }
+  });
+
+  document.querySelectorAll('[id^="menu-card-"]:not(.hidden)').forEach((menuEl) => {
+    if (!isClickInsideFloatingElement(target, downTarget, menuEl.parentElement || menuEl)) {
+      menuEl.classList.add('hidden');
+    }
+  });
+
+  document.querySelectorAll('.dropdown-menu.show').forEach((menuEl) => {
+    const container = menuEl.closest('.dropdown-container') || menuEl;
+    if (!isClickInsideFloatingElement(target, downTarget, container)) {
+      menuEl.classList.remove('show', 'dropdown-menu-up');
+      if (container !== menuEl) container.classList.remove('is-open');
+    }
+  });
+}
+
+export function initFloatingWindowOutsideClose() {
+  if (floatingOutsideCloseBound || typeof document === 'undefined') return;
+  floatingOutsideCloseBound = true;
+
+  document.addEventListener('pointerdown', (e) => {
+    lastFloatingPointerDownTarget = e.target;
+  }, true);
+
+  document.addEventListener('click', (e) => {
+    const downTarget = lastFloatingPointerDownTarget;
+    lastFloatingPointerDownTarget = null;
+    if (e.target instanceof Element && e.target.closest('#toast-container')) return;
+    if (getTopmostOpenModal()) return;
+    closeOpenNonModalPopovers(e.target, downTarget);
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || getTopmostOpenModal()) return;
+    SINGLE_POPOVER_CLOSE_RULES.forEach((rule) => {
+      if (rule.isOpen()) rule.close();
+    });
+  });
+}
+
+initFloatingWindowOutsideClose();
+
 // Exponer funciones globales
 if (typeof window !== 'undefined') {
   window.closeAdminDualLoginModal = closeAdminDualLoginModal;
@@ -1005,6 +1115,7 @@ if (typeof window !== 'undefined') {
   window.MODAL_CLOSE_MAP = MODAL_CLOSE_MAP;
   window.closeModalElement = closeModalElement;
   window.initUniversalModalBackdrop = initUniversalModalBackdrop;
+  window.initFloatingWindowOutsideClose = initFloatingWindowOutsideClose;
 }
 
 

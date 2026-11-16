@@ -3,6 +3,10 @@ import { findNodeById } from '../catalog/treeService.js';
 import { formatMoney, formatQty } from '../../core/formatters.js';
 import { calculateParentTotal } from '../../core/calculations.js';
 import { showToast } from '../../ui/notifications.js';
+import { getActiveProjectId } from '../../config/constants.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
+import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js';
 import {
   cleanPhoneForWhatsApp,
   addCotizacion,
@@ -52,7 +56,48 @@ function escapeProvHtml(str) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeProvJs(str) {
+  return escapeProvHtml(String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
+
+function persistProveedoresCloudSummary() {
+  const pid = getActiveProjectId();
+  if (!pid || typeof localStorage === 'undefined') return;
+  try {
+    const provList = [];
+    const walk = (nodes) => {
+      (nodes || []).forEach(n => {
+        if (Array.isArray(n.cotizaciones)) {
+          n.cotizaciones.forEach(c => {
+            if (c && c.id) {
+              provList.push({
+                id: c.id,
+                nombre: c.proveedor || '',
+                proveedor: c.proveedor || '',
+                telefono: c.telefono || '',
+                email: c.email || '',
+                especialidad: n.descripcion || 'Especialista',
+                notas: c.notas || '',
+                monto: Number(c.monto) || 0,
+                costo: Number(c.costo) || 0,
+                isGanador: Boolean(c.isGanador),
+                nodeId: n.id,
+                clave: n.clave || ''
+              });
+            }
+          });
+        }
+        if (Array.isArray(n.children)) walk(n.children);
+      });
+    };
+    walk(state.treeData || []);
+    localStorage.setItem(`adm_arq_proveedores_${pid}`, JSON.stringify(provList));
+    scheduleExpensesCloudSync(pid);
+  } catch (_) {}
 }
 
 function updateSidePanelAddButtonState(status) {
@@ -129,7 +174,7 @@ function renderBlockedSubconceptPanel(container, status) {
             <strong class="text-slate-800">[${ancClave}] ${ancDesc}</strong> ya cuenta con cotizaciones registradas.
           </p>
           ${anc ? `
-            <button type="button" onclick="window.selectRowAndOpenProveedores('${anc.id}', event)"
+            <button type="button" onclick="window.selectRowAndOpenProveedores('${escapeProvHtml(anc.id)}', event)"
                     class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-lg font-semibold shadow-xs inline-flex items-center gap-1.5 transition cursor-pointer">
               <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Ver cotizaciones de [${ancClave}]
             </button>
@@ -214,7 +259,7 @@ function renderConsolidatedParentPanel(container, status) {
               <span class="bg-blue-100 text-blue-800 font-bold text-[9px] px-1.5 py-0.5 rounded font-mono shrink-0">${escapeProvHtml(subNode.clave || '')}</span>
               <span class="text-[10px] font-semibold text-slate-700 truncate" title="${escapeProvHtml(subNode.descripcion || '')}">${escapeProvHtml(subNode.descripcion || '')}</span>
             </div>
-            <button type="button" onclick="window.selectRowAndOpenProveedores('${subNode.id}', event)"
+            <button type="button" onclick="window.selectRowAndOpenProveedores('${escapeProvHtml(subNode.id)}', event)"
                     class="text-[9px] font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-1.5 py-0.5 rounded transition shrink-0 cursor-pointer"
                     title="Abrir cotizaciones de [${escapeProvHtml(subNode.clave || '')}]">
               Ver <i class="fa-solid fa-chevron-right text-[8px]"></i>
@@ -244,7 +289,7 @@ function renderConsolidatedParentPanel(container, status) {
 
           ${tienePdf ? `
             <div class="pt-1 border-t border-slate-100">
-              <button type="button" onclick="window.handleViewCotizacionPdf('${subNode.id}', '${cot.id}')"
+              <button type="button" onclick="window.handleViewCotizacionPdf('${escapeProvHtml(subNode.id)}', '${escapeProvHtml(cot.id)}')"
                       class="text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition cursor-pointer max-w-[240px] truncate"
                       title="Ver o descargar cotización: ${escapeProvHtml(cot.archivoNombre)}">
                 <i class="fa-solid fa-file-pdf text-rose-600 text-[11px] shrink-0"></i>
@@ -274,7 +319,7 @@ function renderConsolidatedParentPanel(container, status) {
         </div>
         <div class="flex flex-wrap gap-1.5">
           ${pendingItems.map(ch => `
-            <button type="button" onclick="window.selectRowAndOpenProveedores('${ch.id}', event)"
+            <button type="button" onclick="window.selectRowAndOpenProveedores('${escapeProvHtml(ch.id)}', event)"
                     class="bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-md px-2 py-0.5 text-[10px] font-semibold transition cursor-pointer">
               [${escapeProvHtml(ch.clave || '')}] Elegir ganador ($0.00)
             </button>
@@ -470,8 +515,8 @@ export function renderCotizacionesSidePanel(node) {
           <div class="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
             <div class="flex items-start gap-2 flex-1 overflow-hidden">
               <label class="cursor-pointer flex items-center gap-1.5 mt-0.5 shrink-0" title="${isWinner ? 'Proveedor ganador actualmente asignado' : 'Hacer clic para elegir a este proveedor como ganador'}">
-                <input type="radio" name="cotizacion-ganador-${node.id}" ${isWinner ? 'checked' : ''} 
-                       onchange="window.handleSelectCotizacionGanador('${node.id}', '${cot.id}', this.checked)"
+                <input type="radio" name="cotizacion-ganador-${escapeProvHtml(node.id)}" ${isWinner ? 'checked' : ''} 
+                       onchange="window.handleSelectCotizacionGanador('${escapeProvHtml(node.id)}', '${escapeProvHtml(cot.id)}', this.checked)"
                        class="w-4 h-4 text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer">
               </label>
 
@@ -482,7 +527,7 @@ export function renderCotizacionesSidePanel(node) {
                     <span class="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider flex items-center gap-1">
                       <i class="fa-solid fa-check text-[8px]"></i> Elegido
                     </span>
-                    <button type="button" onclick="window.handleSelectCotizacionGanador('${node.id}', '${cot.id}', false)"
+                    <button type="button" onclick="window.handleSelectCotizacionGanador('${escapeProvHtml(node.id)}', '${escapeProvHtml(cot.id)}', false)"
                             class="text-[9px] text-slate-500 hover:text-rose-600 underline font-semibold cursor-pointer"
                             title="Quitar selección de proveedor ganador">
                       Quitar
@@ -520,30 +565,30 @@ export function renderCotizacionesSidePanel(node) {
           <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
             <div class="flex items-center gap-1.5 overflow-hidden">
               ${tienePdf ? `
-                <button type="button" onclick="window.handleViewCotizacionPdf('${node.id}', '${cot.id}')" 
+                <button type="button" onclick="window.handleViewCotizacionPdf('${escapeProvHtml(node.id)}', '${escapeProvHtml(cot.id)}')" 
                         class="text-[10px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1 transition cursor-pointer max-w-[220px] truncate" 
-                        title="Ver o descargar cotización original: ${cot.archivoNombre}">
+                        title="Ver o descargar cotización original: ${escapeProvHtml(cot.archivoNombre)}">
                   <i class="fa-solid fa-file-pdf text-rose-600 text-[11px] shrink-0"></i>
-                  <span class="truncate">${cot.archivoNombre}</span>
-                  ${cot.archivoSize ? `<span class="text-[8px] text-rose-500 font-mono">(${cot.archivoSize})</span>` : ''}
+                  <span class="truncate">${escapeProvHtml(cot.archivoNombre)}</span>
+                  ${cot.archivoSize ? `<span class="text-[8px] text-rose-500 font-mono">(${escapeProvHtml(cot.archivoSize)})</span>` : ''}
                 </button>
               ` : `
                 <label class="text-[10px] text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded px-2 py-0.5 flex items-center gap-1 cursor-pointer transition" title="Adjuntar documento PDF de cotización">
                   <i class="fa-solid fa-paperclip text-slate-400 text-[9px]"></i>
                   <span>Adjuntar PDF</span>
-                  <input type="file" accept=".pdf,image/*,.doc,.docx" class="hidden" onchange="window.handleUploadCotizacionFile('${node.id}', '${cot.id}', this)">
+                  <input type="file" accept=".pdf,image/*,.doc,.docx" class="hidden" onchange="window.handleUploadCotizacionFile('${escapeProvHtml(node.id)}', '${escapeProvHtml(cot.id)}', this)">
                 </label>
               `}
             </div>
 
             <!-- Botones de Acción de Tarjeta: Editar / Eliminar -->
             <div class="flex items-center gap-1 shrink-0">
-              <button type="button" onclick="window.openEditCotizacionModal('${node.id}', '${cot.id}')" 
+              <button type="button" onclick="window.openEditCotizacionModal('${escapeProvJs(node.id)}', '${escapeProvJs(cot.id)}')" 
                       class="text-slate-400 hover:text-blue-600 text-[10px] p-1 rounded hover:bg-slate-100 transition cursor-pointer" 
                       title="Editar datos de la cotización">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
-              <button type="button" onclick="window.handleDeleteCotizacion('${node.id}', '${cot.id}')" 
+              <button type="button" onclick="window.handleDeleteCotizacion('${escapeProvJs(node.id)}', '${escapeProvJs(cot.id)}')" 
                       class="text-slate-400 hover:text-rose-600 text-[10px] p-1 rounded hover:bg-rose-50 transition cursor-pointer" 
                       title="Eliminar esta cotización">
                 <i class="fa-solid fa-trash-can"></i>
@@ -555,7 +600,7 @@ export function renderCotizacionesSidePanel(node) {
           ${cot.notas ? `
             <div class="bg-slate-50 border border-slate-200/70 rounded p-1.5 text-[10px] text-slate-600 leading-snug">
               <span class="font-bold text-slate-500 block text-[9px] uppercase tracking-wider mb-0.5">Alcance / Notas:</span>
-              ${cot.notas}
+              ${escapeProvHtml(cot.notas)}
             </div>
           ` : ''}
 
@@ -588,6 +633,14 @@ export function renderCotizacionesSidePanel(node) {
  * @param {string|null} cotId Si es null, crea una nueva; si tiene id, edita
  */
 export function openCotizacionModal(cotId = null) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite agregar ni editar cotizaciones.', 'warning');
+    return;
+  }
+  const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
+  const activeTabKey = (viewPres && !viewPres.classList.contains('hidden')) ? 'presupuesto' : 'alcances';
+  if (!guardTabUnlocked(activeTabKey)) return;
+
   currentEditingCotId = cotId;
   const modal = document.getElementById('modal-cotizacion-proveedor');
   const title = document.getElementById('modal-cotizacion-title');
@@ -715,6 +768,13 @@ export function closeCotizacionModal() {
  */
 export function saveCotizacionForm(event) {
   if (event) event.preventDefault();
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite guardar cotizaciones.', 'warning');
+    return;
+  }
+  const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
+  const activeTabKey = (viewPres && !viewPres.classList.contains('hidden')) ? 'presupuesto' : 'alcances';
+  if (!guardTabUnlocked(activeTabKey)) return;
 
   const nodeId = state.activeSelectedId;
   if (!nodeId) {
@@ -773,6 +833,7 @@ export function saveCotizacionForm(event) {
   } else {
     addCotizacion(nodeId, payload);
   }
+  persistProveedoresCloudSummary();
 
   closeCotizacionModal();
 }
@@ -811,6 +872,17 @@ export function handleModalFileInputChange(inputEl) {
  * @param {HTMLInputElement} inputEl 
  */
 export function handleCardDirectFileUpload(nodeId, cotId, inputEl) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite subir archivos de cotización.', 'warning');
+    if (inputEl) inputEl.value = '';
+    return;
+  }
+  const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
+  const activeTabKey = (viewPres && !viewPres.classList.contains('hidden')) ? 'presupuesto' : 'alcances';
+  if (!guardTabUnlocked(activeTabKey)) {
+    if (inputEl) inputEl.value = '';
+    return;
+  }
   const file = inputEl.files && inputEl.files[0];
   if (!file) return;
 
@@ -825,6 +897,7 @@ export function handleCardDirectFileUpload(nodeId, cotId, inputEl) {
       archivoData: e.target.result,
       archivoSize: formattedSize
     });
+    persistProveedoresCloudSummary();
     showToast(`Cotización "${file.name}" adjuntada con éxito.`, 'success');
   };
   reader.readAsDataURL(file);

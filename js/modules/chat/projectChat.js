@@ -12,6 +12,7 @@ import {
   getProjectById,
   getProjectsList,
   getCurrentUser,
+  saveCurrentUser,
   getLastKnownUser,
   AVATARS_BY_SEX,
   getPendingInvitationsForUser,
@@ -23,12 +24,16 @@ import {
   saveStoredPlanInvitations,
   getDeletedProjectsList
 } from '../portal/projectService.js';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js';
 import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js';
 import { showToast } from '../../ui/notifications.js';
 import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js';
 import { openSubscriptionModal } from '../portal/subscriptionModal.js';
 import { openPrintWindow } from '../io/printService.js';
 import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js';
+
+let lastSentChatGuard = { text: '', ts: 0 };
 
 export const CHAT_DIVISIONS = [
   {
@@ -124,7 +129,7 @@ let activeChatSearch = ''; // Búsqueda rápida por folio, texto, autor o etique
 let activePartidaFilterId = null; // ID de Partida/Concepto cuando se filtra con el botón de comentarios
 let activeTagPickerKind = null; // 'user' | 'partida' | 'estimacion' | 'reporte' | null
 let selectedAuthorHandle = null;
-let selectedNotificationsHandle = 'all'; // 'all' (todos los usuarios etiquetados) o @Usuario específico
+let selectedNotificationsHandle = '__self__'; // '__self__' (usuario actual) o 'all' o @Usuario específico
 let isNotificationsPopoverOpen = false;
 let highlightedMessageId = null;
 let pendingComposerEntryType = 'nota';
@@ -688,6 +693,74 @@ export function generateSeedProjectChatMessages(projectId = null) {
   ];
 }
 
+export function normalizeChatMsgId(rawId) {
+  return String(rawId || '').replace(/^.*?(?:__|::)/, '');
+}
+
+export function dedupeChatMessages(list) {
+  if (!Array.isArray(list)) return [];
+  const seenIds = new Set();
+  const recentByFingerprint = [];
+  const result = [];
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const cleanId = normalizeChatMsgId(item.id);
+    if (cleanId && seenIds.has(cleanId)) continue;
+
+    const authorKey = String(item.authorEmail || item.authorHandle || item.authorName || '').toLowerCase().trim();
+    const textKey = String(item.text || '').trim();
+    const timeKey = String(item.time || '').trim();
+    const ts = item.createdAt ? Date.parse(item.createdAt) : NaN;
+
+    const isDuplicateByContent = recentByFingerprint.some(prev => {
+      if (prev.authorKey !== authorKey || prev.textKey !== textKey) return false;
+      if (Number.isFinite(ts) && Number.isFinite(prev.ts)) {
+        return Math.abs(ts - prev.ts) < 2000;
+      }
+      return Boolean(timeKey && prev.timeKey === timeKey);
+    });
+
+    if (isDuplicateByContent) continue;
+
+    const normalizedItem = cleanId ? { ...item, id: cleanId } : { ...item };
+    if (cleanId) seenIds.add(cleanId);
+    recentByFingerprint.push({ authorKey, textKey, timeKey, ts });
+    result.push(normalizedItem);
+  }
+
+  return result;
+}
+
+export function markActiveProjectChatMessagesAsRead(projectId = null) {
+  const pid = projectId || getActiveProjectId() || 'proj-default-01';
+  const arqKey = `adm_arq_project_chat_${pid}`;
+  const constKey = `adm_const_project_chat_${pid}`;
+  try {
+    const raw = localStorage.getItem(arqKey) || localStorage.getItem(constKey);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    let changed = false;
+    const deduped = dedupeChatMessages(parsed).map(m => {
+      if (!m.isRead) {
+        changed = true;
+        return { ...m, isRead: true };
+      }
+      return m;
+    });
+    if (deduped.length !== parsed.length) changed = true;
+    if (changed) {
+      const data = JSON.stringify(deduped);
+      localStorage.setItem(arqKey, data);
+      localStorage.setItem(constKey, data);
+    }
+    return changed;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function loadProjectChatMessages(projectId = null) {
   const pid = projectId || getActiveProjectId() || 'proj-default-01';
   const arqKey = `adm_arq_project_chat_${pid}`;
@@ -698,26 +771,31 @@ export function loadProjectChatMessages(projectId = null) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         const { list, migrated } = normalizeProjectChatMessagesList(parsed);
-        if (migrated) {
-          saveProjectChatMessages(list, pid);
+        const deduped = dedupeChatMessages(list);
+        if (migrated || deduped.length !== parsed.length) {
+          saveProjectChatMessages(deduped, pid, { skipCloudSync: true });
         }
-        return list;
+        return deduped;
       }
     }
   } catch (e) {}
 
   // Si no hay mensajes o es un proyecto nuevo, generar asientos semilla distribuidos en las 3 divisiones
-  const seedMessages = generateSeedProjectChatMessages(pid);
-  saveProjectChatMessages(seedMessages, pid);
+  const seedMessages = dedupeChatMessages(generateSeedProjectChatMessages(pid));
+  saveProjectChatMessages(seedMessages, pid, { skipCloudSync: true });
   return seedMessages;
 }
 
-export function saveProjectChatMessages(messages, projectId = null) {
+export function saveProjectChatMessages(messages, projectId = null, opts = {}) {
   const pid = projectId || getActiveProjectId() || 'proj-default-01';
   try {
-    const data = JSON.stringify(messages || []);
+    const deduped = dedupeChatMessages(messages || []);
+    const data = JSON.stringify(deduped);
     localStorage.setItem(`adm_arq_project_chat_${pid}`, data);
     localStorage.setItem(`adm_const_project_chat_${pid}`, data);
+    if (!opts?.skipCloudSync) {
+      scheduleChatCloudSync(pid);
+    }
   } catch (e) {}
 }
 
@@ -1090,6 +1168,8 @@ function getAllNotificationsUsers(scope = 'all') {
 // NOTIFICACIONES DE MENCIONES (EN "MIS PROYECTOS DE OBRA" Y BARRA LATERAL IZQUIERDA)
 // =========================================================================
 const DISMISSED_NOTIFICATIONS_KEY = 'cubikar_dismissed_notifications_v1';
+const READ_MENTIONS_KEY = 'cubikar_read_mentions_v1';
+let notifCloudSyncTimer = null;
 
 export function getDismissedNotificationIds() {
   try {
@@ -1104,6 +1184,86 @@ export function getDismissedNotificationIds() {
   return [];
 }
 
+export function getReadMentionIds() {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(READ_MENTIONS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    }
+  } catch (_) {}
+  return [];
+}
+
+export function syncNotificationStateToCloud() {
+  if (typeof window === 'undefined') return;
+  if (notifCloudSyncTimer) clearTimeout(notifCloudSyncTimer);
+  notifCloudSyncTimer = setTimeout(async () => {
+    notifCloudSyncTimer = null;
+    try {
+      const sb = getSupabaseClient();
+      if (!isSupabaseConfigured() || !sb || typeof sb.auth?.updateUser !== 'function') return;
+      const currentUser = getCurrentUser();
+      if (!currentUser || !currentUser.id) return;
+
+      const dismissed = getDismissedNotificationIds().slice(-400);
+      const readIds = getReadMentionIds().slice(-400);
+
+      if (!currentUser.user_metadata) currentUser.user_metadata = {};
+      currentUser.user_metadata.cubikar_dismissed_notifications = dismissed;
+      currentUser.user_metadata.cubikar_read_mentions = readIds;
+      if (typeof saveCurrentUser === 'function') saveCurrentUser(currentUser);
+
+      await sb.auth.updateUser({
+        data: {
+          cubikar_dismissed_notifications: dismissed,
+          cubikar_read_mentions: readIds
+        }
+      });
+    } catch (_) {}
+  }, 450);
+}
+
+export async function hydrateNotificationStateFromCloud(authUser = null) {
+  try {
+    let userMeta = authUser?.user_metadata || getCurrentUser()?.user_metadata || null;
+    if (!userMeta) {
+      const sb = getSupabaseClient();
+      if (isSupabaseConfigured() && sb && typeof sb.auth?.getUser === 'function') {
+        const { data } = await sb.auth.getUser();
+        userMeta = data?.user?.user_metadata || null;
+      }
+    }
+    if (!userMeta || typeof userMeta !== 'object') return false;
+
+    let changed = false;
+    if (Array.isArray(userMeta.cubikar_dismissed_notifications) && userMeta.cubikar_dismissed_notifications.length > 0) {
+      const curDismissed = getDismissedNotificationIds();
+      const mergedDismissed = Array.from(new Set([...curDismissed, ...userMeta.cubikar_dismissed_notifications])).slice(-500);
+      if (mergedDismissed.length !== curDismissed.length && typeof localStorage !== 'undefined') {
+        localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(mergedDismissed));
+        changed = true;
+      }
+    }
+    if (Array.isArray(userMeta.cubikar_read_mentions) && userMeta.cubikar_read_mentions.length > 0) {
+      const curRead = getReadMentionIds();
+      const mergedRead = Array.from(new Set([...curRead, ...userMeta.cubikar_read_mentions])).slice(-500);
+      if (mergedRead.length !== curRead.length && typeof localStorage !== 'undefined') {
+        localStorage.setItem(READ_MENTIONS_KEY, JSON.stringify(mergedRead));
+        changed = true;
+      }
+    }
+    if (changed) {
+      renderSidebarNotificationsUI();
+    }
+    return changed;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function markNotificationDismissed(notifKey) {
   if (!notifKey) return;
   try {
@@ -1113,16 +1273,55 @@ export function markNotificationDismissed(notifKey) {
       if (list.length > 500) list.splice(0, list.length - 500);
       localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(list));
     }
+    syncNotificationStateToCloud();
   } catch (_) {}
 }
 
-// scope = 'current' -> Solo notificaciones donde mencionaron usuarios en el proyecto activo (Barra lateral del proyecto)
-// scope = 'all'     -> Todas las notificaciones donde etiquetaron usuarios de todos los proyectos ("Mis Proyectos de Obra")
+export function markMentionReadKey(readKey) {
+  if (!readKey) return;
+  try {
+    const list = getReadMentionIds();
+    if (!list.includes(readKey)) {
+      list.push(readKey);
+      if (list.length > 500) list.splice(0, list.length - 500);
+      localStorage.setItem(READ_MENTIONS_KEY, JSON.stringify(list));
+    }
+    syncNotificationStateToCloud();
+  } catch (_) {}
+}
+
+function getSelfMentionTokens(users = []) {
+  const curUser = getCurrentUser() || getLastKnownUser();
+  if (!curUser) return [];
+  const tokens = new Set();
+  const myEmail = String(curUser.email || '').toLowerCase().trim();
+  const myName = String(curUser.name || '').trim();
+  if (myEmail) {
+    (users || []).filter(u => String(u?.email || '').toLowerCase().trim() === myEmail)
+      .forEach(u => { if (u.handle) tokens.add(String(u.handle).toLowerCase()); });
+    const prefix = myEmail.split('@')[0];
+    if (prefix) tokens.add('@' + prefix.toLowerCase());
+    tokens.add(myEmail);
+  }
+  if (myName) {
+    (users || []).filter(u => String(u?.name || '').toLowerCase().trim() === myName.toLowerCase())
+      .forEach(u => { if (u.handle) tokens.add(String(u.handle).toLowerCase()); });
+    tokens.add('@' + myName.replace(/\s+/g, '.').toLowerCase());
+    tokens.add('@' + myName.replace(/\s+/g, '').toLowerCase());
+  }
+  tokens.add('@todos');
+  return Array.from(tokens);
+}
+
+// scope = 'current' -> Notificaciones filtradas en el proyecto activo (Barra lateral)
+// scope = 'all'     -> Notificaciones filtradas en todos los proyectos ("Mis Proyectos")
 export function getUserMentionsNotifications(targetHandle = null, scope = 'all') {
-  const filterHandle = targetHandle || selectedNotificationsHandle || 'all';
+  const filterHandle = targetHandle || selectedNotificationsHandle || '__self__';
   const isAllHandles = String(filterHandle).toLowerCase() === 'all';
+  const isSelfHandle = filterHandle === '__self__';
   const handleLower = String(filterHandle || '').toLowerCase();
   const dismissedSet = new Set(getDismissedNotificationIds());
+  const readMentionsSet = new Set(getReadMentionIds());
 
   const activePid = getActiveProjectId() || 'proj-default-01';
   const activeProjObj = getProjectById(activePid);
@@ -1136,6 +1335,7 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
   const results = [];
   projects.forEach(proj => {
     const msgs = loadProjectChatMessages(proj.id);
+    const selfTokens = isSelfHandle ? getSelfMentionTokens(getAssignedProjectUsers(proj.id)) : [];
     msgs.forEach(m => {
       if (m.dismissed || dismissedSet.has(`${proj.id}:${m.id}`) || dismissedSet.has(String(m.id))) return;
       const mentionsList = extractMentionsFromMessage(m);
@@ -1143,16 +1343,25 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
 
       const isMentioned = isAllHandles
         ? mentionsList.length > 0
-        : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
-            || (m.text && String(m.text).toLowerCase().includes(handleLower)));
+        : (isSelfHandle
+            ? (selfTokens.length > 0 && (
+                mentionsList.some(tag => selfTokens.includes(String(tag).toLowerCase())) ||
+                (m.text && selfTokens.some(tok => String(m.text).toLowerCase().includes(tok)))
+              ))
+            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
+                || (m.text && String(m.text).toLowerCase().includes(handleLower))));
 
       if (isMentioned) {
         const readBy = Array.isArray(m.readBy) ? m.readBy : [];
         const isRead = Boolean(m.isRead)
           || readBy.includes('__all__')
+          || readMentionsSet.has(`${proj.id}:${m.id}`)
+          || readMentionsSet.has(String(m.id))
           || (isAllHandles
             ? mentionsList.every(tag => readBy.some(h => String(h).toLowerCase() === String(tag).toLowerCase()))
-            : readBy.some(h => String(h).toLowerCase() === handleLower));
+            : (isSelfHandle
+                ? selfTokens.some(tok => readBy.some(h => String(h).toLowerCase() === tok))
+                : readBy.some(h => String(h).toLowerCase() === handleLower)));
 
         results.push({
           projectId: proj.id,
@@ -1185,13 +1394,14 @@ export function closeMentionNotificationsPopover() {
 }
 
 export function onNotificationsUserFilterChange(handle) {
-  selectedNotificationsHandle = handle || 'all';
+  selectedNotificationsHandle = handle || '__self__';
   renderSidebarNotificationsUI();
 }
 
 export function markAllMentionsAsRead(scope = 'all') {
-  const filterHandle = selectedNotificationsHandle || 'all';
+  const filterHandle = selectedNotificationsHandle || '__self__';
   const isAllHandles = String(filterHandle).toLowerCase() === 'all';
+  const isSelfHandle = filterHandle === '__self__';
   const handleLower = String(filterHandle || '').toLowerCase();
 
   const activePid = getActiveProjectId() || 'proj-default-01';
@@ -1201,6 +1411,7 @@ export function markAllMentionsAsRead(scope = 'all') {
 
   projects.forEach(proj => {
     const msgs = loadProjectChatMessages(proj.id);
+    const selfTokens = isSelfHandle ? getSelfMentionTokens(getAssignedProjectUsers(proj.id)) : [];
     let changed = false;
     msgs.forEach(m => {
       const mentionsList = extractMentionsFromMessage(m);
@@ -1208,12 +1419,19 @@ export function markAllMentionsAsRead(scope = 'all') {
 
       const isMentioned = isAllHandles
         ? true
-        : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
-            || (m.text && String(m.text).toLowerCase().includes(handleLower)));
+        : (isSelfHandle
+            ? (selfTokens.length > 0 && (
+                mentionsList.some(tag => selfTokens.includes(String(tag).toLowerCase())) ||
+                (m.text && selfTokens.some(tok => String(m.text).toLowerCase().includes(tok)))
+              ))
+            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
+                || (m.text && String(m.text).toLowerCase().includes(handleLower))));
 
       if (isMentioned) {
         if (!Array.isArray(m.readBy)) m.readBy = [];
-        if (isAllHandles) {
+        markMentionReadKey(`${proj.id}:${m.id}`);
+        markMentionReadKey(String(m.id));
+        if (isAllHandles || isSelfHandle) {
           m.isRead = true;
           if (!m.readBy.includes('__all__')) m.readBy.push('__all__');
           mentionsList.forEach(tag => {
@@ -1231,6 +1449,7 @@ export function markAllMentionsAsRead(scope = 'all') {
     if (changed) saveProjectChatMessages(msgs, proj.id);
   });
 
+  syncNotificationStateToCloud();
   renderSidebarNotificationsUI();
 }
 
@@ -1244,6 +1463,8 @@ export function dismissMentionNotification(projectId, msgId, event = null) {
   const pid = projectId || getActiveProjectId() || 'proj-default-01';
   markNotificationDismissed(`${pid}:${msgId}`);
   markNotificationDismissed(String(msgId));
+  markMentionReadKey(`${pid}:${msgId}`);
+  markMentionReadKey(String(msgId));
   const msgs = loadProjectChatMessages(pid);
   const target = msgs.find(m => String(m.id) === String(msgId));
   if (target) {
@@ -1253,49 +1474,46 @@ export function dismissMentionNotification(projectId, msgId, event = null) {
     if (!target.readBy.includes('__all__')) target.readBy.push('__all__');
     saveProjectChatMessages(msgs, pid);
   }
+  syncNotificationStateToCloud();
   renderSidebarNotificationsUI();
   showToast('Notificación eliminada', 'info');
 }
 
 /**
- * Purgar y limpiar todas las notificaciones e invitaciones obsoletas
+ * Purgar notificaciones respetando el scope ('current' = obra actual; 'all' = todas)
+ * SIN destruir ni rechazar las invitaciones reales en BD.
  */
 export function purgeAllNotifications(scope = 'all') {
   const user = getCurrentUser();
   const uEmail = (user?.email || '').toLowerCase().trim();
+  const isCurrentOnly = scope === 'current';
+  const activePid = getActiveProjectId() || 'proj-default-01';
 
-  // Registrar como descartadas todas las invitaciones actuales
-  try {
-    const pendingInvs = uEmail ? getPendingInvitationsForUser(uEmail) : [];
-    pendingInvs.forEach(inv => {
-      if (inv && inv.id) markNotificationDismissed(`inv:${inv.id}`);
-      if (inv && inv.projectId) markNotificationDismissed(`inv_proj:${inv.projectId}:${uEmail}`);
-    });
-  } catch (_) {}
+  // 1. Ocultar avisos de invitaciones únicamente en scope='all' (sin borrar ni rechazar invitaciones reales)
+  if (!isCurrentOnly) {
+    try {
+      const pendingInvs = uEmail ? getPendingInvitationsForUser(uEmail) : [];
+      pendingInvs.forEach(inv => {
+        if (inv && inv.id) markNotificationDismissed(`inv:${inv.id}`);
+        if (inv && inv.projectId) markNotificationDismissed(`inv_proj:${inv.projectId}:${uEmail}`);
+      });
+    } catch (_) {}
+  }
 
-  // 1. Purgar todas las invitaciones pendientes para este usuario
-  try {
-    if (typeof rejectProjectInvitation === 'function') {
-      rejectProjectInvitation('all');
-    }
-  } catch (_) {}
+  // 2. Marcar como leídos y descartados los mensajes de menciones del alcance seleccionado
+  const targetProjects = isCurrentOnly
+    ? [{ id: activePid }]
+    : getAllProjectsForNotifications();
 
-  try {
-    const invs = getStoredInvitations().filter(i => (i.email || '').toLowerCase().trim() !== uEmail);
-    saveStoredInvitations(invs);
-    const planInvs = getStoredPlanInvitations().filter(pi => (pi.email || '').toLowerCase().trim() !== uEmail);
-    saveStoredPlanInvitations(planInvs);
-  } catch (_) {}
-
-  // 2. Marcar como leídos y descartados todos los mensajes de menciones de chat
-  const projects = getAllProjectsForNotifications();
-  projects.forEach(proj => {
+  targetProjects.forEach(proj => {
     try {
       const msgs = loadProjectChatMessages(proj.id);
       let changed = false;
       msgs.forEach(m => {
         markNotificationDismissed(`${proj.id}:${m.id}`);
         markNotificationDismissed(String(m.id));
+        markMentionReadKey(`${proj.id}:${m.id}`);
+        markMentionReadKey(String(m.id));
         m.isRead = true;
         m.dismissed = true;
         if (!Array.isArray(m.readBy)) m.readBy = [];
@@ -1306,52 +1524,41 @@ export function purgeAllNotifications(scope = 'all') {
     } catch (_) {}
   });
 
-  // 3. Purgar claves de chat huérfanas de proyectos eliminados
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const validPids = new Set(getProjectsList().map(p => p.id));
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && (
-          k.startsWith('adm_const_project_chat_') ||
-          k.startsWith('adm_arq_project_chat_') ||
-          k.startsWith('adm_const_chat_') ||
-          k.startsWith('control_obra_chat_') ||
-          k.startsWith('adm_arq_chat_')
-        )) {
-          const pid = k
-            .replace('adm_const_project_chat_', '')
-            .replace('adm_arq_project_chat_', '')
-            .replace('adm_const_chat_', '')
-            .replace('control_obra_chat_', '')
-            .replace('adm_arq_chat_', '');
-          if (!validPids.has(pid)) {
-            localStorage.removeItem(k);
+  // 3. Purgar claves locales de chat huérfanas de proyectos eliminados (solo scope='all')
+  if (!isCurrentOnly) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const validPids = new Set(getProjectsList().flatMap(p => [p?.id, p?.cloudId]).filter(Boolean));
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && (
+            k.startsWith('adm_const_project_chat_') ||
+            k.startsWith('adm_arq_project_chat_') ||
+            k.startsWith('adm_const_chat_') ||
+            k.startsWith('control_obra_chat_') ||
+            k.startsWith('adm_arq_chat_')
+          )) {
+            const pid = k
+              .replace('adm_const_project_chat_', '')
+              .replace('adm_arq_project_chat_', '')
+              .replace('adm_const_chat_', '')
+              .replace('control_obra_chat_', '')
+              .replace('adm_arq_chat_', '');
+            if (!validPids.has(pid)) {
+              localStorage.removeItem(k);
+            }
           }
         }
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
-  // 4. Sincronizar estado limpio en user_metadata
-  try {
-    if (user && user.user_metadata?.cubikar_cloud_state_v2) {
-      const cs = user.user_metadata.cubikar_cloud_state_v2;
-      if (Array.isArray(cs.planInvitations)) {
-        cs.planInvitations = cs.planInvitations.filter(pi => (pi.email || '').toLowerCase().trim() !== uEmail);
-      }
-      if (Array.isArray(cs.acceptedInvitations)) {
-        cs.acceptedInvitations = cs.acceptedInvitations.filter(i => !((i.email || '').toLowerCase().trim() === uEmail && i.status === 'pending'));
-      }
-    }
-    if (typeof window !== 'undefined' && typeof window.triggerDebouncedCloudStateSync === 'function') {
-      window.triggerDebouncedCloudStateSync(user);
-    }
-  } catch (_) {}
+  // 4. Sincronizar estado de lectura/descartes en la nube
+  syncNotificationStateToCloud();
 
   // 5. Refrescar interfaz de la campana inmediatamente
   renderSidebarNotificationsUI();
-  showToast('Notificaciones eliminadas exitosamente', 'info');
+  showToast('Notificaciones limpiadas exitosamente', 'info');
   if (typeof window.refreshProjectsGridUI === 'function') {
     try { window.refreshProjectsGridUI(); } catch (_) {}
   }
@@ -1365,9 +1572,11 @@ export function openMentionNotification(projectId, msgId, partidaId = '', event 
   const activePid = getActiveProjectId() || 'proj-default-01';
   const targetPid = projectId || activePid;
 
-  // Marcar este mensaje como leído para que la campana actualice su contador inmediatamente
+  // Marcar este mensaje como leído para que la campana actualice su contador inmediatamente y persista en la nube
+  markMentionReadKey(`${targetPid}:${msgId}`);
+  markMentionReadKey(String(msgId));
   const msgs = loadProjectChatMessages(targetPid);
-  const targetMsg = msgs.find(m => m.id === msgId);
+  const targetMsg = msgs.find(m => String(m.id) === String(msgId));
   if (targetMsg) {
     targetMsg.isRead = true;
     if (!Array.isArray(targetMsg.readBy)) targetMsg.readBy = [];
@@ -1379,6 +1588,7 @@ export function openMentionNotification(projectId, msgId, partidaId = '', event 
     });
     saveProjectChatMessages(msgs, targetPid);
   }
+  syncNotificationStateToCloud();
 
   isNotificationsPopoverOpen = false;
 
@@ -1412,6 +1622,7 @@ export function openMentionNotification(projectId, msgId, partidaId = '', event 
 
   // En el área de proyectos activa: abrir inmediatamente la Bitácora en la división correspondiente y enfocar el mensaje
   isChatDockExpanded = true;
+  markActiveProjectChatMessagesAsRead(targetPid);
   activeChatDivision = targetDivision;
   activeChatFilter = 'all';
   activeChatSearch = '';
@@ -1498,15 +1709,17 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
     ? `${unreadCount} nueva(s) • ${mentionsList.length} en todos los proyectos`
     : `${unreadCount} nueva(s) • ${mentionsList.length} en esta obra`;
 
+  const escapeAttrJs = (val) => escapeChatAttr(String(val ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+  const safeFilterLabel = filterHandle === '__self__' ? 'ti' : escapeChatHtml(filterHandle);
   const emptyTitle = filterHandle === 'all'
     ? (isPortalScope ? 'Sin menciones en los proyectos' : 'Sin menciones en este proyecto')
-    : `Sin menciones para ${filterHandle}`;
+    : `Sin menciones para ${safeFilterLabel}`;
 
   const emptyDesc = filterHandle === 'all'
     ? (isPortalScope
         ? 'Cuando etiqueten a un <strong>@Usuario</strong> en el Chat de cualquier proyecto, se recopilará aquí.'
         : 'Cuando etiqueten a un <strong>@Usuario</strong> en el Chat del proyecto, aparecerá aquí y al darle clic te enviará al chat.')
-    : `Cuando alguien etiquete a <strong>${filterHandle}</strong> en el Chat de Obra, aparecerá aquí el aviso directo.`;
+    : `Cuando alguien etiquete a <strong>${safeFilterLabel}</strong> en el Chat de Obra, aparecerá aquí el aviso directo.`;
 
   return `
     <!-- Encabezado del centro de notificaciones de menciones -->
@@ -1522,13 +1735,13 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <button type="button" onclick="event.stopPropagation(); purgeAllNotifications('${scope}')"
+        <button type="button" onclick="event.stopPropagation(); purgeAllNotifications('${escapeAttrJs(scope)}')"
                 class="px-2 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/35 text-rose-300 border border-rose-500/35 text-[10px] font-bold cursor-pointer transition flex items-center gap-1"
                 title="Eliminar todas las notificaciones de la campana">
           <i class="fa-solid fa-trash-can text-[9px]"></i> Eliminar todas
         </button>
         ${unreadCount > 0 ? `
-          <button type="button" onclick="event.stopPropagation(); markAllMentionsAsRead('${scope}')"
+          <button type="button" onclick="event.stopPropagation(); markAllMentionsAsRead('${escapeAttrJs(scope)}')"
                   class="px-2 py-1 rounded-lg bg-blue-600/25 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 text-[10px] font-bold cursor-pointer transition"
                   title="Marcar todas las menciones como leídas">
             ✓ Leídas
@@ -1547,20 +1760,20 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
         <div class="flex items-center justify-between">
           <span class="text-[11px] font-extrabold text-amber-300 flex items-center gap-1.5 uppercase tracking-wider">
             <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
-            Aviso de Consumo del Plan (${consumptionAlert.pct}%)
+            Aviso de Consumo del Plan (${Number(consumptionAlert.pct) || 0}%)
           </span>
           <span class="text-[9.5px] bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2 py-0.5 rounded-full font-bold">
-            ${consumptionAlert.planName}
+            ${escapeChatHtml(consumptionAlert.planName || '')}
           </span>
         </div>
         <p class="text-[11px] text-slate-200 leading-snug">
-          ${consumptionAlert.message}
+          ${escapeChatHtml(consumptionAlert.message || '')}
         </p>
         <div class="pt-1">
           <button type="button" onclick="closeMentionNotificationsPopover(); openSubscriptionModal()"
                   class="w-full py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
             <i class="fa-solid fa-crown text-[11px]"></i>
-            <span>${consumptionAlert.actionLabel}</span>
+            <span>${escapeChatHtml(consumptionAlert.actionLabel || 'Ver Planes')}</span>
           </button>
         </div>
       </div>
@@ -1584,11 +1797,11 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
             <div class="p-2.5 bg-slate-950/90 border border-blue-500/40 rounded-xl space-y-2 shadow-lg">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                  <h5 class="text-xs font-bold text-white truncate" title="${inv.projectName}">
-                    📁 ${inv.projectName}
+                  <h5 class="text-xs font-bold text-white truncate" title="${escapeChatAttr(inv.projectName || '')}">
+                    📁 ${escapeChatHtml(inv.projectName || 'Proyecto')}
                   </h5>
                   <span class="text-[10.5px] text-slate-300 block truncate">
-                    Invitado por: <strong class="text-amber-300">${inv.ownerName || 'Anfitrión'}</strong>
+                    Invitado por: <strong class="text-amber-300">${escapeChatHtml(inv.ownerName || 'Anfitrión')}</strong>
                   </span>
                 </div>
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${inv.role === 'editar' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-purple-500/20 text-purple-300 border border-purple-500/40'}">
@@ -1598,15 +1811,15 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
 
               <div class="flex items-center justify-between pt-1.5 border-t border-slate-800/80 gap-2 text-xs">
                 <span class="text-[10px] text-slate-400 truncate">
-                  Membresía: <b class="text-slate-200">${inv.ownerPlanId ? `Plan ${inv.ownerPlanId.toUpperCase()}` : 'Plan Anfitrión'}</b>
+                  Membresía: <b class="text-slate-200">${inv.ownerPlanId ? `Plan ${escapeChatHtml(String(inv.ownerPlanId).toUpperCase())}` : 'Plan Anfitrión'}</b>
                 </span>
                 <div class="flex items-center gap-1.5 shrink-0">
-                  <button type="button" onclick="event.stopPropagation(); handleRejectInvitationAction('${inv.id}')"
+                  <button type="button" onclick="event.stopPropagation(); handleRejectInvitationAction('${escapeAttrJs(inv.id)}')"
                           class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 text-[10.5px] font-semibold transition cursor-pointer flex items-center gap-1"
                           title="Eliminar y descartar esta notificación de invitación">
                     <i class="fa-solid fa-trash-can text-[9px]"></i> Eliminar
                   </button>
-                  <button type="button" onclick="handleAcceptInvitationAction('${inv.id}')"
+                  <button type="button" onclick="handleAcceptInvitationAction('${escapeAttrJs(inv.id)}')"
                           class="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10.5px] transition shadow shadow-blue-600/30 active:scale-95 cursor-pointer flex items-center gap-1">
                     <i class="fa-solid fa-check text-[10px]"></i> Aceptar y Entrar
                   </button>
@@ -1618,14 +1831,15 @@ function buildNotificationsPopoverHTML(mentionsList, unreadCount, users, filterH
       </div>
     ` : ''}
 
-    <!-- Selector de usuario para consultar todas las menciones o las de un usuario en específico -->
+    <!-- Selector de usuario para consultar mis menciones, todas o las de un usuario en específico -->
     <div onclick="event.stopPropagation()" class="px-3.5 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-2">
       <span class="text-[10.5px] text-slate-400 font-medium">Filtrar usuario:</span>
       <select onchange="onNotificationsUserFilterChange(this.value)"
               class="bg-slate-800 border border-slate-700 text-amber-300 rounded-lg px-2 py-1 text-[11px] font-bold outline-none cursor-pointer max-w-[210px]">
+        <option value="__self__" ${filterHandle === '__self__' ? 'selected' : ''}>Mis menciones (@)</option>
         <option value="all" ${filterHandle === 'all' ? 'selected' : ''}>Todos los etiquetados (@)</option>
         ${users.map(u => `
-          <option value="${u.handle}" ${u.handle === filterHandle ? 'selected' : ''}>${u.handle} (${u.roleLabel || 'Asignado'})</option>
+          <option value="${escapeChatAttr(u.handle)}" ${u.handle === filterHandle ? 'selected' : ''}>${escapeChatHtml(u.handle)} (${escapeChatHtml(u.roleLabel || 'Asignado')})</option>
         `).join('')}
       </select>
     </div>
@@ -1718,7 +1932,7 @@ export function renderSidebarNotificationsUI() {
   const currentUser = getCurrentUser();
   const notifWrapper = document.getElementById('portal-notifications-wrapper');
 
-  // Si no hay sesiÃ³n iniciada, ocultar por completo la campana del portal y limpiar badges
+  // Si no hay sesión iniciada, ocultar por completo la campana del portal y limpiar badges
   if (!currentUser) {
     if (notifWrapper) notifWrapper.classList.add('hidden');
     if (portalBadgeEl) {
@@ -1736,7 +1950,7 @@ export function renderSidebarNotificationsUI() {
 
   if (notifWrapper) notifWrapper.classList.remove('hidden');
 
-  const filterHandle = selectedNotificationsHandle || 'all';
+  const filterHandle = selectedNotificationsHandle || '__self__';
 
   // Obtener invitaciones pendientes hacia el usuario conectado
   const pendingInvitations = (currentUser && currentUser.email) ? getPendingInvitationsForUser(currentUser.email) : [];
@@ -1911,6 +2125,9 @@ export function toggleProjectChatDock(forceState = null) {
   }
   if (!wasExpanded && isChatDockExpanded && !activePartidaFilterId && !highlightedMessageId) {
     activeChatDivision = getDivisionForWorkspaceTab(getActiveWorkspaceTabId());
+  }
+  if (isChatDockExpanded) {
+    markActiveProjectChatMessagesAsRead();
   }
   renderProjectChatDock();
   if (isChatDockExpanded) {
@@ -2646,6 +2863,7 @@ export function openProjectChatForPartida(partidaId, event = null) {
   }
 
   isChatDockExpanded = true;
+  markActiveProjectChatMessagesAsRead();
   activeChatDivision = targetDivision;
   activePartidaFilterId = pidStr;
   pendingComposerTags.partidaId = pidStr;
@@ -2717,10 +2935,20 @@ export function sendProjectChatMessage() {
   if (!inp) return;
   const text = inp.value.trim();
   if (!text) return;
+  inp.value = '';
+
+  if (lastSentChatGuard.text === text && (Date.now() - lastSentChatGuard.ts) < 1500) return;
+  lastSentChatGuard = { text, ts: Date.now() };
 
   const users = getAssignedProjectUsers();
   const currentUser = getCurrentUser() || getLastKnownUser();
-  const defaultAuthor = users.find(u => currentUser && u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || users[0];
+  const defaultAuthor = users.find(u => currentUser && u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || users[0] || {
+    name: currentUser?.name || 'Usuario',
+    handle: '@Usuario',
+    roleLabel: 'Colaborador',
+    initials: 'US',
+    avatar: currentUser?.avatar || ''
+  };
   const authorObj = users.find(u => u.handle === selectedAuthorHandle) || defaultAuthor;
 
   const mergedMentions = extractMentionsFromMessage({
@@ -2751,6 +2979,7 @@ export function sendProjectChatMessage() {
     division: activeChatDivision,
     entryType: pendingComposerEntryType || 'nota',
     createdAt: now.toISOString(),
+    isRead: true,
     authorName: authorObj.name,
     authorHandle: authorObj.handle,
     authorRole: authorObj.roleLabel,
@@ -2769,7 +2998,6 @@ export function sendProjectChatMessage() {
 
   saveProjectChatMessages(messages);
   broadcastChatMessage(getActiveProjectId(), newMsg);
-  inp.value = '';
   pendingComposerEntryType = 'nota';
   pendingComposerTags = {
     partidaId: activePartidaFilterId || null,
@@ -2790,11 +3018,12 @@ export function sendProjectChatMessage() {
 }
 
 export function deleteProjectChatMessage(msgId) {
+  const cleanTargetId = normalizeChatMsgId(msgId);
   const messages = loadProjectChatMessages();
-  const next = messages.filter(m => m.id !== msgId);
+  const next = messages.filter(m => normalizeChatMsgId(m.id) !== cleanTargetId);
   saveProjectChatMessages(next);
-  broadcastChatDelete(getActiveProjectId(), msgId);
-  if (moveMenuMessageId === msgId) moveMenuMessageId = null;
+  broadcastChatDelete(getActiveProjectId(), cleanTargetId);
+  if (normalizeChatMsgId(moveMenuMessageId) === cleanTargetId) moveMenuMessageId = null;
   renderProjectChatDock();
   triggerExternalChatRefresh();
 }
@@ -3060,7 +3289,13 @@ export function renderProjectChatDock() {
   const partidas = getAllCatalogConceptTags();
   const estimaciones = getProjectEstimacionesTags();
   const reportes = getProjectReportesTags();
+  if (isChatDockExpanded === true) {
+    markActiveProjectChatMessagesAsRead();
+  }
   const allMessages = loadProjectChatMessages();
+  const currentUser = getCurrentUser() || getLastKnownUser();
+  const myEmail = (currentUser?.email || '').toLowerCase().trim();
+  const unreadCount = allMessages.filter(m => !m.isRead && (m.authorEmail || '').toLowerCase().trim() !== myEmail).length;
 
   // Actualizar el botón del Chat/Bitácora en la barra vertical izquierda
   const sidebarChatBtn = document.getElementById('btn-sidebar-project-chat');
@@ -3079,12 +3314,12 @@ export function renderProjectChatDock() {
       : 'fa-solid fa-comments text-lg group-hover:text-blue-400 transition';
   }
   if (sidebarChatBadge) {
-    if (allMessages.length > 0) {
-      sidebarChatBadge.classList.remove('hidden');
-      sidebarChatBadge.textContent = allMessages.length > 99 ? '99+' : String(allMessages.length);
-    } else {
+    if (isChatDockExpanded === true || unreadCount === 0) {
       sidebarChatBadge.classList.add('hidden');
       sidebarChatBadge.textContent = '0';
+    } else if (unreadCount > 0) {
+      sidebarChatBadge.classList.remove('hidden');
+      sidebarChatBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
     }
   }
 
@@ -3099,7 +3334,6 @@ export function renderProjectChatDock() {
     ? 'no-print fixed bottom-0 right-5 z-50 w-[900px] max-w-[calc(100vw-1.5rem)] shadow-2xl rounded-t-2xl border border-b-0 border-slate-300 bg-white overflow-hidden transition-all duration-200 font-sans'
     : 'no-print fixed bottom-0 right-5 z-50 w-[470px] sm:w-[515px] max-w-[calc(100vw-1.5rem)] shadow-2xl rounded-t-xl border border-b-0 border-slate-300 bg-white overflow-hidden transition-all duration-200 font-sans';
 
-  const currentUser = getCurrentUser() || getLastKnownUser();
   if (!selectedAuthorHandle || !users.some(u => u.handle === selectedAuthorHandle)) {
     const matched = users.find(u => currentUser && u.email && currentUser.email && u.email.toLowerCase() === currentUser.email.toLowerCase()) || users[0];
     selectedAuthorHandle = matched ? matched.handle : '@Admin';
@@ -3449,7 +3683,7 @@ export function renderProjectChatDock() {
                   onclick="sendProjectChatMessage()"
                   class="px-3 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition shrink-0 shadow-xs flex items-center gap-1.5">
             <i class="fa-solid fa-paper-plane text-[10px]"></i>
-            <span>Asentar</span>
+            <span>Enviar</span>
           </button>
         </div>
       </div>
@@ -3511,4 +3745,10 @@ if (typeof window !== 'undefined') {
   };
   window.resetDefaultProjectChatWithFeedback = resetDefaultProjectChatWithFeedback;
   window.generateSeedProjectChatMessages = generateSeedProjectChatMessages;
+  window.hydrateNotificationStateFromCloud = hydrateNotificationStateFromCloud;
+  window.syncNotificationStateToCloud = syncNotificationStateToCloud;
+  setTimeout(() => { try { hydrateNotificationStateFromCloud(); } catch (_) {} }, 800);
+  window.addEventListener('cubikar:cloud-modules-hydrated', () => {
+    try { hydrateNotificationStateFromCloud(); } catch (_) {}
+  });
 }

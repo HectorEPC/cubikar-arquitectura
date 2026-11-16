@@ -3,7 +3,7 @@
 
 import { state } from '../../state/store.js';
 import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js';
-import { getFactorSobrecosto, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js';
 import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js';
 import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js';
 import { showToast } from '../../ui/notifications.js';
@@ -572,9 +572,9 @@ export function printTab1Catalog(options = {}) {
 
   const currencySymbol = getCurrencySymbol();
   const currencyCode = getCurrencyCode();
-  const factorSobrecosto = getFactorSobrecosto();
+  const factorSobrecosto = getEjecutivoCostPlusFactor();
   const applySobrecosto = state.settings.applySobrecosto;
-  const pctSobrecosto = ((factorSobrecosto - 1) * 100).toFixed(2);
+  let pctSobrecosto = ((factorSobrecosto - 1) * 100).toFixed(2);
   const companyName = (state.settings && state.settings.companyName) || 'Sistema de Control de Obra';
   const companyLogo = (state.settings && state.settings.companyLogo) || '';
   const projectName = (state.settings && state.settings.projectName) || 'Proyecto de Obra Base';
@@ -608,7 +608,10 @@ export function printTab1Catalog(options = {}) {
   // Totales generales
   const grandTotal = state.treeData.reduce((sum, root) => sum + calculateParentTotal(root), 0);
   const grandDirectTotal = state.treeData.reduce((sum, root) => sum + calculateParentDirectTotal(root), 0);
-  const sobrecostoMonto = grandTotal - grandDirectTotal;
+  const sobrecostoMonto = round2(grandTotal - grandDirectTotal);
+  if (grandDirectTotal > 0) {
+    pctSobrecosto = ((sobrecostoMonto / grandDirectTotal) * 100).toFixed(2);
+  }
 
   let conceptsWithQuotesCount = 0;
   let totalCotizacionesCount = 0;
@@ -749,13 +752,13 @@ export function printTab1Catalog(options = {}) {
       </div>
 
       <div class="summary-card">
-        ${applySobrecosto ? `
+        ${(applySobrecosto || sobrecostoMonto > 0.01) ? `
           <div class="summary-row">
-            <span style="color: #475569;">Costo Directo Total:</span>
+            <span style="color: #475569;">Costo Base Directo:</span>
             <span class="font-mono font-bold">${formatMoney(grandDirectTotal)}</span>
           </div>
           <div class="summary-row" style="background-color: #fffbeb; color: #92400e;">
-            <span>Factor Sobrecosto (+${pctSobrecosto}%):</span>
+            <span>Cost-Plus / Utilidad (+${pctSobrecosto}%):</span>
             <span class="font-mono font-bold">+${formatMoney(sobrecostoMonto)}</span>
           </div>
         ` : ''}
@@ -809,8 +812,8 @@ export function printApuMatrix() {
 
   const currencySymbol = getCurrencySymbol();
   const currencyCode = getCurrencyCode();
-  const factorSobrecosto = getFactorSobrecosto();
-  const applySobrecosto = state.settings.applySobrecosto;
+  const applySobrecosto = state.settings?.applySobrecosto !== false;
+  const factorSobrecosto = applySobrecosto ? getEjecutivoCostPlusFactor() : 1;
   const pctSobrecosto = ((factorSobrecosto - 1) * 100).toFixed(2);
   const companyName = (state.settings && state.settings.companyName) || 'Sistema de Control de Obra';
   const companyLogo = (state.settings && state.settings.companyLogo) || '';
@@ -905,8 +908,8 @@ export function printApuMatrix() {
     `);
   });
 
-  const sobrecostoMonto = applySobrecosto ? round2(totalCostoDirecto * (factorSobrecosto - 1)) : 0;
-  const precioUnitarioFinal = applySobrecosto ? round2(totalCostoDirecto * factorSobrecosto) : totalCostoDirecto;
+  const precioUnitarioFinal = round2(totalCostoDirecto * factorSobrecosto);
+  const sobrecostoMonto = round2(precioUnitarioFinal - totalCostoDirecto);
   const importeTotalPresupuesto = round2(conceptoCantidad * precioUnitarioFinal);
 
   // -----------------------------------------------------------
@@ -914,7 +917,7 @@ export function printApuMatrix() {
   // -----------------------------------------------------------
   let totalImporteObra = 0;
   const insumosUnitariosRows = insumos.map(ins => {
-    const cantUnit = round2(ins.cantidad || 0);
+    const cantUnit = round5(Number(ins.cantidad) || 0);
     const costoUnit = round2(ins.costoUnitario || 0);
     const cantidadTotalObra = round2(cantUnit * conceptoCantidad);
     const importeObra = round2(cantidadTotalObra * costoUnit);
@@ -979,7 +982,7 @@ export function printApuMatrix() {
         <!-- Fila 3: Ubicación -->
         <div><strong>Ubicación:</strong> <span class="meta-tag font-medium" style="color: #334155; font-size: 7.5pt; padding: 1px 6px;">${escapeHtml(projectLocation || 'No especificada')}</span></div>
         <!-- Fila 4: Moneda de trabajo y Sobrecosto -->
-        <div><strong>Moneda de trabajo:</strong> <span class="meta-tag font-mono" style="font-size: 7.5pt; padding: 1px 6px;">${currencyCode} (${currencySymbol})</span> &nbsp;<strong>Factor Sobrecosto:</strong> ${applySobrecosto ? `<span class="meta-tag font-mono" style="background:#fef3c7; border-color:#fde68a; color:#92400e; font-size: 7.5pt; padding: 1px 6px;">+${pctSobrecosto}%</span>` : '<span class="meta-tag" style="font-size: 7.5pt; padding: 1px 6px;">Costo Directo</span>'}</div>
+        <div><strong>Moneda de trabajo:</strong> <span class="meta-tag font-mono" style="font-size: 7.5pt; padding: 1px 6px;">${currencyCode} (${currencySymbol})</span> &nbsp;<strong>Factor Cost-Plus:</strong> ${(applySobrecosto || sobrecostoMonto > 0.01) ? `<span class="meta-tag font-mono" style="background:#fef3c7; border-color:#fde68a; color:#92400e; font-size: 7.5pt; padding: 1px 6px;">+${pctSobrecosto}%</span>` : '<span class="meta-tag" style="font-size: 7.5pt; padding: 1px 6px;">Costo Directo</span>'}</div>
       </div>
     </div>
 
@@ -1041,9 +1044,9 @@ export function printApuMatrix() {
           <span style="color: #475569;">Costo Directo (C.D.):</span>
           <span class="font-mono font-bold">${formatMoney(totalCostoDirecto)}</span>
         </div>
-        ${applySobrecosto ? `
+        ${(applySobrecosto || sobrecostoMonto > 0.01) ? `
           <div class="summary-row" style="background-color: #fffbeb; color: #92400e;">
-            <span>Sobrecosto (+${pctSobrecosto}%):</span>
+            <span>Cost-Plus / Utilidad (+${pctSobrecosto}%):</span>
             <span class="font-mono font-bold">+${formatMoney(sobrecostoMonto)}</span>
           </div>
         ` : ''}

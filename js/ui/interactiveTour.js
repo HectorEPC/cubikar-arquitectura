@@ -287,51 +287,51 @@ export const TOUR_DEFINITIONS = {
     ]
   },
 
-  'compras': {
-    id: 'compras',
-    title: 'Tour • Compras y ERP Financiero',
+  'seguimiento': {
+    id: 'seguimiento',
+    title: 'Tour • Seguimiento Financiero y Egresos',
     steps: [
       {
-        tab: 'compras',
-        target: '#tab-btn-compras',
-        fallbackTarget: '#view-compras',
+        tab: 'seguimiento',
+        target: '#tab-btn-seguimiento',
+        fallbackTarget: '#view-seguimiento',
         moduleBadge: '1. Tablero Financiero',
         title: 'Presupuesto vs. Gasto Real',
-        content: 'Indicadores en tiempo real del presupuesto contratado, egresos acumulados, cuentas por pagar y saldo de obra.',
+        content: 'Indicadores en tiempo real del presupuesto contratado, egresos acumulados, pagos a especialistas y utilidad real del despacho.',
         position: 'bottom'
       },
       {
-        tab: 'compras',
-        target: '#view-compras',
-        fallbackTarget: '#tab-btn-compras',
-        moduleBadge: '2. Registro de Compras',
-        title: 'Captura de Facturas y Egresos',
-        content: 'Registra compras con desglose de IVA, clasifícalas por rubro y adjunta comprobantes o facturas PDF respaldadas en la nube.',
+        tab: 'seguimiento',
+        target: '#view-seguimiento',
+        fallbackTarget: '#tab-btn-seguimiento',
+        moduleBadge: '2. Registro de Egresos',
+        title: 'Captura de Compras y Honorarios',
+        content: 'Registra egresos con desglose de impuestos, clasifícalos por partida y adjunta comprobantes o facturas PDF respaldadas en la nube.',
         position: 'top'
       }
     ]
   },
 
-  'bitacora': {
-    id: 'bitacora',
-    title: 'Tour • Bitácora Legal de Obra',
+  'estimaciones': {
+    id: 'estimaciones',
+    title: 'Tour • Estimaciones y Cobro',
     steps: [
       {
-        tab: 'bitacora',
-        target: '#tab-btn-bitacora',
-        fallbackTarget: '#view-bitacora',
-        moduleBadge: '1. Libro de Bitácora',
-        title: 'Notas Oficiales con Folio Inmutable',
-        content: 'Genera notas oficiales foliadas correlativamente (#001, #002) conforme a normativa de obra pública y privada.',
+        tab: 'estimaciones',
+        target: '#tab-btn-estimaciones',
+        fallbackTarget: '#view-estimaciones',
+        moduleBadge: '1. Carátula de Cobro',
+        title: 'Control de Estimaciones y Avances',
+        content: 'Genera cortes periódicos de cobro de honorarios o avance de proyecto, controla amortización de anticipos y descarga reportes PDF.',
         position: 'bottom'
       },
       {
-        tab: 'bitacora',
-        target: '#view-bitacora',
-        fallbackTarget: '#tab-btn-bitacora',
-        moduleBadge: '2. Firmas y Sellado',
-        title: 'Firma Digital y Hash de Integridad',
-        content: 'Firma en panel táctil y sella la nota para congelarla con un Hash criptográfico SHA que certifica su inviolabilidad.',
+        tab: 'estimaciones',
+        target: '#view-estimaciones',
+        fallbackTarget: '#tab-btn-estimaciones',
+        moduleBadge: '2. Subcontratos y Pagos',
+        title: 'Pagos a Especialistas',
+        content: 'Administra anticipos, pagos parciales y liquidación de saldo pendiente para tus colaboradores y especialistas externos.',
         position: 'top'
       }
     ]
@@ -376,7 +376,7 @@ export function resetTourDismissedStatus() {
 
 /**
  * Inicia el Tour Guiado interactivo
- * @param {string} tourId - 'master' (15 módulos) | 'portal' | 'compras' | 'bitacora'
+ * @param {string} tourId - 'master' (17 módulos) | 'portal' | 'seguimiento' | 'estimaciones'
  * @param {boolean} forceStart - Si es true, inicia aunque haya sido saltado previamente
  * @param {number} initialStepIndex - Índice del paso en el que debe iniciar o reanudarse
  */

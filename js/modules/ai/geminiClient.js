@@ -5,7 +5,7 @@ import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js';
 import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js';
-import { round2, getFactorSobrecosto } from '../../core/calculations.js';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js';
 import { round5 } from '../../core/formatters.js';
 
 // Extractor robusto de JSON para respuestas de Gemini
@@ -44,9 +44,9 @@ export async function testGeminiConnection() {
     return;
   }
 
-  showToast('Probando Google Search Grounding con Gemini 3.8 Flash...', 'info');
+  showToast('Probando Google Search Grounding con Gemini 2.5 Flash...', 'info');
 
-  const testModels = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const testModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
   let testSuccess = false;
   let testErr = '';
 
@@ -173,9 +173,9 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
     node.googleSources = data.googleSources || [];
     node.aiTips = data.sugerencias || '';
 
-    // Recalcular costo directo y precio unitario con factor sobrecosto
+    // Recalcular costo directo y precio unitario con modelo Cost-Plus
     const totalCD = round2(node.insumos.reduce((acc, ins) => acc + (round5(ins.cantidad || 0) * round2(ins.costoUnitario || 0)), 0));
-    const factorSobrecosto = getFactorSobrecosto();
+    const factorSobrecosto = getEjecutivoCostPlusFactor();
     const totalPU = round2(totalCD * factorSobrecosto);
 
     node.costoDirecto = totalCD;
@@ -333,11 +333,11 @@ Instrucciones prioritarias con Google Search:
 \`\`\``;
 
   const attempts = [
-    { model: 'gemini-3.8-flash', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.5-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-3.8-flash', tools: null },
-    { model: 'gemini-1.5-flash', tools: [{ google_search: {} }] },
-    { model: 'gemini-1.5-flash', tools: [{ googleSearch: {} }] }
+    { model: 'gemini-2.5-flash', tools: null },
+    { model: 'gemini-2.0-flash', tools: [{ googleSearch: {} }] },
+    { model: 'gemini-1.5-flash', tools: [{ googleSearch: {} }] },
+    { model: 'gemini-1.5-flash', tools: null }
   ];
 
   let lastError = '';
@@ -415,9 +415,9 @@ Instrucciones prioritarias con Google Search:
           };
         });
 
-        // Calcular costo directo y precio unitario con factor de sobrecosto
+        // Calcular costo directo y precio unitario con modelo Cost-Plus
         const totalCD = round2(node.insumos.reduce((acc, ins) => acc + (ins.cantidad * ins.costoUnitario), 0));
-        const factorSobrecosto = getFactorSobrecosto();
+        const factorSobrecosto = getEjecutivoCostPlusFactor();
         const totalPU = round2(totalCD * factorSobrecosto);
 
         node.costoDirecto = totalCD;

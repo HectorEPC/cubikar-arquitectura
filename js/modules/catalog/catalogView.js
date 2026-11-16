@@ -258,13 +258,13 @@ export function renderTAB1() {
         <td class="p-1 text-center align-top pt-2">
           <div class="relative inline-flex items-center justify-center">
             ${isLevel1 ? `
-              <label class="cursor-pointer flex items-center justify-center m-0 p-0" title="${node.color ? 'Color propio: ' + node.color + ' (clic para cambiar)' : 'Elegir color para esta partida Nivel 1'}">
-                <input type="color" value="${node.color || '#3b82f6'}" ${isCatLocked ? 'disabled' : ''}
-                       onchange="updateNodeColor('${node.id}', this.value, event)" 
+              <label class="cursor-pointer flex items-center justify-center m-0 p-0" title="${escapeCatalogHtml(node.color ? 'Color propio: ' + node.color + ' (clic para cambiar)' : 'Elegir color para esta partida Nivel 1')}">
+                <input type="color" value="${escapeCatalogHtml(node.color || '#3b82f6')}" ${isCatLocked ? 'disabled' : ''}
+                       onchange="updateNodeColor('${escapeCatalogHtml(node.id)}', this.value, event)" 
                        class="color-picker-dot w-4 h-4 rounded-full cursor-pointer border ${node.color ? 'border-slate-500 ring-1 ring-slate-400' : 'border-slate-300 opacity-30 hover:opacity-100'}">
               </label>
               ${node.color && !isCatLocked ? `
-                <button type="button" onclick="clearNodeColor('${node.id}', event)" 
+                <button type="button" onclick="clearNodeColor('${escapeCatalogHtml(node.id)}', event)" 
                         title="Quitar color propio" 
                         class="absolute -top-1.5 -right-1.5 bg-white hover:bg-red-600 hover:text-white text-slate-500 rounded-full w-3.5 h-3.5 flex items-center justify-center border border-slate-300 text-[7px] shadow-xs transition leading-none">
                   <i class="fa-solid fa-xmark"></i>
@@ -274,20 +274,20 @@ export function renderTAB1() {
           </div>
         </td>
         <td class="p-1.5 text-center align-top pt-2">
-          <input type="checkbox" ${node.selected ? 'checked' : ''} ${isCatLocked ? 'disabled' : ''} onchange="toggleSelectNode('${node.id}', this.checked, event)" class="rounded text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+          <input type="checkbox" ${node.selected ? 'checked' : ''} ${isCatLocked ? 'disabled' : ''} onchange="toggleSelectNode('${escapeCatalogHtml(node.id)}', this.checked, event)" class="rounded text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
         </td>
         <td class="p-1.5 text-center font-sans ${isLevel1 ? 'font-bold text-slate-700' : 'text-slate-400'} text-[10px] align-top pt-2">${level}</td>
-        <td class="p-1.5 ${isLevel1 ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'} align-top pt-2">${node.clave}</td>
+        <td class="p-1.5 ${isLevel1 ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'} align-top pt-2">${escapeCatalogHtml(node.clave)}</td>
         <td class="p-1.5 align-top text-justify">
           <div class="flex items-start" style="padding-left: ${paddingIndent}px">
             ${isParent ? `
-              <button onclick="toggleExpand('${node.id}', event)" class="mr-1 ${isLevel1 ? 'text-slate-700 font-bold' : 'text-slate-500'} hover:text-slate-900 w-3 text-center shrink-0 mt-1">
+              <button onclick="toggleExpand('${escapeCatalogHtml(node.id)}', event)" class="mr-1 ${isLevel1 ? 'text-slate-700 font-bold' : 'text-slate-500'} hover:text-slate-900 w-3 text-center shrink-0 mt-1">
                 <i class="fa-solid fa-chevron-${node.expanded ? 'down' : 'right'} text-[9px]"></i>
               </button>
             ` : '<span class="w-4 inline-block shrink-0"></span>'}
             <div class="flex-1 min-w-0">
-              <textarea ${isCatLocked ? 'disabled readonly' : ''} onchange="updateNode('${node.id}', 'descripcion', this.value)" 
-                        class="desc-input w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded text-xs font-sans ${isLevel1 ? 'font-bold text-slate-900' : 'text-slate-700'} text-justify leading-snug break-words whitespace-normal disabled:cursor-default">${node.descripcion || ''}</textarea>
+              <textarea ${isCatLocked ? 'disabled readonly' : ''} onchange="updateNode('${escapeCatalogHtml(node.id)}', 'descripcion', this.value)" 
+                        class="desc-input w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded text-xs font-sans ${isLevel1 ? 'font-bold text-slate-900' : 'text-slate-700'} text-justify leading-snug break-words whitespace-normal disabled:cursor-default">${escapeCatalogHtml(node.descripcion || '')}</textarea>
               
               ${renderConceptQuoteBadgesHtml(quoteStatus, isParent)}
             </div>
@@ -296,7 +296,7 @@ export function renderTAB1() {
         </td>
         <td class="p-1.5 text-right align-top pt-2">
           ${!isParent ? `
-            <input type="number" step="0.01" ${isCatLocked ? 'disabled readonly' : ''} value="${Number(node.cantidad || 0).toFixed(2)}" onchange="updateNode('${node.id}', 'cantidad', parseFloat(this.value) || 0)" 
+            <input type="number" step="0.01" ${isCatLocked ? 'disabled readonly' : ''} value="${Number(node.cantidad || 0).toFixed(2)}" onchange="updateNode('${escapeCatalogHtml(node.id)}', 'cantidad', parseFloat(this.value) || 0)" 
                    class="qty-input w-16 text-right bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white py-0.5 rounded text-xs font-mono ${isLevel1 ? 'font-bold text-slate-900' : ''} disabled:cursor-default">
           ` : `<span class="${isLevel1 ? 'font-bold text-slate-600' : 'text-slate-400'} font-mono">${formatQty(node.cantidad)}</span>`}
         </td>
@@ -304,7 +304,7 @@ export function renderTAB1() {
           ${isParent ? `
             <span class="${isLevel1 ? 'font-bold text-slate-800' : 'text-slate-600 font-medium'} text-xs font-mono">lote</span>
           ` : `
-            <input type="text" ${isCatLocked ? 'disabled readonly' : ''} value="${node.unidad || 'pza'}" onchange="updateNode('${node.id}', 'unidad', this.value)" 
+            <input type="text" ${isCatLocked ? 'disabled readonly' : ''} value="${escapeCatalogHtml(node.unidad || 'pza')}" onchange="updateNode('${escapeCatalogHtml(node.id)}', 'unidad', this.value)" 
                    class="w-10 text-center bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white py-0.5 rounded text-xs ${isLevel1 ? 'font-bold text-slate-900' : ''} disabled:cursor-default">
           `}
         </td>
@@ -336,7 +336,7 @@ export function renderTAB1() {
                   `;
                 }
               })()}
-              <button type="button" onclick="repartirEquitativamente('${node.id}', event)" ${isCatLocked ? 'disabled' : ''}
+              <button type="button" onclick="repartirEquitativamente('${escapeCatalogHtml(node.id)}', event)" ${isCatLocked ? 'disabled' : ''}
                       class="no-print text-[9px] bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-700 border border-slate-300 hover:border-indigo-600 px-1.5 py-0.5 rounded transition cursor-pointer flex items-center gap-0.5 font-sans font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                       title="Dividir 100% equitativamente entre los ${node.children.length} subconceptos">
                 <i class="fa-solid fa-divide text-[8px]"></i>
@@ -347,7 +347,7 @@ export function renderTAB1() {
             <div class="flex items-center justify-center">
               <input type="number" step="0.01" min="0" max="100" ${isCatLocked ? 'disabled readonly' : ''}
                      value="${Number(node.porcentaje_relativo || 0).toFixed(2)}"
-                     onchange="updateNode('${node.id}', 'porcentaje_relativo', parseFloat(this.value) || 0)"
+                     onchange="updateNode('${escapeCatalogHtml(node.id)}', 'porcentaje_relativo', parseFloat(this.value) || 0)"
                      class="pct-rel-input w-16 text-right bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded text-xs font-mono font-semibold text-slate-700 disabled:cursor-default"
                      title="Ponderación relativa respecto a su padre directo">
               <span class="text-slate-400 text-[10px] ml-0.5 font-mono">%</span>

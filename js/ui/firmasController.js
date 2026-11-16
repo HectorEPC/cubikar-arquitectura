@@ -3,8 +3,9 @@
 
 import { state, persistSettings } from '../state/store.js';
 import { showToast } from './notifications.js';
-import { getProjectById, getCurrentUser, getProjectMembers } from '../modules/portal/projectService.js';
+import { getProjectById, getCurrentUser, getProjectMembers, canCurrentUserEditProject } from '../modules/portal/projectService.js';
 import { getActiveProjectId } from '../config/constants.js';
+import { guardTabUnlocked } from './tabLockController.js';
 
 export const DEFAULT_FIRMAS_CONFIG = [
   {
@@ -198,7 +199,9 @@ function renderTeamQuickSelectors() {
       <div class="flex items-center gap-1 flex-wrap">
         ${people.slice(0, 4).map(p => `
           <button type="button" 
-                  onclick="quickAssignPersonToFirstEmptySlot('${escapeHtml(p.name)}', '${escapeHtml(p.role)}')"
+                  data-person-name="${escapeHtml(p.name)}"
+                  data-person-role="${escapeHtml(p.role)}"
+                  onclick="quickAssignPersonToFirstEmptySlot(this.dataset.personName || '', this.dataset.personRole || '')"
                   class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10.5px] font-semibold px-2 py-0.5 rounded-full transition cursor-pointer flex items-center gap-1 shadow-2xs"
                   title="Asignar a la primera firma vacía: ${escapeHtml(p.name)} (${escapeHtml(p.role)})">
             <i class="fa-solid fa-user-plus text-[9px]"></i>
@@ -214,6 +217,7 @@ function renderTeamQuickSelectors() {
  * Asigna una persona a la primera firma que tenga el nombre vacío o a la primera firma
  */
 export function quickAssignPersonToFirstEmptySlot(name, role = '') {
+  if (!guardFirmasEdit()) return;
   let targetIndex = temporaryFirmas.findIndex(f => !f.nombre || f.nombre.trim() === '');
   if (targetIndex === -1) {
     targetIndex = 0;
@@ -364,6 +368,7 @@ export function renderFirmasModalCards() {
  * Agrega un nuevo slot de firma
  */
 export function addFirmaSlotAction() {
+  if (!guardFirmasEdit()) return;
   const nextNum = temporaryFirmas.length + 1;
   const suggestedRol = PRESET_ROLES[Math.min(nextNum - 1, PRESET_ROLES.length - 1)] || 'REVISÓ';
 
@@ -380,10 +385,23 @@ export function addFirmaSlotAction() {
   renderFirmasLivePreview();
 }
 
+function guardFirmasEdit() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite editar las firmas de este proyecto.', 'warning');
+    return false;
+  }
+  const viewPres = document.getElementById('view-presupuesto') || document.getElementById('view-insumos');
+  if (viewPres && !viewPres.classList.contains('hidden')) {
+    return guardTabUnlocked('presupuesto');
+  }
+  return guardTabUnlocked('alcances');
+}
+
 /**
  * Elimina una firma por índice
  */
 export function removeFirmaSlotAction(index) {
+  if (!guardFirmasEdit()) return;
   if (temporaryFirmas.length <= 1) {
     showToast('Debe haber al menos 1 firma en el documento.', 'warning');
     return;
@@ -397,6 +415,10 @@ export function removeFirmaSlotAction(index) {
  * Alterna el estado activo de una firma
  */
 export function toggleFirmaSlotAction(index, isChecked) {
+  if (!guardFirmasEdit()) {
+    renderFirmasModalCards();
+    return;
+  }
   if (temporaryFirmas[index]) {
     temporaryFirmas[index].activo = Boolean(isChecked);
     renderFirmasModalCards();
@@ -408,6 +430,10 @@ export function toggleFirmaSlotAction(index, isChecked) {
  * Actualiza un campo individual de una firma
  */
 export function updateFirmaSlotField(index, field, value) {
+  if (!guardFirmasEdit()) {
+    renderFirmasModalCards();
+    return;
+  }
   if (temporaryFirmas[index]) {
     temporaryFirmas[index][field] = value;
     renderFirmasLivePreview();
@@ -418,6 +444,7 @@ export function updateFirmaSlotField(index, field, value) {
  * Restablece las firmas a los valores sugeridos por defecto
  */
 export function resetFirmasToDefaultAction() {
+  if (!guardFirmasEdit()) return;
   if (!confirm('¿Restablecer los bloques de firmas a los 3 cargos institucionales estándar?')) return;
   temporaryFirmas = DEFAULT_FIRMAS_CONFIG.map(f => ({ ...f }));
   renderFirmasModalCards();
@@ -467,6 +494,7 @@ export function renderFirmasLivePreview() {
  * Guarda las firmas en state.settings y las persiste
  */
 export function saveFirmasModalAction() {
+  if (!guardFirmasEdit()) return;
   if (!state.settings) state.settings = {};
   state.settings.firmas = temporaryFirmas.map(f => ({ ...f }));
   persistSettings();

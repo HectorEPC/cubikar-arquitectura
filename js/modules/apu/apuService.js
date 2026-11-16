@@ -5,6 +5,7 @@ import { findNodeById, getSelectedLeafConcepts } from '../catalog/treeService.js
 import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from './apuView.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { guardTabUnlocked } from '../../ui/tabLockController.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
 import { round2, round5 } from '../../core/formatters.js';
 
 // Filtro de botones en la tabla Matriz APU
@@ -57,6 +58,10 @@ export function filterInsumos(tipo) {
 
 // Agregar nuevo insumo a la matriz del concepto activo
 export function addInsumo() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite modificar matrices APU.', 'warning');
+    return;
+  }
   if (!guardTabUnlocked('cat')) return;
   if (!state.activeSelectedId) return;
   const node = findNodeById(state.treeData, state.activeSelectedId);
@@ -85,6 +90,12 @@ export function addInsumo() {
 
 // Actualizar un campo de un insumo (descripcion, tipo, unidad, cantidad, costoUnitario)
 export function updateInsumo(index, field, value) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite editar insumos APU.', 'warning');
+    const node = findNodeById(state.treeData, state.activeSelectedId);
+    if (node) renderAPUInsumos(node);
+    return;
+  }
   if (!guardTabUnlocked('cat')) {
     const node = findNodeById(state.treeData, state.activeSelectedId);
     if (node) renderAPUInsumos(node);
@@ -108,6 +119,10 @@ export function updateInsumo(index, field, value) {
 
 // Eliminar un insumo de la matriz
 export function removeInsumo(index) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite eliminar insumos APU.', 'warning');
+    return;
+  }
   if (!guardTabUnlocked('cat')) return;
   const node = findNodeById(state.treeData, state.activeSelectedId);
   if (node && node.insumos) {
@@ -129,6 +144,10 @@ export function removeInsumo(index) {
 
 // Limpiar todo el contenido de la matriz del concepto seleccionado
 export function limpiarMatrizConceptoSeleccionado() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite limpiar matrices APU.', 'warning');
+    return;
+  }
   if (!guardTabUnlocked('cat')) return;
   if (!state.activeSelectedId) {
     showToast('Selecciona primero un concepto en la tabla para limpiar su matriz.', 'warning');
@@ -179,6 +198,10 @@ export function limpiarMatrizConceptoSeleccionado() {
 
 // Limpiar matrices APU de todos los conceptos que tengan casilla seleccionada
 export function limpiarMatricesCasillas() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite limpiar matrices APU.', 'warning');
+    return;
+  }
   if (!guardTabUnlocked('cat')) return;
 
   let targets = getSelectedLeafConcepts ? getSelectedLeafConcepts() : [];

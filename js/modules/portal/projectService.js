@@ -13,7 +13,7 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261115_cubikar_arq_v14';
+} from '../../config/constants.js';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 import { defaultTreeData, defaultSettings } from '../../config/defaultData.js';
@@ -86,10 +86,41 @@ export const SAMPLE_LOGOS = {
   building: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%230f172a'/%3E%3Cpath d='M25,80 L25,35 L45,20 L45,80 Z' fill='%2338bdf8'/%3E%3Cpath d='M45,80 L45,35 L75,35 L75,80 Z' fill='%230284c7'/%3E%3C/svg%3E"
 };
 
-export const STORAGE_KEY_SUBSCRIPTION = 'adm_const_subscription';
+export const STORAGE_KEY_SUBSCRIPTION = 'adm_arq_subscription';
 export const STORAGE_KEY_REGISTERED_USERS = 'control_obra_registered_accounts_v1';
 export const STORAGE_KEY_FEATURED_PROFILES = 'control_obra_featured_profiles_v1';
 export const STORAGE_KEY_CLOSED_SESSIONS = 'control_obra_closed_sessions_v1';
+export const STORAGE_KEY_AUTH_SESSION_VERSION = 'cubikar_auth_session_version';
+export const CURRENT_AUTH_SESSION_VERSION = '2025-07-global-signout-v1';
+
+/**
+ * Cierra de inmediato cualquier sesión local heredada anterior a la revocación global
+ * para garantizar que ningún navegador o dispositivo mantenga sesiones abiertas sin autorización.
+ */
+export function enforceGlobalSessionRevocation() {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const ver = localStorage.getItem(STORAGE_KEY_AUTH_SESSION_VERSION);
+    if (ver !== CURRENT_AUTH_SESSION_VERSION) {
+      localStorage.removeItem(STORAGE_KEY_USER);
+      localStorage.removeItem(STORAGE_KEY_USER + '_last');
+      localStorage.removeItem(STORAGE_KEY_FEATURED_PROFILES);
+      localStorage.removeItem('sb-supabase-auth-token');
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('sb-') || k.includes('auth-token'))) {
+          localStorage.removeItem(k);
+        }
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(STORAGE_KEY_USER);
+      }
+      localStorage.setItem('control_obra_user_profile_dismissed', 'true');
+      localStorage.setItem('cubikar_last_signout_ts', String(Date.now()));
+      localStorage.setItem(STORAGE_KEY_AUTH_SESSION_VERSION, CURRENT_AUTH_SESSION_VERSION);
+    }
+  } catch (_) {}
+}
 
 export const SYSTEM_EXCLUDED_EMAILS = new Set([
   'admin.general@constructora.com',
@@ -173,7 +204,8 @@ export function saveRegisteredUserAccount(userObj) {
 
     let sub = null;
     if (typeof localStorage !== 'undefined') {
-      const subRaw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+      const subRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+        || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
       if (subRaw) {
         try {
           const parsed = JSON.parse(subRaw);
@@ -184,7 +216,7 @@ export function saveRegisteredUserAccount(userObj) {
     if (!sub) {
       sub = { planId: 'free', billingCycle: 'monthly', updatedAt: null };
       try {
-        localStorage.setItem(`adm_const_subscription_${cleanEmail}`, JSON.stringify(sub));
+        localStorage.setItem(`adm_arq_subscription_${cleanEmail}`, JSON.stringify(sub));
       } catch (_) {}
     }
     userObj.subscription = sub;
@@ -202,7 +234,8 @@ export function findRegisteredUserAccount(email) {
   const list = getRegisteredUsersList();
   const found = list.find(u => (u.email || '').toLowerCase().trim() === cleanEmail) || null;
   if (found && typeof localStorage !== 'undefined') {
-    const subRaw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+    const subRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+      || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
     if (subRaw) {
       try {
         const parsed = JSON.parse(subRaw);
@@ -237,12 +270,13 @@ export function getFeaturedProfilesList() {
         email: em,
         avatar: p.avatar || (AVATARS_BY_SEX && AVATARS_BY_SEX[p.sexo]) || (AVATARS_BY_SEX && AVATARS_BY_SEX['Masculino']) || 'assets/branding/cubikar_icon_transparent.png',
         sexo: p.sexo || 'Masculino',
-        role: p.role || 'Admin General',
-        roleLabel: p.roleLabel || 'Administrador',
+        role: p.role || 'usuario',
+        roleLabel: p.roleLabel || 'Usuario',
         dob: p.dob || '',
         subscription: (() => {
           if (typeof localStorage !== 'undefined') {
-            const raw = localStorage.getItem(`adm_const_subscription_${em}`);
+            const raw = localStorage.getItem(`adm_arq_subscription_${em}`)
+              || localStorage.getItem(`adm_const_subscription_${em}`);
             if (raw) {
               try {
                 const parsed = JSON.parse(raw);
@@ -256,13 +290,13 @@ export function getFeaturedProfilesList() {
       });
     };
 
-    // 1. Usuario actualmente activo en sesiÃ³n
+    // 1. Usuario actualmente activo en sesión
     const curr = getCurrentUser();
     if (curr) {
       addProfileCandidate(curr);
     }
 
-    // 2. Perfiles explÃ­citamente guardados en STORAGE_KEY_FEATURED_PROFILES
+    // 2. Perfiles explícitamente guardados en STORAGE_KEY_FEATURED_PROFILES
     const rawFeatured = localStorage.getItem(STORAGE_KEY_FEATURED_PROFILES);
     if (rawFeatured) {
       try {
@@ -306,12 +340,13 @@ export function addFeaturedProfile(user) {
       email: cleanEmail,
       avatar: user.avatar || (AVATARS_BY_SEX && AVATARS_BY_SEX[user.sexo]) || (AVATARS_BY_SEX && AVATARS_BY_SEX['Masculino']) || 'assets/branding/cubikar_icon_transparent.png',
       sexo: user.sexo || 'Masculino',
-      role: user.role || 'Admin General',
-      roleLabel: user.roleLabel || 'Administrador',
+      role: user.role || 'usuario',
+      roleLabel: user.roleLabel || 'Usuario',
       dob: user.dob || '',
       subscription: (() => {
         if (typeof localStorage !== 'undefined') {
-          const raw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+          const raw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+            || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
           if (raw) {
             try {
               const parsed = JSON.parse(raw);
@@ -385,7 +420,7 @@ export function purgeAllRegisteredAccountsAndUsers() {
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && (k.startsWith('control_obra_user') || k.startsWith('control_obra_featured') || k.startsWith('control_obra_closed') || k.startsWith('sb-') || k.includes('auth-token') || k.startsWith('adm_const_subscription'))) {
+      if (k && (k.startsWith('control_obra_user') || k.startsWith('control_obra_featured') || k.startsWith('control_obra_closed') || k.startsWith('sb-') || k.includes('auth-token') || k.startsWith('adm_arq_subscription') || k.startsWith('adm_const_subscription'))) {
         keysToRemove.push(k);
       }
     }
@@ -396,7 +431,7 @@ export function purgeAllRegisteredAccountsAndUsers() {
 }
 
 // ==========================================
-// ELIMINACIÃ“N DEFINITIVA DE CUENTA Y ARCHIVOS
+// ELIMINACIÓN DEFINITIVA DE CUENTA Y ARCHIVOS
 // ==========================================
 export function deleteUserAccountAndData(email) {
   if (!email) return false;
@@ -422,7 +457,7 @@ export function deleteUserAccountAndData(email) {
       } catch (_) {}
     });
 
-    // 2. Guardar lista de proyectos restantes (excluyendo los del usuario y quitÃ¡ndolo de colaboradores de otros proyectos)
+    // 2. Guardar lista de proyectos restantes (excluyendo los del usuario y quitándolo de colaboradores de otros proyectos)
     const remainingProjects = allProjects.filter(p => {
       const oEmail = (p.ownerEmail || '').toLowerCase().trim();
       return oEmail !== cleanEmail;
@@ -468,12 +503,13 @@ export function deleteUserAccountAndData(email) {
       localStorage.setItem(STORAGE_KEY_CLOSED_SESSIONS, JSON.stringify(closed));
     } catch (_) {}
 
-    // 7. Limpiar suscripciones o datos locales especÃ­ficos del correo
+    // 7. Limpiar suscripciones o datos locales específicos del correo
     try {
+      localStorage.removeItem(`adm_arq_subscription_${cleanEmail}`);
       localStorage.removeItem(`adm_const_subscription_${cleanEmail}`);
     } catch (_) {}
 
-    // 8. Si es el usuario activo actual, limpiar sesiÃ³n activa y espacio de trabajo
+    // 8. Si es el usuario activo actual, limpiar sesión activa y espacio de trabajo
     const current = getCurrentUser();
     if (current && (current.email || '').toLowerCase().trim() === cleanEmail) {
       saveCurrentUser(null);
@@ -493,8 +529,22 @@ export function deleteUserAccountAndData(email) {
 // ==========================================
 // GESTIÓN DE USUARIO
 // ==========================================
-export function getCurrentUser() {
+let _simulatedUserView = null;
+
+export function setSimulatedUserView(simUser = null) {
+  _simulatedUserView = simUser ? { ...simUser, isSimulation: true } : null;
+}
+
+export function getSimulatedUserView() {
+  return _simulatedUserView;
+}
+
+export function getCurrentUser(ignoreSimulation = false) {
   try {
+    enforceGlobalSessionRevocation();
+    if (!ignoreSimulation && _simulatedUserView) {
+      return { ..._simulatedUserView };
+    }
     let raw = null;
     if (typeof sessionStorage !== 'undefined') {
       raw = sessionStorage.getItem(STORAGE_KEY_USER);
@@ -509,7 +559,8 @@ export function getCurrentUser() {
       const u = JSON.parse(raw);
       const cleanEmail = (u?.email || '').toLowerCase().trim();
       if (cleanEmail && typeof localStorage !== 'undefined') {
-        const subRaw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+        const subRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+          || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
         if (subRaw) {
           try {
             const parsed = JSON.parse(subRaw);
@@ -534,6 +585,7 @@ export function getCurrentUser() {
 // Retorna el usuario guardado en localStorage sin forzar ningún fallback inventado
 export function getSavedUserProfile() {
   try {
+    enforceGlobalSessionRevocation();
     const isDismissed = localStorage.getItem('control_obra_user_profile_dismissed');
     if (isDismissed === 'true') {
       return null;
@@ -543,7 +595,8 @@ export function getSavedUserProfile() {
       const u = JSON.parse(raw);
       const cleanEmail = (u?.email || '').toLowerCase().trim();
       if (cleanEmail && typeof localStorage !== 'undefined') {
-        const subRaw = localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
+        const subRaw = localStorage.getItem(`adm_arq_subscription_${cleanEmail}`)
+          || localStorage.getItem(`adm_const_subscription_${cleanEmail}`);
         if (subRaw) {
           try {
             const parsed = JSON.parse(subRaw);
@@ -567,24 +620,20 @@ export function getLastKnownUser() {
   if (saved) return saved;
 
   const fallback = {
-    name: 'Usuario',
-    email: 'admin.general@constructora.com',
+    name: 'Invitado',
+    email: '',
     avatar: '',
-    role: 'Admin General',
-    roleLabel: 'Administrador',
+    role: 'invitado',
+    roleLabel: 'Invitado',
     sexo: 'Masculino'
   };
-  try {
-    const cleanEmail = (fallback.email || '').toLowerCase().trim();
-    const subRaw = cleanEmail ? localStorage.getItem(`adm_const_subscription_${cleanEmail}`) : null;
-    if (subRaw) fallback.subscription = JSON.parse(subRaw);
-  } catch (e) {}
   return fallback;
 }
 
 export function saveCurrentUser(user, remember = null) {
   try {
     if (!user) {
+      _simulatedUserView = null;
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(STORAGE_KEY_USER);
       }
@@ -594,31 +643,33 @@ export function saveCurrentUser(user, remember = null) {
     } else {
       try {
         localStorage.removeItem('control_obra_user_profile_dismissed');
+        localStorage.setItem(STORAGE_KEY_AUTH_SESSION_VERSION, CURRENT_AUTH_SESSION_VERSION);
       } catch (e) {}
       const cleanUserEmail = (user?.email || '').toLowerCase().trim();
 
-      // Sincronizar siempre con la suscripciÃ³n aislada del usuario
+      // Sincronizar siempre con la suscripción aislada de ADM_ARQ del usuario
       if (cleanUserEmail && typeof localStorage !== 'undefined') {
-        const subRaw = localStorage.getItem(`adm_const_subscription_${cleanUserEmail}`);
+        const subRaw = localStorage.getItem(`adm_arq_subscription_${cleanUserEmail}`)
+          || localStorage.getItem(`adm_const_subscription_${cleanUserEmail}`);
         if (subRaw) {
           try {
             const parsedSub = JSON.parse(subRaw);
             if (parsedSub?.planId) {
               if (user.subscription && user.subscription.updatedAt && parsedSub.updatedAt && new Date(user.subscription.updatedAt) > new Date(parsedSub.updatedAt)) {
-                localStorage.setItem(`adm_const_subscription_${cleanUserEmail}`, JSON.stringify(user.subscription));
+                localStorage.setItem(`adm_arq_subscription_${cleanUserEmail}`, JSON.stringify(user.subscription));
               } else {
                 user.subscription = parsedSub;
               }
             }
           } catch (_) {}
         } else {
-          // Si el usuario no tiene suscripciÃ³n previa, inicia en gratuita
+          // Si el usuario no tiene suscripción previa, inicia en gratuita
           if (user.subscription && user.subscription.planId && user.subscription.planId !== 'free' && user.subscription.updatedAt) {
-            localStorage.setItem(`adm_const_subscription_${cleanUserEmail}`, JSON.stringify(user.subscription));
+            localStorage.setItem(`adm_arq_subscription_${cleanUserEmail}`, JSON.stringify(user.subscription));
           } else {
             const initialFree = { planId: 'free', billingCycle: 'monthly', updatedAt: null };
             user.subscription = initialFree;
-            localStorage.setItem(`adm_const_subscription_${cleanUserEmail}`, JSON.stringify(initialFree));
+            localStorage.setItem(`adm_arq_subscription_${cleanUserEmail}`, JSON.stringify(initialFree));
           }
         }
       }
@@ -1240,6 +1291,9 @@ export function createNewProject(params) {
 
 // Duplicar proyecto
 export function duplicateProject(projectId) {
+  const check = canUserCreateProject();
+  if (!check.allowed) return null;
+
   const orig = getProjectById(projectId);
   if (!orig) return null;
 
@@ -1257,6 +1311,20 @@ export function duplicateProject(projectId) {
   copySettings.projectName = orig.projectName + ' (Copia)';
 
   const copyTree = JSON.parse(JSON.stringify(origTree));
+  const stripCloudUuids = (nodes) => {
+    if (!Array.isArray(nodes)) return;
+    nodes.forEach(n => {
+      if (!n || typeof n !== 'object') return;
+      delete n.uuid;
+      if (Array.isArray(n.insumos)) {
+        n.insumos.forEach(ins => {
+          if (ins && typeof ins === 'object') delete ins.uuid;
+        });
+      }
+      if (Array.isArray(n.children)) stripCloudUuids(n.children);
+    });
+  };
+  stripCloudUuids(copyTree);
 
   const newCreatedAt = new Date().toISOString().slice(0, 10);
   copySettings.createdAt = newCreatedAt;
@@ -1271,6 +1339,14 @@ export function duplicateProject(projectId) {
       viewMode: 'gantt',
       selectedPartida: 'all'
     }));
+    const origCalWork = localStorage.getItem(`calendario_workdays_${projectId}`);
+    if (origCalWork) {
+      localStorage.setItem(`calendario_workdays_${newId}`, origCalWork);
+    }
+    const origExpenses = localStorage.getItem(`expenses_control_${projectId}`);
+    if (origExpenses) {
+      localStorage.setItem(`expenses_control_${newId}`, origExpenses);
+    }
     const origEst = localStorage.getItem(`estimaciones_data_${projectId}`);
     if (origEst) {
       localStorage.setItem(`estimaciones_data_${newId}`, origEst);
@@ -1279,6 +1355,8 @@ export function duplicateProject(projectId) {
 
   const newProj = Object.assign({}, orig, {
     id: newId,
+    cloudId: null,
+    isCloudSynced: false,
     projectName: copySettings.projectName,
     members: (orig.members || []).map(m => Object.assign({}, m)),
     createdAt: newCreatedAt
@@ -1392,6 +1470,16 @@ export function updateProjectMemberRole(projectId, memberId, newRole) {
   if (mem) {
     mem.role = newRole;
     saveProjectsList(list);
+    try {
+      const targetCloudId = proj.cloudId || proj.id;
+      if (typeof window !== 'undefined' && mem.email) {
+        if (typeof window.updateCollaboratorRoleInCloud === 'function') {
+          window.updateCollaboratorRoleInCloud(targetCloudId, mem.email, newRole);
+        } else if (typeof window.addCollaboratorToCloud === 'function') {
+          window.addCollaboratorToCloud(targetCloudId, mem.email, newRole, mem.status === 'pending' ? 'pending' : 'accepted');
+        }
+      }
+    } catch (_) {}
     return true;
   }
   return false;
@@ -1407,6 +1495,12 @@ export function updateProjectMemberTabs(projectId, memberId, allowedTabs) {
   if (mem) {
     mem.allowedTabs = Array.isArray(allowedTabs) ? allowedTabs : [];
     saveProjectsList(list);
+    try {
+      const targetCloudId = proj.cloudId || proj.id;
+      if (typeof window !== 'undefined' && typeof window.syncProjectMemberTabsToCloud === 'function' && mem.email) {
+        window.syncProjectMemberTabsToCloud(targetCloudId, mem.email, mem.allowedTabs);
+      }
+    } catch (_) {}
     return true;
   }
   return false;
@@ -1419,6 +1513,7 @@ export function setTabAssignedMembers(projectId, tabId, memberIds) {
   if (!proj || !Array.isArray(proj.members)) return false;
 
   const idSet = new Set(memberIds);
+  const tabsMap = {};
   proj.members.forEach(m => {
     if (!Array.isArray(m.allowedTabs)) {
       m.allowedTabs = ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'];
@@ -1430,9 +1525,18 @@ export function setTabAssignedMembers(projectId, tabId, memberIds) {
     } else {
       m.allowedTabs = m.allowedTabs.filter(t => t !== tabId);
     }
+    if (m.email) {
+      tabsMap[m.email.toLowerCase().trim()] = m.allowedTabs;
+    }
   });
 
   saveProjectsList(list);
+  try {
+    const targetCloudId = proj.cloudId || proj.id;
+    if (typeof window !== 'undefined' && typeof window.syncProjectMemberTabsToCloud === 'function') {
+      window.syncProjectMemberTabsToCloud(targetCloudId, tabsMap);
+    }
+  } catch (_) {}
   return true;
 }
 
@@ -1464,10 +1568,17 @@ export async function deleteProject(projectId) {
       localStorage.removeItem(getSettingsKey(pid));
       localStorage.removeItem(getStorageKey(pid));
       localStorage.removeItem(`estimaciones_data_${pid}`);
+      localStorage.removeItem(`expenses_control_${pid}`);
+      localStorage.removeItem(`calendario_cfg_${pid}`);
+      localStorage.removeItem(`calendario_workdays_${pid}`);
       localStorage.removeItem(`adm_arq_project_chat_${pid}`);
       localStorage.removeItem(`adm_const_project_chat_${pid}`);
       localStorage.removeItem(`adm_const_chat_${pid}`);
       localStorage.removeItem(`control_obra_chat_${pid}`);
+      localStorage.removeItem(`adm_arq_signatures_${pid}`);
+      localStorage.removeItem(`adm_arq_bitacora_${pid}`);
+      localStorage.removeItem(`adm_arq_expenses_${pid}`);
+      localStorage.removeItem(`adm_arq_suppliers_${pid}`);
       localStorage.removeItem(`adm_const_signatures_${pid}`);
       localStorage.removeItem(`adm_const_bitacora_${pid}`);
       localStorage.removeItem(`adm_const_expenses_${pid}`);
@@ -1505,24 +1616,33 @@ export async function deleteProject(projectId) {
     if (typeof setActiveProjectId === 'function') setActiveProjectId(null);
   }
 
-  // 3. Purgar del estado sincronizado del usuario en user_metadata (cubikar_cloud_state_v2)
+  // 3. Purgar del estado sincronizado del usuario en user_metadata (cubikar_cloud_state_v2) y persistir en Supabase Auth
   const user = getCurrentUser();
   const myEmail = (user?.email || '').toLowerCase().trim();
+  const collabEmails = Array.isArray(targetObj?.members)
+    ? targetObj.members.map(m => String(m?.email || '').toLowerCase().trim()).filter(Boolean)
+    : [];
   if (user && user.user_metadata?.cubikar_cloud_state_v2) {
     const cs = user.user_metadata.cubikar_cloud_state_v2;
     let modified = false;
-    if (Array.isArray(cs.ownedProjects)) {
-      const prevLen = cs.ownedProjects.length;
-      cs.ownedProjects = cs.ownedProjects.filter(p => p.id !== projectId && p.cloudId !== projectId && (!cloudId || (p.id !== cloudId && p.cloudId !== cloudId)));
-      if (cs.ownedProjects.length !== prevLen) modified = true;
+    if (Array.isArray(cs.ownedProjects) && cs.ownedProjects.length > 0) {
+      cs.ownedProjects = [];
+      modified = true;
     }
-    if (Array.isArray(cs.collaboratedProjects)) {
-      const prevLen = cs.collaboratedProjects.length;
-      cs.collaboratedProjects = cs.collaboratedProjects.filter(p => p.id !== projectId && p.cloudId !== projectId && (!cloudId || (p.id !== cloudId && p.cloudId !== cloudId)));
-      if (cs.collaboratedProjects.length !== prevLen) modified = true;
+    if (Array.isArray(cs.collaboratedProjects) && cs.collaboratedProjects.length > 0) {
+      cs.collaboratedProjects = [];
+      modified = true;
     }
+    const delIds = getDeletedProjectsList();
+    cs.deletedProjectIds = Array.isArray(delIds) ? delIds.slice(-500) : [];
     if (modified) {
       saveCurrentUser(user);
+      try {
+        const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+        if (sb && typeof sb.auth?.updateUser === 'function') {
+          await sb.auth.updateUser({ data: { cubikar_cloud_state_v2: cs } });
+        }
+      } catch (_) {}
     }
   }
 
@@ -1540,22 +1660,29 @@ export async function deleteProject(projectId) {
   // 5. Registrar lápida (tombstone) y actualizar manifiesto de obras activas del anfitrión en Supabase
   try {
     if (typeof window !== 'undefined' && typeof window.recordDeletedProjectTombstone === 'function') {
-      await window.recordDeletedProjectTombstone(projectId, myEmail);
+      const tombOpts = { deletedByEmail: myEmail, collaboratorEmails: collabEmails };
+      await window.recordDeletedProjectTombstone(projectId, targetObj?.ownerEmail || myEmail, tombOpts);
       if (cloudId && cloudId !== projectId) {
-        await window.recordDeletedProjectTombstone(cloudId, myEmail);
+        await window.recordDeletedProjectTombstone(cloudId, targetObj?.ownerEmail || myEmail, tombOpts);
       }
     }
     if (myEmail && typeof window !== 'undefined' && typeof window.recordHostActiveManifest === 'function') {
-      const myActiveIds = list.filter(p => (p.ownerEmail || '').toLowerCase().trim() === myEmail).map(p => p.id);
+      const myActiveIds = list.filter(p => (p.ownerEmail || '').toLowerCase().trim() === myEmail).map(p => p.cloudId || p.id);
       await window.recordHostActiveManifest(myEmail, myActiveIds);
     }
   } catch (_) {}
 
-  // 6. Eliminar de la base de datos Supabase
+  // 6. Eliminar de la base de datos Supabase (con verificación de errores y lápida persistente)
   try {
-    await deleteProjectFromCloud(projectId);
-    if (cloudId && cloudId !== projectId) {
-      await deleteProjectFromCloud(cloudId);
+    const delRes = await deleteProjectFromCloud(cloudId || projectId, {
+      project: targetObj,
+      cloudId,
+      ownerEmail: targetObj?.ownerEmail || myEmail,
+      deletedByEmail: myEmail,
+      collaboratorEmails: collabEmails
+    });
+    if (delRes && delRes.success === false && delRes.error) {
+      console.warn('[deleteProject] Error al eliminar fila en Supabase:', delRes.error);
     }
   } catch (err) {
     console.warn('[deleteProject] Aviso al eliminar en Supabase:', err);
@@ -1911,8 +2038,21 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
 
     // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
     try {
-      if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-        window.addCollaboratorToCloud(targetProjectId, userEmail, targetInv.role || 'editar', 'accepted');
+      if (targetInv && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        const roleToUse = targetInv.role || targetPlanInv?.role || 'editar';
+        if (targetProjectId) {
+          window.addCollaboratorToCloud(targetProjectId, userEmail, roleToUse, 'accepted');
+        }
+        if (targetInv.ownerEmail) {
+          const hostEm = (targetInv.ownerEmail || '').toLowerCase().trim();
+          const hostProjects = list.filter(p => (p.ownerEmail || '').toLowerCase().trim() === hostEm);
+          hostProjects.forEach(hp => {
+            const cid = hp.cloudId || hp.id;
+            if (cid && cid !== targetProjectId && hp.id === targetProjectId) {
+              window.addCollaboratorToCloud(cid, userEmail, roleToUse, 'accepted');
+            }
+          });
+        }
       }
     } catch (_) {}
 
@@ -1982,8 +2122,17 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
 
     // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
     try {
-      if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-        window.addCollaboratorToCloud(targetProjectId, userEmail, targetInv.role || 'editar', 'accepted');
+      if (targetPlanInv && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        const planRole = targetPlanInv.role || 'editar';
+        if (targetProjectId) {
+          window.addCollaboratorToCloud(targetProjectId, userEmail, planRole, 'accepted');
+        }
+        hostProjects.forEach(hp => {
+          const cid = hp.cloudId || hp.id;
+          if (cid) {
+            window.addCollaboratorToCloud(cid, userEmail, planRole, 'accepted');
+          }
+        });
       }
     } catch (_) {}
 
@@ -2028,34 +2177,14 @@ export function rejectProjectInvitation(invitationId) {
   let planInvs = getStoredPlanInvitations();
   const list = getProjectsList();
   const targetId = String(invitationId || '').trim();
+  if (!targetId || targetId === 'all') {
+    return false;
+  }
 
   let rejected = false;
 
-  // 0. Si se solicitó purgar todas las invitaciones del usuario
-  if (targetId === 'all' || !targetId) {
-    if (userEmail) {
-      invs = invs.filter(i => (i.email || '').toLowerCase().trim() !== userEmail);
-      saveStoredInvitations(invs);
-      planInvs = planInvs.filter(pi => (pi.email || '').toLowerCase().trim() !== userEmail);
-      saveStoredPlanInvitations(planInvs);
-      list.forEach(p => {
-        if (Array.isArray(p.members)) {
-          p.members = p.members.filter(m => (m.email || '').toLowerCase().trim() !== userEmail || (m.status !== 'pending' && m.status !== 'rejected'));
-        }
-      });
-      saveProjectsList(list);
-      rejected = true;
-    }
-  }
-
-  // 1. Buscar en invitaciones formales de proyectos con coincidencia flexible
-  const initialLen = invs.length;
-  const matchedInvs = invs.filter(i => 
-    i.id === targetId || 
-    (userEmail && (i.email || '').toLowerCase().trim() === userEmail && i.id === targetId) ||
-    (i.projectId && (i.projectId === targetId || targetId.includes(i.projectId))) ||
-    (i.projectName && (i.projectName === targetId || targetId.includes(i.projectName)))
-  );
+  // 1. Buscar en invitaciones formales de proyectos únicamente por ID exacto
+  const matchedInvs = invs.filter(i => i.id === targetId);
 
   if (matchedInvs.length > 0) {
     const matchedIds = new Set(matchedInvs.map(m => m.id));
@@ -2064,22 +2193,27 @@ export function rejectProjectInvitation(invitationId) {
     rejected = true;
 
     matchedInvs.forEach(inv => {
+      const invGuestEmail = (inv.email || inv.inviteeEmail || userEmail || '').toLowerCase().trim();
       if (inv.projectId) {
         const proj = list.find(p => p.id === inv.projectId || p.cloudId === inv.projectId);
         if (proj && Array.isArray(proj.members)) {
-          proj.members = proj.members.filter(m => (m.email || '').toLowerCase().trim() !== (inv.email || userEmail));
+          proj.members = proj.members.filter(m => (m.email || '').toLowerCase().trim() !== invGuestEmail);
           saveProjectsList(list);
         }
+        const cloudProjId = proj?.cloudId || inv.projectId;
         try {
-          if (typeof window !== 'undefined' && typeof window.removeCollaboratorFromCloud === 'function') {
-            window.removeCollaboratorFromCloud(inv.projectId, inv.email || userEmail);
+          if (typeof window !== 'undefined' && typeof window.removeCollaboratorFromCloud === 'function' && invGuestEmail) {
+            window.removeCollaboratorFromCloud(cloudProjId, invGuestEmail);
+            if (inv.projectId !== cloudProjId) {
+              window.removeCollaboratorFromCloud(inv.projectId, invGuestEmail);
+            }
           }
         } catch (_) {}
         try {
           if (typeof window !== 'undefined' && typeof window.broadcastCollaboratorRemoved === 'function') {
-            window.broadcastCollaboratorRemoved(inv.projectId, inv.email || userEmail);
+            window.broadcastCollaboratorRemoved(inv.projectId, invGuestEmail);
           } else if (typeof window !== 'undefined' && window.CubikarRealtime?.broadcastCollaboratorRemoved) {
-            window.CubikarRealtime.broadcastCollaboratorRemoved(inv.projectId, inv.email || userEmail);
+            window.CubikarRealtime.broadcastCollaboratorRemoved(inv.projectId, invGuestEmail);
           }
         } catch (_) {}
       }
@@ -2091,11 +2225,11 @@ export function rejectProjectInvitation(invitationId) {
     });
   }
 
-  // 2. Buscar en invitaciones al plan
-  const planIdx = planInvs.findIndex(pi => 
-    pi.id === targetId || 
-    (typeof targetId === 'string' && (targetId.includes(pi.id) || targetId.endsWith(`-${pi.id}`))) ||
-    (userEmail && (pi.email || '').toLowerCase().trim() === userEmail && (pi.id === targetId || targetId.includes(pi.ownerEmail || '')))
+  // 2. Buscar en invitaciones al plan por ID exacto o prefijo estándar plan-inv-
+  const planIdx = planInvs.findIndex(pi =>
+    pi.id === targetId ||
+    targetId === `plan-inv-${pi.id}` ||
+    (typeof targetId === 'string' && targetId.startsWith('plan-inv-') && targetId.endsWith(`-${pi.id}`))
   );
   if (planIdx >= 0) {
     const pInv = planInvs[planIdx];
@@ -2104,16 +2238,22 @@ export function rejectProjectInvitation(invitationId) {
     rejected = true;
 
     const hostEmail = (pInv.ownerEmail || '').toLowerCase().trim();
+    const guestEmail = (pInv.email || pInv.inviteeEmail || userEmail || '').toLowerCase().trim();
     list.forEach(p => {
       if ((p.ownerEmail || '').toLowerCase().trim() === hostEmail && Array.isArray(p.members)) {
-        p.members = p.members.filter(m => (m.email || '').toLowerCase().trim() !== userEmail || m.status !== 'pending');
+        p.members = p.members.filter(m => (m.email || '').toLowerCase().trim() !== guestEmail || m.status !== 'pending');
+        try {
+          if (typeof window !== 'undefined' && typeof window.removeCollaboratorFromCloud === 'function' && guestEmail) {
+            window.removeCollaboratorFromCloud(p.cloudId || p.id, guestEmail);
+          }
+        } catch (_) {}
       }
     });
     saveProjectsList(list);
 
     try {
       if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastInvitationRejected === 'function') {
-        window.CubikarRealtime.broadcastInvitationRejected({ id: pInv.id, ownerEmail: hostEmail, email: userEmail }, user);
+        window.CubikarRealtime.broadcastInvitationRejected({ id: pInv.id, ownerEmail: hostEmail, email: guestEmail }, user);
       }
     } catch (e) {}
   }
@@ -2127,6 +2267,11 @@ export function rejectProjectInvitation(invitationId) {
           p.members.splice(memIdx, 1);
           saveProjectsList(list);
           rejected = true;
+          try {
+            if (typeof window !== 'undefined' && typeof window.removeCollaboratorFromCloud === 'function') {
+              window.removeCollaboratorFromCloud(p.cloudId || p.id, userEmail);
+            }
+          } catch (_) {}
         }
       }
     });
@@ -2360,8 +2505,9 @@ export function canUserCreateProject(user = null, targetScope = null) {
       if (myInv.role === 'editar') userHasEditorRole = true;
     }
 
-    // Administrador General siempre tiene permisos de edición
-    if (u.role === 'Admin General' || u.email === 'admin.general@constructora.com') {
+    // Solo el Administrador Maestro verificado tiene bypass global de creación sin rol en host
+    const isVerifiedMaster = uEmail === 'hepc.90@gmail.com';
+    if (isVerifiedMaster) {
       userHasEditorRole = true;
     }
 
@@ -2379,7 +2525,7 @@ export function canUserCreateProject(user = null, targetScope = null) {
     const hostLimits = getPlanLimits(hostPlanId);
     const hostProjectsCount = hostProjects.length;
 
-    if (hostProjectsCount >= hostLimits.maxProjects && u.role !== 'Admin General') {
+    if (hostProjectsCount >= hostLimits.maxProjects && !isVerifiedMaster) {
       return {
         allowed: false,
         reason: `El anfitrión (${hostName}) ha alcanzado el límite de ${hostLimits.maxProjects} proyectos activos para su Plan ${hostLimits.name}.`,
@@ -2403,8 +2549,8 @@ export function canUserCreateProject(user = null, targetScope = null) {
     };
   }
 
-  // Modo Proyectos Propios: Administrador General siempre puede sin límite
-  if (u.role === 'Admin General' || u.email === 'admin.general@constructora.com') {
+  // Modo Proyectos Propios: validar estrictamente contra la suscripción activa del usuario
+  if (uEmail === 'hepc.90@gmail.com') {
     return { allowed: true, planId: 'pro', maxProjects: Infinity, currentProjects: 0, isHostContext: false };
   }
 
@@ -2548,8 +2694,12 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
 
   const map = new Map();
 
-  // 1. Revisar obras donde el usuario es miembro activo aceptado
-  userProjects.forEach(p => {
+  // 1. Revisar obras activas (no eliminadas) donde el usuario es miembro activo/aceptado
+  const allProjects = Array.isArray(userProjects) ? userProjects : [];
+  allProjects.forEach(p => {
+    if (!p || isProjectMarkedDeleted(p.id) || (p.cloudId && isProjectMarkedDeleted(p.cloudId))) {
+      return;
+    }
     // Excluir obras de muestra predeterminadas
     if (p.isSample || p.id === 'proj-opus-casa-laura' || p.id === 'proj-default-01' || p.id === 'proj-demo-02' || (typeof p.id === 'string' && p.id.startsWith('proj-demo'))) {
       return;
@@ -2564,7 +2714,7 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
       const mem = p.members.find(m => {
         const mEmail = (m.email || '').toLowerCase().trim();
         const mStatus = (m.status || '').toLowerCase().trim();
-        return mEmail === uEmail && (mStatus === 'active' || mStatus === 'accepted');
+        return mEmail === uEmail && (mStatus === 'active' || mStatus === 'accepted' || !mStatus);
       });
       if (mem) {
         if (!map.has(oEmail)) {
@@ -2599,30 +2749,13 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
     }
   });
 
-  // 2. Revisar también si hay invitaciones aceptadas al plan de suscripción
+  // 2. Enriquecer roles con invitaciones aceptadas al plan de suscripción, pero SOLO para anfitriones con al menos 1 obra activa
   const planInvs = getStoredPlanInvitations();
   planInvs.forEach(pInv => {
     const oEmail = (pInv.ownerEmail || '').toLowerCase().trim();
     const guestEmail = (pInv.email || '').toLowerCase().trim();
     if (guestEmail === uEmail && oEmail && oEmail !== uEmail && !SYSTEM_EXCLUDED_EMAILS.has(oEmail) && pInv.status === 'accepted') {
-      const hostName = resolveCleanHostName(oEmail, pInv.ownerName, null, uEmail);
-      const planId = getUserPlanId(oEmail) || pInv.ownerPlanId || 'free';
-      const planLimits = getPlanLimits(planId);
-
-      if (!map.has(oEmail)) {
-        map.set(oEmail, {
-          email: oEmail,
-          name: hostName,
-          companyName: hostName,
-          planId: planId,
-          planName: planLimits.name,
-          maxProjects: planLimits.maxProjects,
-          maxMembers: planLimits.maxMembers,
-          count: 0,
-          isEditor: pInv.role === 'editar',
-          roles: new Set([pInv.role || 'editar'])
-        });
-      } else {
+      if (map.has(oEmail)) {
         const entry = map.get(oEmail);
         if (pInv.role === 'editar') entry.isEditor = true;
         entry.roles.add(pInv.role || 'editar');
@@ -2630,19 +2763,34 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
     }
   });
 
-  return Array.from(map.values()).map(inv => {
-    let myRoleDisplay = 'Leer';
-    if (inv.isEditor) {
-      myRoleDisplay = 'Editor';
-    } else if (inv.roles.has('escribir')) {
-      myRoleDisplay = 'Escribir';
-    }
-    return {
-      ...inv,
-      roles: Array.from(inv.roles),
-      myRoleDisplay
-    };
-  });
+  // Filtrar para devolver únicamente anfitriones con al menos 1 proyecto activo (no eliminado) donde el usuario es miembro activo/aceptado
+  return Array.from(map.entries())
+    .filter(([ownerKey, inv]) => {
+      if (!inv || inv.count <= 0) return false;
+      return allProjects.some(p => {
+        if (!p || isProjectMarkedDeleted(p.id) || (p.cloudId && isProjectMarkedDeleted(p.cloudId))) return false;
+        if (p.isSample || p.id === 'proj-opus-casa-laura' || p.id === 'proj-default-01' || p.id === 'proj-demo-02' || (typeof p.id === 'string' && p.id.startsWith('proj-demo'))) return false;
+        if ((p.ownerEmail || '').toLowerCase().trim() !== ownerKey) return false;
+        return Array.isArray(p.members) && p.members.some(m => {
+          const mEmail = (m?.email || '').toLowerCase().trim();
+          const status = (m?.status || '').toLowerCase().trim();
+          return mEmail === uEmail && (status === 'active' || status === 'accepted' || !status);
+        });
+      });
+    })
+    .map(([, inv]) => {
+      let myRoleDisplay = 'Leer';
+      if (inv.isEditor) {
+        myRoleDisplay = 'Editor';
+      } else if (inv.roles.has('escribir')) {
+        myRoleDisplay = 'Escribir';
+      }
+      return {
+        ...inv,
+        roles: Array.from(inv.roles),
+        myRoleDisplay
+      };
+    });
 }
 
 // Validar si el usuario puede invitar a colaboradores a un proyecto específico
@@ -2650,7 +2798,7 @@ export function canUserInviteToProject(projectId, user = null) {
   const u = user || getCurrentUser();
   if (!u || !u.email) return { allowed: false, reason: 'Debes iniciar sesión.' };
 
-  if (u.role === 'Admin General' || u.email === 'admin.general@constructora.com') {
+  if ((u.email || '').toLowerCase().trim() === 'hepc.90@gmail.com') {
     return { allowed: true, maxMembers: Infinity, currentMembers: 0 };
   }
 
@@ -2736,22 +2884,30 @@ export function getUserRoleInProject(projectId, user = null) {
 // Determinar si el usuario actual tiene permisos de edición (escritura/eliminación) en el proyecto
 export function canCurrentUserEditProject(projectId = null, user = null) {
   const u = user || getCurrentUser();
-  if (!u || !u.email) return true; // Operación local segura por defecto
+  const pId = projectId || (typeof getActiveProjectId === 'function' ? getActiveProjectId() : null);
+  const proj = pId ? getProjectById(pId) : null;
+
+  if (!u || !u.email) {
+    return !proj || !proj.ownerEmail;
+  }
+
+  if (!pId || !proj) {
+    return getProjectsList().length === 0;
+  }
 
   const uEmail = (u.email || '').toLowerCase().trim();
-  if (u.role === 'Admin General' || uEmail === 'admin.general@constructora.com' || uEmail === 'admin.general@arquitectura.com') {
+  const ownerEmail = (proj.ownerEmail || '').toLowerCase().trim();
+  if (!ownerEmail || ownerEmail === uEmail) {
     return true;
   }
 
-  const pId = projectId || (typeof getActiveProjectId === 'function' ? getActiveProjectId() : null);
-  if (!pId) return true;
-
   const role = getUserRoleInProject(pId, u);
-  if (!role || role === 'owner') return true;
+  if (!role) return false;
+  if (role === 'owner' || role === 'editar' || role === 'escribir') return true;
   const normalizedRole = String(role).toLowerCase().trim();
   if (normalizedRole === 'editar' || normalizedRole === 'escribir' || normalizedRole === 'editor' || normalizedRole === 'escritura') return true;
   if (normalizedRole === 'leer' || normalizedRole === 'lector' || normalizedRole === 'view' || normalizedRole === 'viewer') return false;
-  return true;
+  return false;
 }
 
 // ==========================================
@@ -2835,7 +2991,7 @@ export function canUserInviteToPlan(user = null) {
   const u = user || getCurrentUser();
   if (!u || !u.email) return { allowed: false, reason: 'Debes iniciar sesión para invitar usuarios a tu plan.' };
 
-  if (u.role === 'Admin General' || u.email === 'admin.general@constructora.com') {
+  if ((u.email || '').toLowerCase().trim() === 'hepc.90@gmail.com') {
     return {
       allowed: true,
       planId: 'pro',
@@ -2996,7 +3152,7 @@ export function removePlanCollaborator(collaboratorEmail, user = null) {
   ));
   saveStoredPlanInvitations(invs);
 
-  // Remover también de los proyectos del anfitrión
+  // Remover también de los proyectos del anfitrión y sincronizar en Supabase
   const allProjects = getProjectsList();
   let modified = false;
   allProjects.forEach(proj => {
@@ -3004,6 +3160,13 @@ export function removePlanCollaborator(collaboratorEmail, user = null) {
       const prevLen = proj.members.length;
       proj.members = proj.members.filter(m => (m.email || '').toLowerCase().trim() !== targetEmail);
       if (proj.members.length !== prevLen) modified = true;
+      try {
+        const cid = proj.cloudId || proj.id;
+        if (cid && typeof window !== 'undefined') {
+          window.removeCollaboratorFromCloud?.(cid, targetEmail);
+          window.broadcastCollaboratorRemoved?.(cid, targetEmail) || window.CubikarRealtime?.broadcastCollaboratorRemoved?.(cid, targetEmail);
+        }
+      } catch (_) {}
     }
   });
 
@@ -3047,7 +3210,7 @@ export function updatePlanCollaboratorRole(collaboratorEmail, newRole, user = nu
     saveStoredInvitations(projInvs);
   }
 
-  // 3. Actualizar en los miembros de todos los proyectos propiedad del dueño
+  // 3. Actualizar en los miembros de todos los proyectos propiedad del dueño y sincronizar en Supabase
   const allProjects = getProjectsList();
   let projectsModified = false;
   allProjects.forEach(proj => {
@@ -3056,6 +3219,16 @@ export function updatePlanCollaboratorRole(collaboratorEmail, newRole, user = nu
         if ((m.email || '').toLowerCase().trim() === targetEmail) {
           m.role = newRole;
           projectsModified = true;
+          try {
+            const cid = proj.cloudId || proj.id;
+            if (cid && typeof window !== 'undefined') {
+              if (typeof window.updateCollaboratorRoleInCloud === 'function') {
+                window.updateCollaboratorRoleInCloud(cid, targetEmail, newRole);
+              } else if (typeof window.addCollaboratorToCloud === 'function') {
+                window.addCollaboratorToCloud(cid, targetEmail, newRole, m.status === 'pending' ? 'pending' : 'accepted');
+              }
+            }
+          } catch (_) {}
         }
       });
     }

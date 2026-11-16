@@ -13,11 +13,13 @@ import { state, persistLocalData } from '../../state/store.js';
 import { saveState } from '../../state/history.js';
 import { showToast } from '../../ui/notifications.js';
 import { formatMoney, round2, round5 } from '../../core/formatters.js';
-import { getFactorSobrecosto } from '../../core/calculations.js';
+import { getEjecutivoCostPlusFactor } from '../../core/calculations.js';
 import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js';
 import { renderTAB1 } from '../catalog/catalogView.js';
 import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from '../apu/apuView.js';
 import { closeAiGeneratorModal } from '../../ui/modalController.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
 import {
   getReferenceDatabaseStats,
   listReferenceCatalogs,
@@ -96,6 +98,11 @@ export async function buildLocalGenerationContext(selectedCatalogIds = 'all') {
 
 // Generar matriz APU con catálogo local para conceptos seleccionados con casilla
 export async function generarMatrizCasillasLocal() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite generar matrices APU.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   let selected = getSelectedLeafConcepts();
   if (selected.length === 0 && state.activeSelectedId) {
     const active = findNodeById(state.treeData, state.activeSelectedId);
@@ -118,6 +125,11 @@ export async function generarMatrizCasillasLocal() {
 // Abrir modal para preguntar qué catálogos considerar al generar matriz APU
 // Si singleSelectedOnly es true, aplica ESTRICTAMENTE al concepto actualmente seleccionado en la pestaña Matriz
 export async function openLocalCatalogSelectorModal(singleSelectedOnly = false) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite generar matrices APU.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   let node = null;
   const isSingle = Boolean(singleSelectedOnly);
 
@@ -267,6 +279,11 @@ export function updateLocalCatalogSelectedCount() {
 
 // Confirmar selección y ejecutar generación para todos los conceptos seleccionados con casilla
 export async function confirmAndExecuteLocalGeneration() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite generar matrices APU.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   const checked = document.querySelectorAll('input[name="local-cat-choice"]:checked');
   if (checked.length === 0) {
     showToast('Selecciona al menos un catálogo para generar la matriz.', 'warning');
@@ -378,7 +395,7 @@ export async function generateSingleConceptLocalMatrix(node, catalogIds = 'all',
   const totalCD = matrixDirectCost(result.insumos);
   node.costoDirecto = totalCD;
 
-  const factor = getFactorSobrecosto();
+  const factor = getEjecutivoCostPlusFactor();
   node.precioUnitario = round2(totalCD * factor);
   node._generationMode = result.mode;
 
@@ -419,6 +436,11 @@ export async function generateSingleConceptLocalMatrix(node, catalogIds = 'all',
  * Generación de Matriz APU para el concepto activo en la pestaña matriz usando catálogo local.
  */
 export async function executeLocalGeneration(catalogIds = 'all') {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite generar matrices APU.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   const node = findNodeById(state.treeData, state.activeSelectedId);
   if (!node) {
     showToast('Selecciona primero un concepto en la tabla para generar su matriz.', 'warning');

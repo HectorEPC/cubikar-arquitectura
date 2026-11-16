@@ -13,6 +13,8 @@ import { saveReferenceCatalog, getReferenceDatabaseStats, canImportReferenceCata
 import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js';
 import { parseOpusOrNeodataFile } from './opusNeodataImporter.js';
 import { cleanMojibake, sanitizeCatalogNodes, readBlobAsTextSmart } from '../../core/textSanitizer.js';
+import { canCurrentUserEditProject } from '../portal/projectService.js';
+import { guardTabUnlocked } from '../../ui/tabLockController.js';
 
 let currentParsedData = null; // Almacena el resultado del parsing del archivo actual
 let currentWorkbook = null;
@@ -970,6 +972,11 @@ function displayParsedPreview(parsedData, fileName) {
 
 // Ejecutar importación final según la opción elegida por el usuario
 export async function executeImport() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite importar catálogos o presupuestos.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   if (!currentParsedData || !currentParsedData.items || currentParsedData.items.length === 0) {
     showToast('No hay datos para importar', 'warning');
     return;
@@ -1111,6 +1118,11 @@ export async function executeImport() {
 
 // Carga directa del proyecto autntico Casa Laura (Opus 2014) con sus 12 partidas y 94 conceptos exactos
 export function loadCasaLauraOpusDirectly() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite cargar el proyecto de muestra en esta obra.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   saveState();
   const rawCopy = JSON.parse(JSON.stringify(CASA_LAURA_PROJECT));
 
