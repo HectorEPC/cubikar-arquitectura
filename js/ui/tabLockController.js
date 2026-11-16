@@ -1,13 +1,13 @@
-﻿// js/ui/tabLockController.js
-// Controlador de Candado de Bloqueo por PestaÃ±a (Alcances, Presupuesto, Seguimiento, Calendario)
-// y por EstimaciÃ³n Individual en la pestaÃ±a Estimaciones.
-// Cuando estÃ¡ bloqueado, solo permite consultar e imprimir la informaciÃ³n (sin cambiar, mover ni editar).
+// js/ui/tabLockController.js
+// Controlador de Candado de Bloqueo por Pestaña (Alcances, Presupuesto, Seguimiento, Calendario)
+// y por Estimación Individual en la pestaña Estimaciones.
+// Cuando está bloqueado, solo permite consultar e imprimir la información (sin cambiar, mover ni editar).
 
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf3';
-import { showToast } from './notifications.js?v=20261116_cf3';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf3';
-import { isEstimacionLocked, toggleActiveEstimacionLockState, setEstimacionLocked } from '../modules/estimaciones/estimacionesModel.js?v=20261116_cf3';
-import { scheduleCronogramaCloudSync } from '../core/cloudModulesSyncService.js?v=20261116_cf3';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf4';
+import { showToast } from './notifications.js?v=20261116_cf4';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf4';
+import { isEstimacionLocked, toggleActiveEstimacionLockState, setEstimacionLocked } from '../modules/estimaciones/estimacionesModel.js?v=20261116_cf4';
+import { scheduleCronogramaCloudSync } from '../core/cloudModulesSyncService.js?v=20261116_cf4';
 
 const STORAGE_KEY_TAB_LOCKS_PREFIX = 'adm_arq_tab_locks_';
 
@@ -45,7 +45,7 @@ export function loadProjectTabLocks(projectId = null) {
       };
     }
   } catch (err) {
-    console.warn('Error al leer bloqueo de pestaÃ±as:', err);
+    console.warn('Error al leer bloqueo de pestañas:', err);
   }
   return { alcances: false, presupuesto: false, seguimiento: false, calendario: false };
 }
@@ -62,7 +62,7 @@ export function saveProjectTabLocks(locks, projectId = null) {
     scheduleCronogramaCloudSync(projectId);
     return clean;
   } catch (err) {
-    console.warn('Error al guardar bloqueo de pestaÃ±as:', err);
+    console.warn('Error al guardar bloqueo de pestañas:', err);
     return { alcances: false, presupuesto: false, seguimiento: false, calendario: false };
   }
 }
@@ -87,7 +87,7 @@ export function setTabLocked(tabKey, locked, { notify = true, rerender = true } 
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
   if (!canCurrentUserEditProject()) {
     if (notify) {
-      showToast('ðŸ”’ Modo solo lectura: no tienes permisos para bloquear o desbloquear pestaÃ±as.', 'warning');
+      showToast('🔒 Modo solo lectura: no tienes permisos para bloquear o desbloquear pestañas.', 'warning');
     }
     return isTabLocked(key);
   }
@@ -109,9 +109,9 @@ export function setTabLocked(tabKey, locked, { notify = true, rerender = true } 
   if (notify) {
     const label = TAB_LABELS[key] || key;
     if (isLocked) {
-      showToast(`ðŸ”’ ${label} bloqueada: modo solo consulta e impresiÃ³n`, 'warning');
+      showToast(`🔒 ${label} bloqueada: modo solo consulta e impresión`, 'warning');
     } else {
-      showToast(`ðŸ”“ ${label} desbloqueada: ediciÃ³n habilitada`, 'info');
+      showToast(`🔓 ${label} desbloqueada: edición habilitada`, 'info');
     }
   }
 
@@ -121,7 +121,7 @@ export function setTabLocked(tabKey, locked, { notify = true, rerender = true } 
 export function toggleTabLock(tabKey) {
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
   if (!canCurrentUserEditProject()) {
-    showToast('ðŸ”’ Modo solo lectura: no tienes permisos para bloquear o desbloquear pestaÃ±as.', 'warning');
+    showToast('🔒 Modo solo lectura: no tienes permisos para bloquear o desbloquear pestañas.', 'warning');
     return isTabLocked(key);
   }
   if (key === 'estimaciones') {
@@ -130,11 +130,11 @@ export function toggleTabLock(tabKey) {
       lockRenderCallback('estimaciones', locked);
     }
     applyTabLocksToDOM();
-    const estName = est?.nombre || 'EstimaciÃ³n';
+    const estName = est?.nombre || 'Estimación';
     if (locked) {
-      showToast(`ðŸ”’ ${estName} bloqueada: solo consulta e impresiÃ³n`, 'warning');
+      showToast(`🔒 ${estName} bloqueada: solo consulta e impresión`, 'warning');
     } else {
-      showToast(`ðŸ”“ ${estName} desbloqueada: ediciÃ³n habilitada`, 'info');
+      showToast(`🔓 ${estName} desbloqueada: edición habilitada`, 'info');
     }
     return locked;
   }
@@ -145,7 +145,7 @@ export function toggleTabLock(tabKey) {
 
 export function guardTabUnlocked(tabKey, customMessage = null) {
   if (!canCurrentUserEditProject()) {
-    showToast('ðŸ”’ Modo solo lectura: tu rol no permite modificar este proyecto.', 'warning');
+    showToast('🔒 Modo solo lectura: tu rol no permite modificar este proyecto.', 'warning');
     return false;
   }
   const key = tabKey === 'cat' ? 'alcances' : tabKey === 'insumos' ? 'presupuesto' : tabKey;
@@ -153,8 +153,8 @@ export function guardTabUnlocked(tabKey, customMessage = null) {
   const label = TAB_LABELS[key] || key;
   const msg = customMessage || (
     key === 'estimaciones'
-      ? 'ðŸ”’ Esta estimaciÃ³n estÃ¡ bloqueada (solo consulta e impresiÃ³n). Desbloquee el candado para editar.'
-      : `ðŸ”’ La pestaÃ±a "${label}" estÃ¡ bloqueada (solo consulta e impresiÃ³n). Desbloquee el candado para realizar cambios.`
+      ? '🔒 Esta estimación está bloqueada (solo consulta e impresión). Desbloquee el candado para editar.'
+      : `🔒 La pestaña "${label}" está bloqueada (solo consulta e impresión). Desbloquee el candado para realizar cambios.`
   );
   showToast(msg, 'warning');
   return false;
@@ -168,7 +168,7 @@ function updateStaticLockButtonUI(btnId, locked, tabLabel) {
   if (locked) {
     btn.className = 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-700 text-[11px] px-2.5 py-1 rounded flex items-center justify-center font-bold shadow-sm transition active:scale-95 cursor-pointer shrink-0';
     btn.innerHTML = '<i class="fa-solid fa-lock text-[11px] text-white"></i>';
-    btn.title = `ðŸ”’ ${tabLabel} bloqueada (Solo consulta e impresiÃ³n) â€” Haz clic para desbloquear`;
+    btn.title = `🔒 ${tabLabel} bloqueada (Solo consulta e impresión) — Haz clic para desbloquear`;
     if (typeof btn.setAttribute === 'function') {
       btn.setAttribute('aria-pressed', 'true');
       btn.setAttribute('data-locked', 'true');
@@ -176,7 +176,7 @@ function updateStaticLockButtonUI(btnId, locked, tabLabel) {
   } else {
     btn.className = 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] px-2.5 py-1 rounded flex items-center justify-center font-medium shadow-sm transition active:scale-95 cursor-pointer shrink-0';
     btn.innerHTML = '<i class="fa-solid fa-lock-open text-[11px] text-slate-600"></i>';
-    btn.title = `Bloquear ${tabLabel} (Permitir solo consulta e impresiÃ³n)`;
+    btn.title = `Bloquear ${tabLabel} (Permitir solo consulta e impresión)`;
     if (typeof btn.setAttribute === 'function') {
       btn.setAttribute('aria-pressed', 'false');
       btn.setAttribute('data-locked', 'false');
@@ -191,7 +191,7 @@ export function applyTabLocksToDOM() {
   const estLocked = isEstimacionLocked();
   const readOnly = !canCurrentUserEditProject();
 
-  // 1. Botones de bloqueo estÃ¡ticos
+  // 1. Botones de bloqueo estáticos
   updateStaticLockButtonUI('btn-lock-alcances', locks.alcances, 'Alcances');
   updateStaticLockButtonUI('btn-lock-cat', locks.alcances, 'Alcances');
   updateStaticLockButtonUI('btn-lock-presupuesto', locks.presupuesto, 'Presupuesto');

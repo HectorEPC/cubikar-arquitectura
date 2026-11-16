@@ -1,10 +1,10 @@
-﻿// js/core/cloudModulesSyncService.js
-// SincronizaciÃ³n integral de mÃ³dulos operativos con Supabase (ADM_ARQ):
-// Seguimiento/BitÃ¡cora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
+// js/core/cloudModulesSyncService.js
+// Sincronización integral de módulos operativos con Supabase (ADM_ARQ):
+// Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf3';
-import { isValidUUID } from './cloudProjectService.js?v=20261116_cf3';
-import { getActiveProjectId, getProjectById } from '../modules/portal/projectService.js?v=20261116_cf3';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf4';
+import { isValidUUID } from './cloudProjectService.js?v=20261116_cf4';
+import { getActiveProjectId, getProjectById } from '../modules/portal/projectService.js?v=20261116_cf4';
 
 const syncTimers = {
   bitacora: null,
@@ -25,7 +25,7 @@ function resolveCloudProjectUuid(projectId = null) {
 }
 
 /**
- * Elimina cadenas Base64 pesadas (> 2048 chars) para no exceder lÃ­mites de payload en PostgreSQL.
+ * Elimina cadenas Base64 pesadas (> 2048 chars) para no exceder límites de payload en PostgreSQL.
  */
 export function stripInlineBinaryPayloads(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -48,7 +48,7 @@ function normalizeChatId(rawId) {
 }
 
 // ==========================================
-// 1. SEGUIMIENTO Y BITÃCORA DE OBRA
+// 1. SEGUIMIENTO Y BITÁCORA DE OBRA
 // ==========================================
 export function scheduleBitacoraCloudSync(projectId = null) {
   if (!isSupabaseConfigured()) return;
@@ -329,7 +329,7 @@ export async function syncEstimacionesNow(projectId = null) {
   const rows = [];
   const localRowIds = new Set();
 
-  // Fila maestra de configuraciÃ³n de estimaciones
+  // Fila maestra de configuración de estimaciones
   const cfgId = `__CONFIG__${cloudId}`;
   localRowIds.add(cfgId);
   rows.push({
@@ -359,7 +359,7 @@ export async function syncEstimacionesNow(projectId = null) {
       id: rowId,
       proyecto_id: cloudId,
       numero: Number(est.numero) || 1,
-      titulo: est.titulo || `EstimaciÃ³n #${est.numero || 1}`,
+      titulo: est.titulo || `Estimación #${est.numero || 1}`,
       fecha_inicio: est.periodoInicio || est.fechaInicio || '',
       fecha_corte: est.periodoFin || est.fechaCorte || '',
       estatus: est.estatus || est.estado || 'borrador',
@@ -392,7 +392,7 @@ export async function syncEstimacionesNow(projectId = null) {
 }
 
 // ==========================================
-// 4. CRONOGRAMA / CALENDARIO Y CANDADOS DE PESTAÃ‘AS
+// 4. CRONOGRAMA / CALENDARIO Y CANDADOS DE PESTAÑAS
 // ==========================================
 export function scheduleCronogramaCloudSync(projectId = null) {
   if (!isSupabaseConfigured()) return;
@@ -443,7 +443,7 @@ export async function syncCronogramaNow(projectId = null) {
 }
 
 // ==========================================
-// 5. CHAT DE OBRA (SINCRONIZACIÃ“N Y BORRADO)
+// 5. CHAT DE OBRA (SINCRONIZACIÓN Y BORRADO)
 // ==========================================
 export function scheduleChatCloudSync(projectId = null) {
   if (!isSupabaseConfigured()) return;
@@ -521,7 +521,7 @@ export async function syncChatNow(projectId = null) {
 }
 
 // ==========================================
-// 6. HIDRATACIÃ“N INTEGRAL DESDE SUPABASE AL ABRIR PROYECTO
+// 6. HIDRATACIÓN INTEGRAL DESDE SUPABASE AL ABRIR PROYECTO
 // ==========================================
 export async function hydrateProjectModulesFromCloud(projectId = null) {
   if (!isSupabaseConfigured()) return false;
@@ -550,7 +550,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
 
     let changed = false;
 
-    // 1. Seguimiento / BitÃ¡cora
+    // 1. Seguimiento / Bitácora
     const hasBitCfg = bitCfgRes.data && !bitCfgRes.error;
     const hasBitNotas = Array.isArray(bitNotasRes.data) && bitNotasRes.data.length > 0;
     if (hasBitCfg || hasBitNotas) {
@@ -745,7 +745,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
           ...base,
           id: rawId,
           numero: Number(row.numero ?? base.numero ?? 1),
-          titulo: row.titulo || base.titulo || `EstimaciÃ³n #${row.numero || 1}`,
+          titulo: row.titulo || base.titulo || `Estimación #${row.numero || 1}`,
           periodoInicio: row.fecha_inicio || base.periodoInicio || base.fechaInicio || '',
           periodoFin: row.fecha_corte || base.periodoFin || base.fechaCorte || '',
           fechaInicio: row.fecha_inicio || base.fechaInicio || base.periodoInicio || '',
@@ -771,7 +771,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
       syncEstimacionesNow(pid).catch(() => {});
     }
 
-    // 4. Cronograma y Candados de PestaÃ±as
+    // 4. Cronograma y Candados de Pestañas
     if (cronoRes.data && !cronoRes.error) {
       const c = cronoRes.data;
       if (c.schedule_cfg && Object.keys(c.schedule_cfg).length > 0) {
@@ -846,7 +846,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
 
     return changed;
   } catch (err) {
-    console.warn('[CloudModulesSync] Error hidratando mÃ³dulos desde Supabase:', err);
+    console.warn('[CloudModulesSync] Error hidratando módulos desde Supabase:', err);
     return false;
   }
 }

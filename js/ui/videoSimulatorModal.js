@@ -1,11 +1,11 @@
-﻿// js/ui/videoSimulatorModal.js
+// js/ui/videoSimulatorModal.js
 // Reproductor Web de Video-Simulación Interactiva para cubikar Arquitectura
 // Simula audiovisualmente el 100% de los 17 módulos de cubikar Arquitectura:
 // Pantallas realistas (Alcances, Presupuesto, APU, IA Grounding, Gantt, Estimaciones, ERP, Bitácora),
 // cursor virtual animado con clic ripple sobre elementos reales,
 // narración fluida por voz natural en español con oraciones completas y subtítulos sincronizados.
 
-import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261116_cf3';
+import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261116_cf4';
 
 let isVideoModalOpen = false;
 let currentModuleId = 1;

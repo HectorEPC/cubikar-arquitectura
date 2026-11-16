@@ -1,6 +1,6 @@
-﻿// js/modules/admin/cubikarAdmin.js
-// MÃ³dulo de AdministraciÃ³n Maestra de Cubikar
-// Control de Administradores, Base de Datos de Usuarios, MÃ©tricas SaaS, Consumos de IA y Alertas de Cuota
+// js/modules/admin/cubikarAdmin.js
+// Módulo de Administración Maestra de Cubikar
+// Control de Administradores, Base de Datos de Usuarios, Métricas SaaS, Consumos de IA y Alertas de Cuota
 
 import {
   getCurrentUser,
@@ -8,9 +8,9 @@ import {
   getProjectsList,
   findRegisteredUserAccount,
   deleteUserAccountAndData
-} from '../portal/projectService.js?v=20261116_cf3';
-import { SUBSCRIPTION_PLANS, openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf3';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
+} from '../portal/projectService.js?v=20261116_cf4';
+import { SUBSCRIPTION_PLANS, openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf4';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
 
 // Administrador Maestro Oficial
 export const MASTER_ADMIN_EMAIL = 'hepc.90@gmail.com';
@@ -27,12 +27,12 @@ export const DEFAULT_MARKET_RATES = {
   aiTokenPer1k: 0.004,
   // $0.0005 MXN por cada MB al mes (~$0.50 MXN por GB en Supabase/S3 Storage)
   storageMbMonth: 0.0005,
-  // $0.002 MXN por cada MB de transferencia y sincronizaciÃ³n Realtime (WebSockets)
+  // $0.002 MXN por cada MB de transferencia y sincronización Realtime (WebSockets)
   bandwidthMb: 0.002
 };
 
 // =========================================================================
-// 1. GESTIÃ“N DE ROLES ADMINISTRATIVOS (SuperAdmin y Co-Administradores)
+// 1. GESTIÓN DE ROLES ADMINISTRATIVOS (SuperAdmin y Co-Administradores)
 // =========================================================================
 
 export function getMarketRates() {
@@ -49,7 +49,7 @@ export function getMarketRates() {
 export function saveMarketRates(rates) {
   try {
     localStorage.setItem(STORAGE_KEY_MARKET_RATES, JSON.stringify(rates));
-    showToast('Tarifas de mercado actualizadas con Ã©xito.', 'success');
+    showToast('Tarifas de mercado actualizadas con éxito.', 'success');
   } catch (_) {}
 }
 
@@ -85,7 +85,7 @@ export function isUserAdmin(email) {
 
 export function addCoAdmin(email, name = '') {
   if (!email || !email.trim()) {
-    showToast('Ingresa un correo electrÃ³nico vÃ¡lido.', 'error');
+    showToast('Ingresa un correo electrónico válido.', 'error');
     return false;
   }
   const cleanEmail = email.toLowerCase().trim();
@@ -112,7 +112,7 @@ export function addCoAdmin(email, name = '') {
   });
 
   saveCoAdminsList(list);
-  showToast(`Administrador "${cleanEmail}" agregado con Ã©xito.`, 'success');
+  showToast(`Administrador "${cleanEmail}" agregado con éxito.`, 'success');
   renderCoAdminsListUI();
   return true;
 }
@@ -127,12 +127,12 @@ export function removeCoAdmin(email) {
 
   const list = getCoAdminsList().filter(a => (a.email || '').toLowerCase().trim() !== cleanEmail);
   saveCoAdminsList(list);
-  showToast(`Acceso de administraciÃ³n revocado a "${cleanEmail}".`, 'info');
+  showToast(`Acceso de administración revocado a "${cleanEmail}".`, 'info');
   renderCoAdminsListUI();
 }
 
 // =========================================================================
-// 2. REGISTRO Y SEGUIMIENTO DE CONSUMOS TÃ‰CNICOS (IA, Storage, Bandwidth)
+// 2. REGISTRO Y SEGUIMIENTO DE CONSUMOS TÉCNICOS (IA, Storage, Bandwidth)
 // =========================================================================
 
 export function getUserConsumptionData(userEmail) {
@@ -143,7 +143,7 @@ export function getUserConsumptionData(userEmail) {
     if (raw) return JSON.parse(raw);
   } catch (_) {}
 
-  // Consumo inicial estimado segÃºn proyectos existentes
+  // Consumo inicial estimado según proyectos existentes
   return {
     tokensIA: 15400,
     storageMB: 2.4,
@@ -186,11 +186,11 @@ export function recordStorageUsage(userEmail, megabytes) {
 }
 
 // =========================================================================
-// 3. EVALUACIÃ“N DE ACTIVIDAD (SEMÃFORO 15 DÃAS) Y ALERTA DE CONSUMO (85%+)
+// 3. EVALUACIÓN DE ACTIVIDAD (SEMÁFORO 15 DÍAS) Y ALERTA DE CONSUMO (85%+)
 // =========================================================================
 
 export function evaluateUserActivity(user, consumption) {
-  // Criterio de dÃ­as de inactividad
+  // Criterio de días de inactividad
   const now = new Date();
   const lastDateStr = consumption?.lastActivity || user?.lastLogin || user?.createdAt || null;
   if (!lastDateStr) return 'activo';
@@ -199,11 +199,11 @@ export function evaluateUserActivity(user, consumption) {
   const diffDays = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
 
   if (diffDays <= 15) {
-    return 'activo'; // ðŸŸ¢ Menor o igual a 15 dÃ­as
+    return 'activo'; // 🟢 Menor o igual a 15 días
   } else if (diffDays <= 90) {
-    return 'reposo'; // ðŸŸ¡ MÃ¡s de 15 dÃ­as sin interacciÃ³n
+    return 'reposo'; // 🟡 Más de 15 días sin interacción
   } else {
-    return 'inactivo'; // ðŸ”´ MÃ¡s de 90 dÃ­as o cuenta congelada
+    return 'inactivo'; // 🔴 Más de 90 días o cuenta congelada
   }
 }
 
@@ -212,13 +212,13 @@ export function calculateUserMetrics(user) {
   const rates = getMarketRates();
   const consumption = getUserConsumptionData(cleanEmail);
 
-  // 1. Obtener plan de suscripciÃ³n
+  // 1. Obtener plan de suscripción
   let planId = user?.subscription?.planId || 'free';
   let billingCycle = user?.subscription?.billingCycle || 'monthly';
   let subPlan = SUBSCRIPTION_PLANS.find(p => p.id === planId) || SUBSCRIPTION_PLANS[0];
 
   let cuotaMensual = billingCycle === 'annual' ? (subPlan.annualPrice || subPlan.monthlyPrice) : subPlan.monthlyPrice;
-  // Si es gratuita, asignamos una base de costo de cortesÃ­a de $10 MXN para medir el ratio
+  // Si es gratuita, asignamos una base de costo de cortesía de $10 MXN para medir el ratio
   let baseComparativa = cuotaMensual > 0 ? cuotaMensual : 15.0;
 
   // 2. Costo real de recursos consumidos
@@ -271,7 +271,7 @@ export function calculateUserMetrics(user) {
   };
 }
 
-// Alerta preventiva que aparecerÃ¡ en la campana de notificaciones del usuario
+// Alerta preventiva que aparecerá en la campana de notificaciones del usuario
 export function getActiveUserConsumptionAlert(userEmail) {
   if (!userEmail) return null;
   const cleanEmail = userEmail.toLowerCase().trim();
@@ -292,7 +292,7 @@ export function getActiveUserConsumptionAlert(userEmail) {
       type: 'high_consumption',
       pct: metrics.pctConsumo,
       planName: metrics.planName,
-      message: `Has utilizado el ${metrics.pctConsumo}% de los recursos de almacenamiento y sincronizaciÃ³n incluidos en tu suscripciÃ³n de este mes.`,
+      message: `Has utilizado el ${metrics.pctConsumo}% de los recursos de almacenamiento y sincronización incluidos en tu suscripción de este mes.`,
       actionLabel: 'Mejorar mi Plan / Ver Opciones'
     };
   }
@@ -300,7 +300,7 @@ export function getActiveUserConsumptionAlert(userEmail) {
 }
 
 // =========================================================================
-// 4. MODAL SELECTOR DE INICIO (DOBLE OPCIÃ“N PARA EL ADMINISTRADOR)
+// 4. MODAL SELECTOR DE INICIO (DOBLE OPCIÓN PARA EL ADMINISTRADOR)
 // =========================================================================
 
 export function showAdminDualLoginModal(user, onChooseCommonUser, onChooseAdmin) {
@@ -341,7 +341,7 @@ let adminFilterCycle = 'all';
 
 
 // =========================================================================
-// SELECCIÃ“N Y ELIMINACIÃ“N DE USUARIOS
+// SELECCIÓN Y ELIMINACIÓN DE USUARIOS
 // =========================================================================
 
 export let selectedAdminUserEmails = new Set();
@@ -403,13 +403,13 @@ export function updateAdminDeleteButtonUI() {
 export function deleteSelectedAdminUsers() {
   const targets = Array.from(selectedAdminUserEmails).filter(e => !isUserMasterAdmin(e));
   if (targets.length === 0) {
-    showToast('Selecciona al menos un usuario para eliminar (el Administrador Maestro estÃ¡ protegido).', 'warning');
+    showToast('Selecciona al menos un usuario para eliminar (el Administrador Maestro está protegido).', 'warning');
     return;
   }
 
   const msg = targets.length === 1
-    ? `Â¿EstÃ¡s seguro de que deseas eliminar permanentemente al usuario "${targets[0]}"?\n\nEsta acciÃ³n eliminarÃ¡ su cuenta, proyectos y datos asociados.`
-    : `Â¿EstÃ¡s seguro de que deseas eliminar permanentemente a los ${targets.length} usuarios seleccionados?\n\nEsta acciÃ³n eliminarÃ¡ sus cuentas, proyectos y datos asociados.`;
+    ? `¿Estás seguro de que deseas eliminar permanentemente al usuario "${targets[0]}"?\n\nEsta acción eliminará su cuenta, proyectos y datos asociados.`
+    : `¿Estás seguro de que deseas eliminar permanentemente a los ${targets.length} usuarios seleccionados?\n\nEsta acción eliminará sus cuentas, proyectos y datos asociados.`;
 
   if (!confirm(msg)) {
     return;
@@ -431,7 +431,7 @@ export function deleteSelectedAdminUsers() {
   const selectAll = document.getElementById('admin-select-all-checkbox');
   if (selectAll) selectAll.checked = false;
 
-  showToast(`Â¡${deletedCount} usuario(s) eliminado(s) correctamente!`, 'success');
+  showToast(`¡${deletedCount} usuario(s) eliminado(s) correctamente!`, 'success');
   renderCubikarAdminTable();
 }
 
@@ -456,7 +456,7 @@ export function getFullAdminUsersDataset() {
   const registered = getRegisteredUsersList();
   const current = getCurrentUser();
 
-  // Asegurar que hepc.90@gmail.com estÃ© siempre presente como Administrador Maestro
+  // Asegurar que hepc.90@gmail.com esté siempre presente como Administrador Maestro
   let allUsers = [...registered];
   const hasMaster = allUsers.some(u => (u.email || '').toLowerCase().trim() === MASTER_ADMIN_EMAIL.toLowerCase().trim());
   if (!hasMaster) {
@@ -469,12 +469,12 @@ export function getFullAdminUsersDataset() {
     });
   }
 
-  // Si hay usuario en sesiÃ³n y no estÃ¡ en la lista, incluirlo
+  // Si hay usuario en sesión y no está en la lista, incluirlo
   if (current && !allUsers.some(u => (u.email || '').toLowerCase().trim() === (current.email || '').toLowerCase().trim())) {
     allUsers.push(current);
   }
 
-  // Mapear mÃ©tricas para cada usuario
+  // Mapear métricas para cada usuario
   return allUsers.map((u, idx) => {
     const metrics = calculateUserMetrics(u);
     const regDate = u.createdAt ? new Date(u.createdAt) : new Date('2026-02-01');
@@ -544,7 +544,7 @@ export function renderCubikarAdminTable() {
   }
 
   tbody.innerHTML = dataset.map(row => {
-    // SemÃ¡foro de Actividad idÃ©ntico a la hoja del usuario
+    // Semáforo de Actividad idéntico a la hoja del usuario
     let badgeActividad = '';
     if (row.actividad === 'activo') {
       badgeActividad = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold bg-[#22c55e] text-slate-950 uppercase tracking-wider shadow-sm"><i class="fa-solid fa-circle text-[7px]"></i> Activo</span>`;
@@ -554,7 +554,7 @@ export function renderCubikarAdminTable() {
       badgeActividad = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-extrabold bg-[#ef4444] text-white uppercase tracking-wider shadow-sm"><i class="fa-solid fa-ban text-[8px]"></i> Inactivo</span>`;
     }
 
-    // Badge de MembresÃ­a
+    // Badge de Membresía
     const badgePlanClass = row.membresia === 'pro'
       ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
       : (row.membresia === 'plus' ? 'bg-blue-500/20 text-blue-300 border-blue-400/40' : 'bg-slate-700 text-slate-300 border-slate-600');
@@ -576,7 +576,7 @@ export function renderCubikarAdminTable() {
 
     return `
       <tr class="transition-colors border-b border-slate-800 text-xs text-slate-200 select-text ${rowHighlightClass}">
-        <!-- 0. Casilla de SelecciÃ³n -->
+        <!-- 0. Casilla de Selección -->
         <td class="px-2.5 py-2.5 text-center border-r border-slate-800/80">
           ${isUserMasterAdmin(row.correo) ? `
             <span class="text-amber-400/50 text-xs" title="Administrador Maestro protegido (No eliminable)"><i class="fa-solid fa-lock"></i></span>
@@ -607,23 +607,23 @@ export function renderCubikarAdminTable() {
         <!-- 4. Fecha de Registro -->
         <td class="px-3 py-2.5 text-center font-mono text-slate-400 whitespace-nowrap">${row.fechaRegistro}</td>
 
-        <!-- 5. Actividad (SemÃ¡foro) -->
+        <!-- 5. Actividad (Semáforo) -->
         <td class="px-3 py-2.5 text-center whitespace-nowrap">${badgeActividad}</td>
 
-        <!-- 6. MembresÃ­a Activa -->
+        <!-- 6. Membresía Activa -->
         <td class="px-3 py-2.5 text-center whitespace-nowrap">
           <span class="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border uppercase ${badgePlanClass}">
             ${row.membresia}
           </span>
         </td>
 
-        <!-- 7. Tipo de MembresÃ­a -->
+        <!-- 7. Tipo de Membresía -->
         <td class="px-3 py-2.5 text-center capitalize text-slate-300 whitespace-nowrap">${row.tipoMembresia}</td>
 
-        <!-- 8. Inicio de MembresÃ­a -->
+        <!-- 8. Inicio de Membresía -->
         <td class="px-3 py-2.5 text-center font-mono text-slate-400 whitespace-nowrap">${row.inicioMembresia}</td>
 
-        <!-- 9. Fin de MembresÃ­a -->
+        <!-- 9. Fin de Membresía -->
         <td class="px-3 py-2.5 text-center font-mono text-slate-400 whitespace-nowrap">${row.finMembresia}</td>
 
         <!-- 10. Cantidad de Usuarios Colaborativos -->
@@ -635,16 +635,16 @@ export function renderCubikarAdminTable() {
         </td>
 
         <!-- 12. Almacenamiento (MB) -->
-        <td class="px-3 py-2.5 text-right font-mono text-indigo-300 whitespace-nowrap" title="Base de datos, catÃ¡logos e imÃ¡genes">
+        <td class="px-3 py-2.5 text-right font-mono text-indigo-300 whitespace-nowrap" title="Base de datos, catálogos e imágenes">
           <i class="fa-solid fa-database text-[10px] text-indigo-400 mr-1"></i>${row.storageMB}
         </td>
 
         <!-- 13. Ancho de Banda y Realtime -->
-        <td class="px-3 py-2.5 text-right font-mono text-teal-300 whitespace-nowrap" title="Transferencia de datos y sincronizaciÃ³n Realtime">
+        <td class="px-3 py-2.5 text-right font-mono text-teal-300 whitespace-nowrap" title="Transferencia de datos y sincronización Realtime">
           <i class="fa-solid fa-bolt text-[10px] text-teal-400 mr-1"></i>${row.bandwidthMB}
         </td>
 
-        <!-- 14. Total de Gastos en SuscripciÃ³n -->
+        <!-- 14. Total de Gastos en Suscripción -->
         <td class="px-3.5 py-2.5 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
           $ ${row.gastoSuscripcion.toFixed(2)}
         </td>
@@ -662,7 +662,7 @@ export function renderCubikarAdminTable() {
               <div class="h-full ${barColor} rounded-full transition-all" style="width: ${row.pctConsumo}%;"></div>
             </div>
             ${row.isHighConsumption ? `
-              <span title="Â¡Alerta! Usuario al ${row.pctConsumo}% de su lÃ­mite. NotificaciÃ³n enviada a su campana." class="text-amber-400 text-xs animate-bounce">
+              <span title="¡Alerta! Usuario al ${row.pctConsumo}% de su límite. Notificación enviada a su campana." class="text-amber-400 text-xs animate-bounce">
                 <i class="fa-solid fa-triangle-exclamation"></i>
               </span>
             ` : ''}
@@ -696,7 +696,7 @@ function updateAdminKpisUI(dataset) {
 }
 
 // =========================================================================
-// 6. GESTIÃ“N DE CO-ADMINISTRADORES (SUB-MODAL)
+// 6. GESTIÓN DE CO-ADMINISTRADORES (SUB-MODAL)
 // =========================================================================
 
 export function openCoAdminsModal() {
@@ -769,7 +769,7 @@ export function renderCoAdminsListUI() {
 }
 
 // =========================================================================
-// 7. GESTIÃ“N DE TARIFAS DE MERCADO (SUB-MODAL)
+// 7. GESTIÓN DE TARIFAS DE MERCADO (SUB-MODAL)
 // =========================================================================
 
 export function openMarketRatesModal() {
@@ -813,7 +813,7 @@ export function saveMarketRatesFromModal() {
 }
 
 // =========================================================================
-// 8. EXPORTACIÃ“N A EXCEL / CSV CON EL FORMATO EXACTO
+// 8. EXPORTACIÓN A EXCEL / CSV CON EL FORMATO EXACTO
 // =========================================================================
 
 export function exportCubikarDatabaseToExcel() {
@@ -909,7 +909,7 @@ export function setAdminTableSearch(text) {
 export function copySupabaseSqlScript() {
   const sqlScript = `-- ============================================================================
 -- SCRIPT SQL PARA SUPABASE (CUBIKAR ARQUITECTURA)
--- Crea las tablas de usuarios, planes y proyectos con polÃ­ticas RLS seguras
+-- Crea las tablas de usuarios, planes y proyectos con políticas RLS seguras
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.cubikar_users (
@@ -955,9 +955,9 @@ CREATE POLICY "Acceso co-admins para Admin Master" ON public.cubikar_coadmins
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(sqlScript).then(() => {
-      showToast('âœ… Script SQL para Supabase copiado al portapapeles.', 'success');
+      showToast('✅ Script SQL para Supabase copiado al portapapeles.', 'success');
     }).catch(() => {
-      showToast('No se pudo copiar automÃ¡ticamente.', 'warning');
+      showToast('No se pudo copiar automáticamente.', 'warning');
     });
   } else {
     showToast('Copiado al portapapeles no disponible en este navegador.', 'warning');
@@ -1008,7 +1008,7 @@ if (typeof window !== 'undefined') {
     }
   };
   window.handleRemoveCoAdminClick = (email) => {
-    if (confirm(`Â¿EstÃ¡s seguro de revocar los permisos de administrador a "${email}"?`)) {
+    if (confirm(`¿Estás seguro de revocar los permisos de administrador a "${email}"?`)) {
       removeCoAdmin(email);
     }
   };

@@ -1,12 +1,12 @@
-﻿import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261116_cf3';
-import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261116_cf3';
-import { syncActiveProjectSummary, getProjectById, isProjectMarkedDeleted } from '../modules/portal/projectService.js?v=20261116_cf3';
-import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261116_cf3';
-import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261116_cf3';
-import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261116_cf3';
-import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261116_cf3';
+import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261116_cf4';
+import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261116_cf4';
+import { syncActiveProjectSummary, getProjectById, isProjectMarkedDeleted } from '../modules/portal/projectService.js?v=20261116_cf4';
+import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261116_cf4';
+import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261116_cf4';
+import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261116_cf4';
+import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261116_cf4';
 
-// Estado global reactivo y centralizado de la aplicaciÃ³n
+// Estado global reactivo y centralizado de la aplicación
 export const state = {
   treeData: [],
   settings: Object.assign({}, defaultSettings),
@@ -79,7 +79,7 @@ export function initStore() {
   // Sincronizar portapapeles compartido de conceptos entre proyectos
   syncClipboardFromStorage();
 
-  // Cargar configuraciÃ³n
+  // Cargar configuración
   try {
     const savedSettings = localStorage.getItem(getSettingsKey());
     if (savedSettings) {
@@ -111,11 +111,11 @@ export function initStore() {
       }
     }
   } catch (e) {
-    console.error('Error cargando configuraciÃ³n:', e);
+    console.error('Error cargando configuración:', e);
     state.settings = Object.assign({}, defaultSettings);
   }
 
-  // Cargar Ã¡rbol de catÃ¡logo
+  // Cargar árbol de catálogo
   try {
     const activePId = getActiveProjectId();
     const savedData = localStorage.getItem(getStorageKey());
@@ -127,7 +127,7 @@ export function initStore() {
       state.treeData = [];
     }
 
-    // Si el proyecto estÃ¡ activo, siempre sincronizar con la versiÃ³n autoritativa mÃ¡s reciente de Supabase PostgreSQL
+    // Si el proyecto está activo, siempre sincronizar con la versión autoritativa más reciente de Supabase PostgreSQL
     if (activePId) {
       loadProjectTreeFromCloud(activePId).then(cloudTree => {
         if (Array.isArray(cloudTree)) {
@@ -157,7 +157,7 @@ export function initStore() {
             triggerDebouncedCloudSync();
           }
         }
-      }).catch(err => console.warn('[CloudSync] Fallo al refrescar Ã¡rbol desde la nube:', err));
+      }).catch(err => console.warn('[CloudSync] Fallo al refrescar árbol desde la nube:', err));
     }
   } catch (e) {
     console.error('Error cargando treeData:', e);
@@ -181,7 +181,7 @@ export function initStore() {
   }
   stripSubInsumos(state.treeData);
 
-  // Sanitizar todos los nÃºmeros para asegurar estrictamente 2 decimales
+  // Sanitizar todos los números para asegurar estrictamente 2 decimales
   function roundNodesTo2Decimals(nodes) {
     if (!Array.isArray(nodes)) return;
     nodes.forEach(n => {
@@ -212,7 +212,7 @@ export function initStore() {
   }
   roundNodesTo2Decimals(state.treeData);
   
-  // Sincronizar automÃ¡ticamente matrices con el catÃ¡logo exacto de Opus 2014
+  // Sincronizar automáticamente matrices con el catálogo exacto de Opus 2014
   function syncOpusExactMatrices(nodes) {
     if (!Array.isArray(nodes) || !CASA_LAURA_PROJECT) return;
     const exactMap = new Map();
@@ -231,7 +231,7 @@ export function initStore() {
           const exact = exactMap.get(n.clave.trim().toUpperCase());
           if (exact) {
             hasOpusConcepts = true;
-            // Solo sincronizar con Opus si el nodo aÃºn no ha sido personalizado por el usuario y carece de matriz
+            // Solo sincronizar con Opus si el nodo aún no ha sido personalizado por el usuario y carece de matriz
             if (!n.isMatrixCustomized && !n.userClearedMatrix && (!Array.isArray(n.insumos) || n.insumos.length === 0)) {
               n.insumos = JSON.parse(JSON.stringify(exact.insumos));
               n.precioUnitario = exact.precioUnitario;
@@ -248,7 +248,7 @@ export function initStore() {
     }
     walk(nodes);
 
-    // Si el proyecto actual es Casa Laura o contiene conceptos Opus, desactivar sobrecosto para reflejar el catÃ¡logo exacto de Opus
+    // Si el proyecto actual es Casa Laura o contiene conceptos Opus, desactivar sobrecosto para reflejar el catálogo exacto de Opus
     const projName = (state.settings.projectName || '').toLowerCase();
     if (hasOpusConcepts && (projName.includes('laura') || projName.includes('opus'))) {
       state.settings.applySobrecosto = false;
@@ -266,7 +266,7 @@ export function initStore() {
   sanitizeCatalogNodes(state.treeData);
 }
 
-// SincronizaciÃ³n automÃ¡tica en segundo plano con Supabase PostgreSQL (Debounce 1.2s)
+// Sincronización automática en segundo plano con Supabase PostgreSQL (Debounce 1.2s)
 let cloudSyncTimer = null;
 export function triggerDebouncedCloudSync() {
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
@@ -281,12 +281,12 @@ export function triggerDebouncedCloudSync() {
     try {
       await syncProjectToCloud(project, state.settings, state.treeData);
     } catch (e) {
-      console.warn('[CloudSync] Fallo silencioso en autosincronizaciÃ³n:', e);
+      console.warn('[CloudSync] Fallo silencioso en autosincronización:', e);
     }
   }, 1200);
 }
 
-// Persistencia de configuraciÃ³n en localStorage y emisiÃ³n en tiempo real
+// Persistencia de configuración en localStorage y emisión en tiempo real
 export function persistSettings(meta = {}) {
   const projectId = getActiveProjectId();
   try {
@@ -301,16 +301,16 @@ export function persistSettings(meta = {}) {
         settings: state.settings,
         immediate: false,
         changeType: 'settings_updated',
-        changeDescription: 'parÃ¡metros del proyecto y sobrecosto',
+        changeDescription: 'parámetros del proyecto y sobrecosto',
         ...meta
       });
     }
   } catch (e) {
-    console.error('Error guardando configuraciÃ³n:', e);
+    console.error('Error guardando configuración:', e);
   }
 }
 
-// Persistencia en localStorage con debounce de 300ms y emisiÃ³n en vivo vÃ­a WebSockets
+// Persistencia en localStorage con debounce de 300ms y emisión en vivo vía WebSockets
 let persistTimer = null;
 export function persistLocalData(immediate = false, meta = {}) {
   const projectId = getActiveProjectId();

@@ -1,9 +1,9 @@
-﻿import { state } from '../state/store.js?v=20261116_cf3';
-import { formatMoney, round2, round5 } from './formatters.js?v=20261116_cf3';
+import { state } from '../state/store.js?v=20261116_cf4';
+import { formatMoney, round2, round5 } from './formatters.js?v=20261116_cf4';
 
 export { round2, round5 };
 
-// CÃ¡lculo del Factor de Sobrecosto (FSR/Indirectos/Financiamiento/Utilidad/Seguros y Fianzas)
+// Cálculo del Factor de Sobrecosto (FSR/Indirectos/Financiamiento/Utilidad/Seguros y Fianzas)
 export function getFactorSobrecosto() {
   if (!state.settings.applySobrecosto) return 1.0;
   const fInd = 1 + ((parseFloat(state.settings.pctIndirectos) || 0) / 100);
@@ -33,7 +33,7 @@ export function getDespachoGastosFactor(settings = state.settings) {
   return getDespachoGastosBreakdown(settings).factor;
 }
 
-// Factor opcional de NÃ³mina / Prestaciones de Oficina sobre Tarifa Hora-Hombre
+// Factor opcional de Nómina / Prestaciones de Oficina sobre Tarifa Hora-Hombre
 export function getNominaOficinaBreakdown(settings = state.settings) {
   const apply = Boolean(settings?.presupuestoArq?.applyNominaFactor);
   const raw = parseFloat(settings?.pctFasar);
@@ -97,7 +97,7 @@ export function updateSobrecostoBadge() {
     label.innerText = `+${gastos.pctTotal.toFixed(1)}%`;
     badge.setAttribute(
       'title',
-      `Factores Despacho Activos: Gastos +${gastos.pctTotal.toFixed(2)}% | Utilidad ${utilPct}% (Mult. Cost-Plus ${multVenta.toFixed(2)}x) â€” Clic para configurar`
+      `Factores Despacho Activos: Gastos +${gastos.pctTotal.toFixed(2)}% | Utilidad ${utilPct}% (Mult. Cost-Plus ${multVenta.toFixed(2)}x) — Clic para configurar`
     );
     if (cdContainer) cdContainer.classList.remove('hidden');
   } else {
@@ -124,8 +124,8 @@ export function hasDescendantCotizaciones(node) {
 
 /**
  * Resuelve el presupuesto del paquete para un nodo (Top-Down):
- * 1. CotizaciÃ³n ganadora del nodo en el panel lateral.
- * 2. `costo_proveedor` explÃ­cito si fue capturado.
+ * 1. Cotización ganadora del nodo en el panel lateral.
+ * 2. `costo_proveedor` explícito si fue capturado.
  */
 export function resolveNodePackageBudget(node) {
   if (!node) return null;
@@ -149,7 +149,7 @@ export function resolveNodePackageBudget(node) {
 
 /**
  * Garantiza que todo grupo de subconceptos cuente con porcentajes relativos asignados.
- * Si un grupo aÃºn no tiene porcentajes relativos, reparte el 100% equitativamente para iniciar balanceado.
+ * Si un grupo aún no tiene porcentajes relativos, reparte el 100% equitativamente para iniciar balanceado.
  */
 export function ensureNodeProrrateoDefaults(nodes) {
   if (!Array.isArray(nodes)) return;
@@ -175,7 +175,7 @@ export function ensureNodeProrrateoDefaults(nodes) {
 }
 
 /**
- * EvalÃºa el semÃ¡foro de validaciÃ³n para un grupo de subconceptos hermanos directos.
+ * Evalúa el semáforo de validación para un grupo de subconceptos hermanos directos.
  * Devuelve sum, status ('valid' | 'under' | 'over'), y la diferencia respecto a 100%.
  */
 export function getGroupProrrateoStatus(children) {
@@ -194,8 +194,8 @@ export function getGroupProrrateoStatus(children) {
 }
 
 /**
- * Motor de PonderaciÃ³n Relativa y Prorrateo Porcentual en Cascada (Top-Down y Bottom-Up hÃ­brido):
- * - Si un nodo padre tiene presupuesto de paquete (cotizaciÃ³n ganadora o costo_proveedor),
+ * Motor de Ponderación Relativa y Prorrateo Porcentual en Cascada (Top-Down y Bottom-Up híbrido):
+ * - Si un nodo padre tiene presupuesto de paquete (cotización ganadora o costo_proveedor),
  *   propaga el monto hacia abajo multiplicando por (porcentaje_relativo / 100).
  * - Si el nodo no tiene paquete asignado, su monto se forma por la suma de sus hijos (Bottom-Up).
  * - Calcula el Gran Total del proyecto y asigna a cada nodo su porcentaje_global.
@@ -218,7 +218,7 @@ export function calculateProrrateoCascade(nodes) {
       const pctRel = Number(node.porcentaje_relativo) || 0;
       node.importe_calculado = round2(inheritedBudget * (pctRel / 100));
     } else {
-      // Nodo raÃ­z o independiente
+      // Nodo raíz o independiente
       const ownPackageBudget = resolveNodePackageBudget(node);
       if (ownPackageBudget !== null) {
         node.importe_calculado = ownPackageBudget;
@@ -271,7 +271,7 @@ export function calculateProrrateoCascade(nodes) {
 }
 
 /**
- * Devuelve el Precio Unitario efectivo de un concepto segÃºn prorrateo, cotizaciones o subconceptos.
+ * Devuelve el Precio Unitario efectivo de un concepto según prorrateo, cotizaciones o subconceptos.
  * @param {Object} node
  * @returns {number}
  */

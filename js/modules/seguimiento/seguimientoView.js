@@ -1,10 +1,10 @@
-﻿// js/modules/seguimiento/seguimientoView.js
-// PestaÃ±a Seguimiento (AsignaciÃ³n de Responsables, Estatus, Archivos y % Avance Real Ponderado)
+// js/modules/seguimiento/seguimientoView.js
+// Pestaña Seguimiento (Asignación de Responsables, Estatus, Archivos y % Avance Real Ponderado)
 
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf3';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
-import { isTabLocked } from '../../ui/tabLockController.js?v=20261116_cf3';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf4';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf4';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
+import { isTabLocked } from '../../ui/tabLockController.js?v=20261116_cf4';
 import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
@@ -15,10 +15,10 @@ import {
   getStoredInvitations,
   getStoredPlanInvitations,
   canCurrentUserEditProject
-} from '../portal/projectService.js?v=20261116_cf3';
-import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261116_cf3';
-import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js?v=20261116_cf3';
-import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf3';
+} from '../portal/projectService.js?v=20261116_cf4';
+import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261116_cf4';
+import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js?v=20261116_cf4';
+import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf4';
 
 function persistSeguimientoCloudSummary() {
   const pid = getActiveProjectId() || getActiveOrFallbackProjectId();
@@ -49,7 +49,7 @@ export const ESTATUS_OPTIONS = [
   },
   {
     id: 'en_revision',
-    label: 'En RevisiÃ³n',
+    label: 'En Revisión',
     bgHex: '#579bfc',
     badgeClass: 'bg-blue-100 text-blue-700 border-blue-300',
     icon: 'fa-solid fa-magnifying-glass'
@@ -72,7 +72,7 @@ export const ESTATUS_OPTIONS = [
 
 const STATUS_FILTER_PILLS = [
   { id: 'en_proceso', label: 'En Proceso', countKey: 'en_proceso', bgHex: '#fdab3d' },
-  { id: 'en_revision', label: 'En RevisiÃ³n', countKey: 'en_revision', bgHex: '#579bfc' },
+  { id: 'en_revision', label: 'En Revisión', countKey: 'en_revision', bgHex: '#579bfc' },
   { id: 'detenido', label: 'Detenidos', countKey: 'detenido', bgHex: '#e2445c' },
   { id: 'aprobado', label: 'Aprobados', countKey: 'aprobado', bgHex: '#00c875' },
   { id: 'pendiente', label: 'Pendientes', countKey: 'pendiente', bgHex: '#8d99ae' }
@@ -390,9 +390,9 @@ function renderAvanceProgressCell(node, clampedAvance, barColor, { hasChildren =
   const isInteractive = !hasChildren && !locked;
   const subCount = Array.isArray(node.children) ? node.children.length : 0;
   const barTitle = hasChildren
-    ? `Avance calculado automÃ¡ticamente (${subCount} subconceptos): ${clampedAvance}% â€” No editable`
+    ? `Avance calculado automáticamente (${subCount} subconceptos): ${clampedAvance}% — No editable`
     : (locked
-      ? 'PestaÃ±a bloqueada (solo consulta)'
+      ? 'Pestaña bloqueada (solo consulta)'
       : `Avance: ${clampedAvance}% (clic en la barra o edita el porcentaje)`);
   const barStateClasses = isInteractive
     ? 'cursor-pointer hover:brightness-95 transition'
@@ -507,10 +507,10 @@ function renderParentConceptStatusCell(node) {
   const summaryTitle = breakdown.present.length > 0
     ? `Estatus en ${breakdown.totalDescendants} subconceptos: ` +
       breakdown.present.map(p => `${p.label}: ${p.count} (${Math.round(p.pct)}%)`).join(', ') +
-      ' â€” Clic para ver desglose'
-    : 'Estatus calculado automÃ¡ticamente desde sus subconceptos';
+      ' — Clic para ver desglose'
+    : 'Estatus calculado automáticamente desde sus subconceptos';
 
-  // Si todos los subconceptos tienen el mismo estatus, se muestra el bloque sÃ³lido correspondiente
+  // Si todos los subconceptos tienen el mismo estatus, se muestra el bloque sólido correspondiente
   if (breakdown.isUniform && breakdown.singleOpt) {
     const isAprobado = breakdown.singleOpt.id === 'aprobado';
     return `
@@ -529,7 +529,7 @@ function renderParentConceptStatusCell(node) {
   }
 
   // Si hay mezcla de estatus en los subconceptos:
-  // Mostramos cÃ­rculos/chips representativos de cada estatus presente con su icono y conteo (verde aprobado, naranja proceso, rojo detenido con alerta, etc.)
+  // Mostramos círculos/chips representativos de cada estatus presente con su icono y conteo (verde aprobado, naranja proceso, rojo detenido con alerta, etc.)
   const chipsHtml = breakdown.present.map(p => {
     const isDetenido = p.id === 'detenido';
     const alertClass = isDetenido ? 'animate-pulse ring-2 ring-rose-400' : '';
@@ -656,7 +656,7 @@ function renderSeguimientoLinkCell(node, locked) {
              target="_blank"
              rel="noopener noreferrer"
              class="w-7 h-7 rounded-lg bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-2xs transition active:scale-95"
-             title="Abrir link en nueva pestaÃ±a">
+             title="Abrir link en nueva pestaña">
             <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
           </a>
         ` : ''}
@@ -666,7 +666,7 @@ function renderSeguimientoLinkCell(node, locked) {
 }
 
 /**
- * Renderiza el cÃ­rculo de foto de perfil del responsable (o sus iniciales como respaldo si no tiene imagen).
+ * Renderiza el círculo de foto de perfil del responsable (o sus iniciales como respaldo si no tiene imagen).
  */
 function renderMemberAvatarCircle(member, fallbackEmail = '', sizeClass = 'w-8 h-8', textSizeClass = 'text-[11px]') {
   const displayName = member?.name || (fallbackEmail ? fallbackEmail.split('@')[0] : 'Usuario');
@@ -763,7 +763,7 @@ export function calcularAvancePonderado({ statusFilter = 'all', responsableFilte
 
   function accumulateNode(node) {
     totalEntregables++;
-    // El peso de ponderaciÃ³n proviene del costo del entregable o de sus horas hombre (mÃ­nimo 1 para ponderar parejo si no hay costos)
+    // El peso de ponderación proviene del costo del entregable o de sus horas hombre (mínimo 1 para ponderar parejo si no hay costos)
     const subc = parseFloat(node.costoSubcontrato) || 0;
     const hh = parseFloat(node.horasHombre) || 0;
     const peso = Math.max(1, subc + (hh * 380));
@@ -900,7 +900,7 @@ function renderSeguimientoFilterBar(filterMeta) {
   `;
 }
 
-// Renderizar la vista de la pestaÃ±a Seguimiento
+// Renderizar la vista de la pestaña Seguimiento
 export function renderSeguimientoView() {
   closeSeguimientoPopover();
   attachGlobalPopoverListeners();
@@ -932,7 +932,7 @@ export function renderSeguimientoView() {
 
   container.innerHTML = `
     <div class="bg-white rounded-lg shadow border border-slate-200 flex flex-col h-full overflow-hidden">
-      <!-- Encabezado de la PestaÃ±a -->
+      <!-- Encabezado de la Pestaña -->
       <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
           <div class="flex items-center gap-2">
@@ -973,15 +973,15 @@ export function renderSeguimientoView() {
         
         <!-- Tarjeta 1: % Avance Real Ponderado -->
         <div class="col-span-2 px-3 py-1.5 bg-gradient-to-r from-purple-700 to-indigo-700 text-white rounded-lg shadow-xs flex flex-col justify-center gap-1.5"
-             title="${hasActiveFilter ? 'Avance real ponderado de los elementos filtrados en la tabla' : 'Avance real ponderado completado segÃºn peso tÃ©cnico'}">
+             title="${hasActiveFilter ? 'Avance real ponderado de los elementos filtrados en la tabla' : 'Avance real ponderado completado según peso técnico'}">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-baseline gap-2 min-w-0">
               <span class="text-lg sm:text-xl font-black leading-none shrink-0">${stats.avancePonderadoFinal}%</span>
               <span class="text-[10px] font-bold uppercase tracking-wider text-purple-200 truncate">
-                Avance Ponderado${hasActiveFilter ? ' Â· Filtrado' : ''}
+                Avance Ponderado${hasActiveFilter ? ' · Filtrado' : ''}
               </span>
               <span class="text-[10px] text-purple-200/90 truncate hidden xl:inline">
-                (${hasActiveFilter ? 'vista filtrada' : 'peso tÃ©cnico'})
+                (${hasActiveFilter ? 'vista filtrada' : 'peso técnico'})
               </span>
             </div>
             <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shrink-0">${deliverablesBadgeText}</span>
@@ -1004,7 +1004,7 @@ export function renderSeguimientoView() {
           </div>
         </div>
 
-        <!-- Tarjeta 3: En Proceso / En RevisiÃ³n -->
+        <!-- Tarjeta 3: En Proceso / En Revisión -->
         <div class="px-2.5 py-1.5 bg-blue-50/70 rounded-lg border border-blue-200 shadow-2xs flex flex-col justify-between">
           <div class="flex items-center justify-between text-blue-800">
             <span class="text-[10px] font-bold uppercase tracking-tight truncate">En Proceso / Rev.</span>
@@ -1012,7 +1012,7 @@ export function renderSeguimientoView() {
           </div>
           <div class="flex items-baseline justify-between gap-1.5 mt-0.5">
             <span class="text-lg font-black text-blue-700 leading-none">${stats.enProceso + stats.enRevision}</span>
-            <span class="text-[10px] text-blue-500 truncate">${stats.enRevision} rev.${stats.detenidos > 0 ? ` Â· <span class="text-rose-600 font-bold">${stats.detenidos} det.</span>` : ' cliente'}</span>
+            <span class="text-[10px] text-blue-500 truncate">${stats.enRevision} rev.${stats.detenidos > 0 ? ` · <span class="text-rose-600 font-bold">${stats.detenidos} det.</span>` : ' cliente'}</span>
           </div>
         </div>
 
@@ -1040,7 +1040,7 @@ export function renderSeguimientoView() {
               <th class="py-2.5 px-3 w-16">Clave</th>
               <th class="py-2.5 px-3 min-w-[220px]">
                 <div class="flex items-center justify-between gap-2">
-                  <span>DescripciÃ³n de Concepto</span>
+                  <span>Descripción de Concepto</span>
                   <div class="inline-flex items-center gap-1 shrink-0">
                     <button type="button"
                             onclick="setAllSeguimientoExpanded(true)"
@@ -1066,7 +1066,7 @@ export function renderSeguimientoView() {
                     <button type="button"
                             onclick="openInviteFromSeguimiento(event, null, 'members')"
                             class="inline-flex items-center -space-x-1.5 cursor-pointer hover:opacity-85 transition focus:outline-none"
-                            title="${escapeHtml(`Equipo e invitados (${members.length}): ${members.map(m => m.name || m.email).join(', ')} â€” Clic para ver o gestionar`)}">
+                            title="${escapeHtml(`Equipo e invitados (${members.length}): ${members.map(m => m.name || m.email).join(', ')} — Clic para ver o gestionar`)}">
                       ${members.slice(0, 3).map(m => renderMemberAvatarCircle(m, m.email, 'w-5 h-5', 'text-[8px]')).join('')}
                       ${members.length > 3 ? `<span class="w-5 h-5 rounded-full bg-slate-600 text-white text-[8px] font-bold inline-flex items-center justify-center ring-2 ring-white shadow-2xs">+${members.length - 3}</span>` : ''}
                     </button>
@@ -1096,7 +1096,7 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
       <tr>
         <td colspan="6" class="p-8 text-center text-slate-400">
           <i class="fa-solid fa-bars-progress text-2xl mb-1 block"></i>
-          No hay entregables configurados aÃºn en la Tabla de Alcances.
+          No hay entregables configurados aún en la Tabla de Alcances.
         </td>
       </tr>
     `;
@@ -1149,11 +1149,11 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
 
         const assignedSummary = assignedEmails.map(em => {
           const m = findMemberByEmail(members, em, fallbackMap);
-          return `${m?.name || em.split('@')[0]}${m?.status === 'pending' ? ' (InvitaciÃ³n pendiente)' : ''}`;
+          return `${m?.name || em.split('@')[0]}${m?.status === 'pending' ? ' (Invitación pendiente)' : ''}`;
         }).join(', ');
 
         const responsableTitle = assignedEmails.length > 0
-          ? `${assignedSummary}${locked ? '' : ' â€” Clic para asignar mÃ¡s o cambiar'}`
+          ? `${assignedSummary}${locked ? '' : ' — Clic para asignar más o cambiar'}`
           : (locked ? 'Sin responsable asignado' : 'Clic para asignar responsables o invitar colaborador');
 
         let responsableCellHtml = '';
@@ -1201,7 +1201,7 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
           ? 'bg-slate-50/70 hover:bg-purple-50/40 font-semibold transition'
           : 'hover:bg-purple-50/30 transition';
         const subCountBadge = hasChildren
-          ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 text-[10px] font-bold shrink-0" title="Concepto con ${node.children.length} subconceptos â€” ${isExpanded ? 'Desagrupado' : 'Agrupado'}">${node.children.length} sub${!isExpanded ? ' Â· agrupado' : ''}</span>`
+          ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 text-[10px] font-bold shrink-0" title="Concepto con ${node.children.length} subconceptos — ${isExpanded ? 'Desagrupado' : 'Agrupado'}">${node.children.length} sub${!isExpanded ? ' · agrupado' : ''}</span>`
           : '';
 
         html += `
@@ -1219,11 +1219,11 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
                 </div>
               </div>
             </td>
-            <!-- Responsable (CÃ­rculo de foto de perfil + Selector / Invitar) -->
+            <!-- Responsable (Círculo de foto de perfil + Selector / Invitar) -->
             <td class="py-1.5 px-3 text-center align-middle">
               ${responsableCellHtml}
             </td>
-            <!-- Estatus (BotÃ³n estilo Monday.com) -->
+            <!-- Estatus (Botón estilo Monday.com) -->
             <td class="p-1.5 align-middle">
               ${hasChildren ? renderParentConceptStatusCell(node) : `
                 <button type="button"
@@ -1233,7 +1233,7 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
                         ${locked ? 'disabled' : ''}
                         class="seg-status-btn group relative w-full h-8 px-3 rounded-[4px] font-bold text-xs text-white flex items-center justify-center shadow-2xs transition-all duration-150 ${locked ? 'opacity-85 cursor-not-allowed' : 'cursor-pointer hover:brightness-95 active:scale-[0.98]'}"
                         style="background-color: ${statusOpt.bgHex}; color: #ffffff;"
-                        title="${locked ? 'PestaÃ±a bloqueada (solo lectura)' : `Estatus: ${statusOpt.label} â€” Clic para cambiar`}">
+                        title="${locked ? 'Pestaña bloqueada (solo lectura)' : `Estatus: ${statusOpt.label} — Clic para cambiar`}">
                   <span class="truncate tracking-wide">${escapeHtml(statusOpt.label)}</span>
                   ${!locked ? '<i class="fa-solid fa-caret-down text-[10px] opacity-0 group-hover:opacity-90 transition-opacity absolute right-2"></i>' : ''}
                 </button>
@@ -1257,7 +1257,7 @@ function renderSeguimientoRows(nodes, members, locked, fallbackMap = buildFallba
         <td colspan="6" class="p-8 text-center text-slate-500">
           <i class="fa-solid fa-filter-circle-xmark text-2xl text-slate-300 mb-2 block"></i>
           <div class="font-bold text-xs text-slate-700">No hay entregables que coincidan con los filtros seleccionados.</div>
-          <div class="text-[11px] text-slate-400 mt-0.5 mb-3">Ajusta el filtro de estatus o responsable para ver mÃ¡s elementos.</div>
+          <div class="text-[11px] text-slate-400 mt-0.5 mb-3">Ajusta el filtro de estatus o responsable para ver más elementos.</div>
           <button type="button"
                   onclick="clearSeguimientoFilters()"
                   class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5">
@@ -1296,7 +1296,7 @@ export function onSeguimientoMemberInvited(email) {
 
 export function toggleResponsableEmailOnNode(nodeId, emailVal, { keepPopoverOpen = true, forceAdd = false } = {}) {
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1360,7 +1360,7 @@ export function toggleResponsablePopover(event, triggerBtn) {
     event.stopPropagation();
   }
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1386,7 +1386,7 @@ export function toggleResponsablePopover(event, triggerBtn) {
   popover.className = 'fixed z-[99999] bg-white border border-slate-200 rounded-xl shadow-2xl p-2 flex flex-col gap-1.5';
 
   const memberItemsHtml = members.length === 0
-    ? `<div class="py-3 px-2 text-center text-[11px] text-slate-400">No hay colaboradores en el proyecto aÃºn.</div>`
+    ? `<div class="py-3 px-2 text-center text-[11px] text-slate-400">No hay colaboradores en el proyecto aún.</div>`
     : members.map(m => {
         const lowerEmail = (m.email || '').trim().toLowerCase();
         const isSelected = lowerEmail !== '' && currentSet.has(lowerEmail);
@@ -1398,7 +1398,7 @@ export function toggleResponsablePopover(event, triggerBtn) {
             <div class="flex-1 min-w-0">
               <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(m.name || m.email)}</div>
               <div class="text-[10px] text-slate-400 truncate">
-                ${escapeHtml(m.role || 'colaborador')}${m.status === 'pending' ? ' Â· InvitaciÃ³n pendiente' : ''}
+                ${escapeHtml(m.role || 'colaborador')}${m.status === 'pending' ? ' · Invitación pendiente' : ''}
               </div>
             </div>
             <span class="w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected ? 'bg-purple-600 border-purple-600 text-white' : 'border-slate-300 text-transparent'}">
@@ -1468,7 +1468,7 @@ export function toggleResponsablePopover(event, triggerBtn) {
 
 export function setConceptAndSubconceptosStatus(nodeId, nextStatus) {
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1506,7 +1506,7 @@ export function toggleEstatusPopover(event, triggerBtn) {
     event.stopPropagation();
   }
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1575,7 +1575,7 @@ export function toggleSubconceptosEstatusPopover(event, triggerBtn) {
     event.stopPropagation();
   }
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1698,7 +1698,7 @@ export function toggleResponsableFilterPopover(event, triggerBtn) {
     const totalCount = entry.count + entry.parentCount;
     const displayName = entry.member?.name || entry.email.split('@')[0];
     const subtitle = entry.member?.status === 'pending'
-      ? 'InvitaciÃ³n pendiente'
+      ? 'Invitación pendiente'
       : (entry.member?.role || entry.email);
     return `
       <button type="button"
@@ -1732,7 +1732,7 @@ export function toggleResponsableFilterPopover(event, triggerBtn) {
         </span>
         <div class="flex-1 min-w-0">
           <div class="text-xs font-bold text-slate-800">Todos los responsables</div>
-          <div class="text-[10px] text-slate-400">Mostrar cualquier asignaciÃ³n</div>
+          <div class="text-[10px] text-slate-400">Mostrar cualquier asignación</div>
         </div>
         <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-slate-100 text-slate-700">${filterMeta.allForStatusCount}</span>
         ${makeCheckmark(isAllSelected)}
@@ -1770,7 +1770,7 @@ export function toggleResponsableFilterPopover(event, triggerBtn) {
   positionPopoverNearAnchor(popover, triggerBtn, 275, estHeight);
 }
 
-// Handlers de actualizaciÃ³n
+// Handlers de actualización
 export function setSeguimientoFilter(st) {
   seguimientoFilterStatus = st || 'all';
   renderSeguimientoView();
@@ -1820,7 +1820,7 @@ export function setAllSeguimientoExpanded(expandedState) {
 
 export function onAvanceBarClick(event, barEl) {
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
   if (!barEl) return;
@@ -1828,7 +1828,7 @@ export function onAvanceBarClick(event, barEl) {
   if (!nodeId) return;
   const targetNode = findNodeById(state.treeData || [], nodeId);
   if (Array.isArray(targetNode?.children) && targetNode.children.length > 0) {
-    showToast('Este concepto tiene subconceptos; su % de avance se calcula automÃ¡ticamente.', 'info');
+    showToast('Este concepto tiene subconceptos; su % de avance se calcula automáticamente.', 'info');
     return;
   }
   const rect = barEl.getBoundingClientRect();
@@ -1841,7 +1841,7 @@ export function onAvanceBarClick(event, barEl) {
 
 export function updateEntregableSeguimiento(nodeId, field, val) {
   if (!canCurrentUserEditProject(getActiveProjectId()) || isTabLocked('seguimiento')) {
-    showToast('ðŸ”’ La pestaÃ±a "Seguimiento" estÃ¡ bloqueada o en modo solo lectura.', 'warning');
+    showToast('🔒 La pestaña "Seguimiento" está bloqueada o en modo solo lectura.', 'warning');
     return;
   }
 
@@ -1849,7 +1849,7 @@ export function updateEntregableSeguimiento(nodeId, field, val) {
   if (field === 'archivoLink') {
     const linkCheck = normalizeSeguimientoLink(val);
     if (!linkCheck.valid) {
-      showToast('Ingresa un link vÃ¡lido (ejemplo: https://drive.google.com/...)', 'warning');
+      showToast('Ingresa un link válido (ejemplo: https://drive.google.com/...)', 'warning');
       renderSeguimientoView();
       return;
     }
@@ -1891,7 +1891,7 @@ export function updateEntregableSeguimiento(nodeId, field, val) {
   }
   update(state.treeData || []);
   if (blockedAvanceEdit) {
-    showToast('Este concepto tiene subconceptos; su % de avance se calcula automÃ¡ticamente a partir de ellos.', 'info');
+    showToast('Este concepto tiene subconceptos; su % de avance se calcula automáticamente a partir de ellos.', 'info');
     renderSeguimientoView();
     return;
   }

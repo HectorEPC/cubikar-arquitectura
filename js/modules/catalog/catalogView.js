@@ -1,21 +1,21 @@
-﻿import { state } from '../../state/store.js?v=20261116_cf3';
-import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261116_cf3';
-import { getHierarchyColor } from '../../core/colors.js?v=20261116_cf3';
-import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261116_cf3';
-import { findNodeById } from './treeService.js?v=20261116_cf3';
-import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261116_cf3';
-import { clampApuWidth } from '../../ui/resizer.js?v=20261116_cf3';
-import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261116_cf3';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261116_cf3';
-import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261116_cf3';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf3';
+import { state } from '../../state/store.js?v=20261116_cf4';
+import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261116_cf4';
+import { getHierarchyColor } from '../../core/colors.js?v=20261116_cf4';
+import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261116_cf4';
+import { findNodeById } from './treeService.js?v=20261116_cf4';
+import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261116_cf4';
+import { clampApuWidth } from '../../ui/resizer.js?v=20261116_cf4';
+import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261116_cf4';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf4';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261116_cf4';
+import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261116_cf4';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261116_cf4';
 
 const SIDEPANEL_BTN_BASE_CLASS = 'sidepanel-row-btn px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0';
 const SIDEPANEL_BTN_ACTIVE_CLASS = `${SIDEPANEL_BTN_BASE_CLASS} bg-blue-600 text-white shadow-xs`;
 const SIDEPANEL_BTN_IDLE_CLASS = `${SIDEPANEL_BTN_BASE_CLASS} bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200`;
 const SIDEPANEL_BTN_BLOCKED_CLASS = `${SIDEPANEL_BTN_BASE_CLASS} bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-300`;
-// Elementos cuya interacciÃ³n mantiene abierto el panel lateral (propio panel, divisor, botones Cotiz. y modales como #modal-cotizacion-proveedor)
+// Elementos cuya interacción mantiene abierto el panel lateral (propio panel, divisor, botones Cotiz. y modales como #modal-cotizacion-proveedor)
 const APU_PANEL_KEEP_OPEN_SELECTOR = '#apu-panel, #panel-resizer, .sidepanel-row-btn, [id^="modal-"]';
 
 let activeSidePanelNodeId = null;
@@ -43,7 +43,7 @@ function renderConceptQuoteBadgesHtml(quoteStatus, isParent) {
       const ganadorQty = (ganador.cantidad !== undefined && ganador.cantidad !== null && ganador.cantidad !== '') ? (parseFloat(ganador.cantidad) || 1) : 1;
       const ganadorCost = (ganador.costo !== undefined && ganador.costo !== null) ? Number(ganador.costo) : round2(Number(ganador.monto || 0) * (ganadorQty > 0 ? ganadorQty : 1));
       const titleDetail = ganadorQty > 1
-        ? `Proveedor Ganador: ${prov} (Total: ${formatMoney(ganadorCost)} â€” ${formatMoney(ganador.monto)} Ã— ${formatQty(ganadorQty)} ${escapeCatalogHtml(ganador.unidad || '')})`
+        ? `Proveedor Ganador: ${prov} (Total: ${formatMoney(ganadorCost)} — ${formatMoney(ganador.monto)} × ${formatQty(ganadorQty)} ${escapeCatalogHtml(ganador.unidad || '')})`
         : `Proveedor Ganador: ${prov} (${formatMoney(ganadorCost)})`;
       return `
         <div class="mt-1 flex items-center gap-1.5 flex-wrap">
@@ -73,7 +73,7 @@ function renderConceptQuoteBadgesHtml(quoteStatus, isParent) {
       const desc = escapeCatalogHtml(item.node.descripcion || '');
       return `
         <span class="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-800 border border-emerald-300/80 px-2 py-0.5 rounded-md font-sans font-bold shadow-2xs"
-              title="[${clave}] ${desc} â€” Ganador: ${prov} (${formatMoney(item.conceptTotal)})">
+              title="[${clave}] ${desc} — Ganador: ${prov} (${formatMoney(item.conceptTotal)})">
           <i class="fa-solid fa-user-check text-[8px] text-emerald-600"></i>
           <span class="font-mono text-emerald-700">[${clave}]</span> ${prov}
           <span class="text-[8px] text-emerald-600 font-mono font-bold">(${formatMoney(item.conceptTotal)})</span>
@@ -91,7 +91,7 @@ function renderConceptQuoteBadgesHtml(quoteStatus, isParent) {
     return `
       <div class="mt-1 flex items-center gap-1.5 flex-wrap">
         <span class="inline-flex items-center gap-1 text-[9px] bg-amber-50 text-amber-800 border border-amber-300/80 px-2 py-0.5 rounded-md font-sans font-semibold shadow-2xs"
-              title="Los subconceptos tienen cotizaciones pero ninguna seleccionada aÃºn (total $0.00)">
+              title="Los subconceptos tienen cotizaciones pero ninguna seleccionada aún (total $0.00)">
           <i class="fa-solid fa-users-viewfinder text-[8px] text-amber-600"></i> ${pendingCount} subconcepto(s) sin ganador ($0.00)
         </span>
       </div>
@@ -150,7 +150,7 @@ function bindSelectAllOnDblClick(fieldEl) {
   };
 }
 
-// Renderizado de la tabla principal de catÃ¡logo (TAB1-CAT-BASE)
+// Renderizado de la tabla principal de catálogo (TAB1-CAT-BASE)
 export function renderTAB1() {
   const tbody = document.getElementById('tb1-body');
   if (!tbody) return;
@@ -188,11 +188,11 @@ export function renderTAB1() {
       const isPuEditable = !isCatLocked && !isParent && !hasOwnQuotes;
       const puTitle = hasOwnQuotes
         ? (quoteStatus.ownWinner
-            ? 'Precio definido por la cotizaciÃ³n seleccionada en el panel lateral (Para editar manualmente, elimine todas las cotizaciones)'
+            ? 'Precio definido por la cotización seleccionada en el panel lateral (Para editar manualmente, elimine todas las cotizaciones)'
             : 'Cotizaciones agregadas sin proveedor ganador seleccionado ($0.00). Para editar manualmente, elimine todas las cotizaciones')
         : (isParent
             ? 'Resultado calculado a partir de los precios unitarios de los subconceptos'
-            : (isCatLocked ? 'CatÃ¡logo bloqueado' : 'Precio unitario editable (Haga doble clic para editar)'));
+            : (isCatLocked ? 'Catálogo bloqueado' : 'Precio unitario editable (Haga doble clic para editar)'));
 
       // Solo pintar la fila de nivel 1; subfilas y conceptos permanecen limpios sin fondo de color
       const isLevel1 = level === 1;
@@ -316,7 +316,7 @@ export function renderTAB1() {
                 if (groupStatus.status === 'valid') {
                   return `
                     <span class="inline-flex items-center gap-1 text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold shadow-2xs"
-                          title="PonderaciÃ³n balanceada al 100.00%">
+                          title="Ponderación balanceada al 100.00%">
                       <i class="fa-solid fa-check text-[8px] text-emerald-600"></i> 100%
                     </span>
                   `;
@@ -349,7 +349,7 @@ export function renderTAB1() {
                      value="${Number(node.porcentaje_relativo || 0).toFixed(2)}"
                      onchange="updateNode('${escapeCatalogHtml(node.id)}', 'porcentaje_relativo', parseFloat(this.value) || 0)"
                      class="pct-rel-input w-16 text-right bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded text-xs font-mono font-semibold text-slate-700 disabled:cursor-default"
-                     title="PonderaciÃ³n relativa respecto a su padre directo">
+                     title="Ponderación relativa respecto a su padre directo">
               <span class="text-slate-400 text-[10px] ml-0.5 font-mono">%</span>
             </div>
           `}
@@ -393,7 +393,7 @@ export function renderTAB1() {
               <span>Cotiz.</span>
             </button>
             <button onclick="addChildRow('${node.id}', event)" ${isCatLocked ? 'disabled' : ''}
-                    title="${isCatLocked ? 'PestaÃ±a bloqueada (Solo consulta e impresiÃ³n)' : 'Agregar Sub-renglÃ³n'}" 
+                    title="${isCatLocked ? 'Pestaña bloqueada (Solo consulta e impresión)' : 'Agregar Sub-renglón'}" 
                     class="${isCatLocked ? 'text-slate-300 p-1 transition disabled:opacity-35 disabled:cursor-not-allowed' : 'text-blue-600 hover:text-blue-800 p-1'}">
               <i class="fa-solid fa-plus-circle text-xs ${isCatLocked ? 'opacity-35' : ''}"></i>
             </button>
@@ -408,7 +408,7 @@ export function renderTAB1() {
                 <button onclick="duplicarNode('${node.id}', event); closeAllDropdownMenus();" ${isCatLocked ? 'disabled' : ''} class="w-full text-left px-3 py-1 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
                   <i class="fa-solid fa-clone text-[10px]"></i> Duplicar
                 </button>
-                <button onclick="copiarNode('${node.id}', event); closeAllDropdownMenus();" class="w-full text-left px-3 py-1 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2" title="Copiar este concepto para pegarlo aquÃ­ o en otro proyecto">
+                <button onclick="copiarNode('${node.id}', event); closeAllDropdownMenus();" class="w-full text-left px-3 py-1 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2" title="Copiar este concepto para pegarlo aquí o en otro proyecto">
                   <i class="fa-solid fa-copy text-[10px]"></i> Copiar
                 </button>
                 <button onclick="pegarNode('${node.id}', event); closeAllDropdownMenus();" ${isCatLocked ? 'disabled' : ''} class="w-full text-left px-3 py-1 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 ${!state.clipboardNode || isCatLocked ? 'opacity-40 cursor-not-allowed' : ''}" title="${state.clipboardNode ? `Pegar concepto copiado [${state.clipboardNode.clave || ''}]` : 'No hay concepto en el portapapeles'}">
@@ -482,7 +482,7 @@ export function renderTAB1() {
   updateSobrecostoBadge();
 }
 
-// Resaltar fila en CatÃ¡logo Base sin recrear el DOM (preserva el foco al hacer clic dentro de un input/textarea)
+// Resaltar fila en Catálogo Base sin recrear el DOM (preserva el foco al hacer clic dentro de un input/textarea)
 export function highlightCatalogRowInPlace(id) {
   state.activeSelectedId = id;
 
@@ -541,7 +541,7 @@ export function selectRow(id) {
   if (apuPanel) apuPanel.classList.remove('hidden');
   if (panelResizer) panelResizer.classList.remove('hidden');
 
-  // Restaurar ancho guardado en localStorage limitÃ¡ndolo de forma segura
+  // Restaurar ancho guardado en localStorage limitándolo de forma segura
   if (apuPanel) {
     const savedWidth = localStorage.getItem(APU_WIDTH_KEY);
     const container = document.getElementById('view-alcances') || document.getElementById('view-cat');
@@ -556,7 +556,7 @@ export function selectRow(id) {
   const apuClave = document.getElementById('apu-clave');
   if (apuClave) apuClave.innerText = node.clave || '';
   const apuTitle = document.getElementById('apu-title');
-  if (apuTitle) apuTitle.innerText = node.descripcion || 'Sin descripciÃ³n';
+  if (apuTitle) apuTitle.innerText = node.descripcion || 'Sin descripción';
   const apuDesc = document.getElementById('apu-desc');
   if (apuDesc) apuDesc.innerText = `Unidad: ${isParent ? 'lote' : (node.unidad || 'pza')} | Cantidad: ${node.cantidad || 0}`;
 
@@ -571,7 +571,7 @@ export function closeApuPanel() {
   renderTAB1();
 }
 
-// Abrir / cerrar menÃº desplegable de opciones de fila
+// Abrir / cerrar menú desplegable de opciones de fila
 export function toggleDropdownMenu(id, event) {
   if (event) {
     event.stopPropagation();
@@ -583,11 +583,11 @@ export function toggleDropdownMenu(id, event) {
 
   const wasOpen = menu.classList.contains('show') || container.classList.contains('is-open');
 
-  // Cerrar cualquier otro menÃº antes de abrir
+  // Cerrar cualquier otro menú antes de abrir
   closeAllDropdownMenus();
 
   if (!wasOpen) {
-    // Detectar si estÃ¡ cerca del lÃ­mite inferior para desplegar hacia arriba
+    // Detectar si está cerca del límite inferior para desplegar hacia arriba
     const rect = container.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     if (spaceBelow < 220 && rect.top > 200) {
@@ -601,7 +601,7 @@ export function toggleDropdownMenu(id, event) {
   }
 }
 
-// Cerrar todos los menÃºs desplegables abiertos
+// Cerrar todos los menús desplegables abiertos
 export function closeAllDropdownMenus() {
   document.querySelectorAll('.dropdown-menu.show').forEach((menu) => {
     menu.classList.remove('show', 'dropdown-menu-up');
@@ -622,7 +622,7 @@ function isKeepOpenTarget(target) {
   return Boolean(el && el.closest(APU_PANEL_KEEP_OPEN_SELECTOR));
 }
 
-// Manejadores globales para cerrar menÃºs y panel lateral al hacer clic fuera o presionar Escape
+// Manejadores globales para cerrar menús y panel lateral al hacer clic fuera o presionar Escape
 if (typeof document !== 'undefined') {
   const markPointerDownOrigin = (e) => {
     lastMouseDownInsideApuPanel = isKeepOpenTarget(e.target);

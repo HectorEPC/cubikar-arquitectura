@@ -1,4 +1,4 @@
-﻿import { APU_WIDTH_KEY } from '../config/constants.js?v=20261116_cf3';
+import { APU_WIDTH_KEY } from '../config/constants.js?v=20261116_cf4';
 
 let isResizingApu = false;
 let startResizeX = 0;
@@ -6,7 +6,7 @@ let startApuWidth = 480;
 
 /**
  * Limita el ancho del panel lateral de Cotizaciones para garantizar que:
- * 1. La tabla principal de alcances mantenga un espacio mÃ­nimo cÃ³modo (al menos 420px).
+ * 1. La tabla principal de alcances mantenga un espacio mínimo cómodo (al menos 420px).
  * 2. El panel lateral no supere el 55% del ancho del contenedor ni 780px.
  * 3. Nunca empuje el panel fuera del borde derecho de la pantalla.
  * @param {number|string} desiredWidth
@@ -25,14 +25,14 @@ export function clampApuWidth(desiredWidth, containerWidth) {
   return Math.max(minW, Math.min(Math.round(val), maxW));
 }
 
-// InicializaciÃ³n del divisor arrastrable entre el catÃ¡logo y el panel APU
+// Inicialización del divisor arrastrable entre el catálogo y el panel APU
 export function initPanelResizer() {
   const resizer = document.getElementById('panel-resizer');
   const apuPanel = document.getElementById('apu-panel');
   const container = document.getElementById('view-alcances') || document.getElementById('view-cat');
   if (!resizer || !apuPanel || !container) return;
 
-  // Restaurar ancho previo guardado en localStorage asegurando lÃ­mites seguros
+  // Restaurar ancho previo guardado en localStorage asegurando límites seguros
   const savedWidth = localStorage.getItem(APU_WIDTH_KEY);
   const containerW = container.clientWidth || window.innerWidth;
   const initialWidth = savedWidth ? parseInt(savedWidth, 10) : 480;
@@ -89,7 +89,7 @@ export function initPanelResizer() {
     window.addEventListener('mouseup', onMouseUp);
   });
 
-  // Soporte para pantallas tÃ¡ctiles
+  // Soporte para pantallas táctiles
   resizer.addEventListener('touchstart', (e) => {
     if (e.touches && e.touches.length > 0) {
       startDrag(e.touches[0].clientX);

@@ -1,34 +1,34 @@
-﻿import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261116_cf3';
-import { defaultTreeData } from '../config/defaultData.js?v=20261116_cf3';
-import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261116_cf3';
-import { showToast } from './notifications.js?v=20261116_cf3';
-import { formatQty, round2, round5 } from '../core/formatters.js?v=20261116_cf3';
+import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261116_cf4';
+import { defaultTreeData } from '../config/defaultData.js?v=20261116_cf4';
+import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261116_cf4';
+import { showToast } from './notifications.js?v=20261116_cf4';
+import { formatQty, round2, round5 } from '../core/formatters.js?v=20261116_cf4';
 import {
   getDespachoGastosBreakdown,
   getNominaOficinaBreakdown,
   getUtilidadDespachoPct,
   getEjecutivoCostPlusFactor,
   updateSobrecostoBadge
-} from '../core/calculations.js?v=20261116_cf3';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261116_cf3';
-import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261116_cf3';
-import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261116_cf3';
-import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261116_cf3';
-import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261116_cf3';
-import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261116_cf3';
-import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261116_cf3';
-import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261116_cf3';
-import { renderBrandingUI } from './brandingController.js?v=20261116_cf3';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261116_cf3';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf3';
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf3';
-import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261116_cf3';
+} from '../core/calculations.js?v=20261116_cf4';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261116_cf4';
+import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261116_cf4';
+import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261116_cf4';
+import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261116_cf4';
+import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261116_cf4';
+import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261116_cf4';
+import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261116_cf4';
+import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261116_cf4';
+import { renderBrandingUI } from './brandingController.js?v=20261116_cf4';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261116_cf4';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf4';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf4';
+import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261116_cf4';
 
 // Modo de destino del modal Google IA: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)
 export let aiModalTargetMode = 'single';
 export let aiModalSingleNodeId = null;
 
-// Modal de GeneraciÃ³n APU con Google Search Grounding
+// Modal de Generación APU con Google Search Grounding
 export function openAiGeneratorModal(singleSelectedOnly = false) {
   let node = null;
   const isSingle = Boolean(singleSelectedOnly);
@@ -87,7 +87,7 @@ export function openAiGeneratorModal(singleSelectedOnly = false) {
     const checkedNodes = getSelectedLeafConcepts ? getSelectedLeafConcepts() : [];
     if (modalPathEl) modalPathEl.innerText = `Lote de ${checkedNodes.length} conceptos seleccionados con casilla`;
     if (modalClaveEl) modalClaveEl.innerText = `${checkedNodes.length} sel.`;
-    if (modalDescEl) modalDescEl.innerText = checkedNodes.map(c => `[${c.clave || ''}] ${c.descripcion}`).slice(0, 4).join(', ') + (checkedNodes.length > 4 ? ` (+${checkedNodes.length - 4} mÃ¡s)` : '');
+    if (modalDescEl) modalDescEl.innerText = checkedNodes.map(c => `[${c.clave || ''}] ${c.descripcion}`).slice(0, 4).join(', ') + (checkedNodes.length > 4 ? ` (+${checkedNodes.length - 4} más)` : '');
     if (modalUnidEl) modalUnidEl.innerText = 'Varias';
     if (modalUnidHintEl) modalUnidHintEl.innerText = 'cada concepto seleccionado';
     if (modalCantEl) modalCantEl.innerText = `${checkedNodes.length} conceptos`;
@@ -98,7 +98,7 @@ export function openAiGeneratorModal(singleSelectedOnly = false) {
 
     if (modalPathEl) modalPathEl.innerText = parentPath;
     if (modalClaveEl) modalClaveEl.innerText = node.clave || '---';
-    if (modalDescEl) modalDescEl.innerText = node.descripcion || 'Sin descripciÃ³n';
+    if (modalDescEl) modalDescEl.innerText = node.descripcion || 'Sin descripción';
     if (modalUnidEl) modalUnidEl.innerText = node.unidad || 'pza';
     if (modalUnidHintEl) modalUnidHintEl.innerText = `1 ${node.unidad || 'pza'}`;
     if (modalCantEl) modalCantEl.innerText = formatQty(node.cantidad || 1);
@@ -137,7 +137,7 @@ export function toggleAiModalKeyVisibility() {
   }
 }
 
-// Modal de ConfiguraciÃ³n General
+// Modal de Configuración General
 export function openSettingsModal(tab = 'informacion') {
   let targetTab = tab;
   if (!targetTab || targetTab === 'general' || targetTab === 'empresa') {
@@ -208,7 +208,7 @@ export function openSettingsModal(tab = 'informacion') {
   const keyEl = document.getElementById('cfg-api-key');
   if (keyEl) keyEl.value = state.settings.apiKey || '';
 
-  // ConfiguraciÃ³n de Moneda
+  // Configuración de Moneda
   const curSelect = document.getElementById('cfg-currency-select');
   const curSymbol = document.getElementById('cfg-currency-symbol');
   const curCode = document.getElementById('cfg-currency-code');
@@ -336,7 +336,7 @@ export function toggleAdvancedBlock(blockKey, forceState = null) {
   updateCalculatedFactorPreview();
 }
 
-// Expandir o colapsar las opciones avanzadas en ConfiguraciÃ³n -> % Despacho, IVA y Moneda
+// Expandir o colapsar las opciones avanzadas en Configuración -> % Despacho, IVA y Moneda
 export function toggleSettingsAdvancedSection(forceState = null) {
   const sec = document.getElementById('cfg-advanced-section');
   const chev = document.getElementById('cfg-advanced-chevron');
@@ -348,12 +348,12 @@ export function toggleSettingsAdvancedSection(forceState = null) {
   }
 }
 
-// Al editar el campo Ãºnico simple "% Gastos Indirectos", recalcular sin llenar Opciones avanzadas
+// Al editar el campo único simple "% Gastos Indirectos", recalcular sin llenar Opciones avanzadas
 export function onSimpleGastosInput() {
   updateCalculatedFactorPreview();
 }
 
-// Al editar cualquiera de los 3 campos del desglose avanzado, recalcular el campo Ãºnico simple
+// Al editar cualquiera de los 3 campos del desglose avanzado, recalcular el campo único simple
 export function onBreakdownGastosInput() {
   const ind = Math.max(0, parseFloat(document.getElementById('cfg-indirectos')?.value) || 0);
   const fin = Math.max(0, parseFloat(document.getElementById('cfg-financiamiento')?.value) || 0);
@@ -385,7 +385,7 @@ export function onCurrencySelectChange(val) {
   updateCurrencyPreview();
 }
 
-// Vista previa dinÃ¡mica del formato de moneda
+// Vista previa dinámica del formato de moneda
 export function updateCurrencyPreview() {
   const symbol = (document.getElementById('cfg-currency-symbol')?.value || '$').trim();
   const code = (document.getElementById('cfg-currency-code')?.value || 'MXN').trim();
@@ -475,12 +475,12 @@ export function updateCalculatedFactorPreview() {
 
   const advTags = [];
   if (applyDesglose) advTags.push('Desglose');
-  if (applyNomina) advTags.push('NÃ³mina H.H.');
+  if (applyNomina) advTags.push('Nómina H.H.');
   if (applyRet) advTags.push('Retenciones');
   const advPill = document.getElementById('cfg-advanced-active-pill');
   if (advPill) {
     if (advTags.length > 0) {
-      advPill.textContent = advTags.join(' Â· ');
+      advPill.textContent = advTags.join(' · ');
       advPill.classList.remove('hidden');
     } else {
       advPill.textContent = '';
@@ -511,22 +511,22 @@ export function updateCalculatedFactorPreview() {
 
   const simpleFactorEl = document.getElementById('cfg-simple-factor-badge');
   if (simpleFactorEl) {
-    simpleFactorEl.innerText = apply ? `Ã—${factor.toFixed(2)} (+${pct}%)` : `Solo Utilidad Ã—${factor.toFixed(2)}`;
+    simpleFactorEl.innerText = apply ? `×${factor.toFixed(2)} (+${pct}%)` : `Solo Utilidad ×${factor.toFixed(2)}`;
   }
 
   const breakdownEl = document.getElementById('cfg-sobrecosto-breakdown');
   if (breakdownEl) {
     const ivaStr = applyIva ? `IVA: ${ivaVal}%` : 'IVA: Desactivado';
-    const retStr = applyRet ? ` Â· Ret: -${(retIsr + retIva).toFixed(2)}%` : '';
-    const nominaStr = nomina.apply ? `Ã—${nomina.factor.toFixed(2)} activo` : 'Desactivado';
+    const retStr = applyRet ? ` · Ret: -${(retIsr + retIva).toFixed(2)}%` : '';
+    const nominaStr = nomina.apply ? `×${nomina.factor.toFixed(2)} activo` : 'Desactivado';
     breakdownEl.innerHTML = `
-      <span>Gastos Operativos: +${gastos.pctTotal.toFixed(2)}% (Ã—${gastos.factor.toFixed(4)}) Â· Utilidad: ${uti.toFixed(1)}%</span>
-      <span>H.H. NÃ³mina: ${nominaStr} Â· ${ivaStr}${retStr}</span>
+      <span>Gastos Operativos: +${gastos.pctTotal.toFixed(2)}% (×${gastos.factor.toFixed(4)}) · Utilidad: ${uti.toFixed(1)}%</span>
+      <span>H.H. Nómina: ${nominaStr} · ${ivaStr}${retStr}</span>
     `;
   }
 }
 
-// Vista previa dinÃ¡mica del Factor de NÃ³mina / Prestaciones de Oficina (antes FASAR)
+// Vista previa dinámica del Factor de Nómina / Prestaciones de Oficina (antes FASAR)
 export function updateFasarPreview() {
   const el = document.getElementById('cfg-fasar');
   const badge = document.getElementById('cfg-fasar-badge');
@@ -561,14 +561,14 @@ export function updateFasarPreview() {
   badge.innerText = `${factor.toFixed(2)}x`;
 
   if (hintEl) {
-    hintEl.innerText = `Activo (Ã—${factor.toFixed(2)} en H.H.)`;
+    hintEl.innerText = `Activo (×${factor.toFixed(2)} en H.H.)`;
     hintEl.className = 'text-[10px] font-bold text-indigo-700 shrink-0';
   }
 }
 
 export function saveSettings() {
   if (!canCurrentUserEditProject(getActiveProjectId())) {
-    showToast('ðŸ”’ Modo solo lectura: no tienes permisos para guardar ajustes del proyecto.', 'warning');
+    showToast('🔒 Modo solo lectura: no tienes permisos para guardar ajustes del proyecto.', 'warning');
     return;
   }
   const cfg = getProjectPresupuestoConfig();
@@ -610,7 +610,7 @@ export function saveSettings() {
   state.settings.ivaPct = parseFloat(safeIva.toFixed(2));
   state.settings._execParamsV1 = true;
 
-  // SincronizaciÃ³n bidireccional con PRESUPUESTO (Cost-Plus, NÃ³mina e Impuestos)
+  // Sincronización bidireccional con PRESUPUESTO (Cost-Plus, Nómina e Impuestos)
   cfg.margenUtilidadGlobal = Math.round(state.settings.pctUtilidad * 100) / 100;
   cfg.applyNominaFactor = Boolean(applyNomina);
   cfg.aplicarIva = Boolean(applyIva);
@@ -633,7 +633,7 @@ export function saveSettings() {
   state.settings.currencySymbol = newSymbol;
   state.settings.showCurrencyCode = showCode;
 
-  // Guardar Datos de Empresa, Proyecto, UbicaciÃ³n y Logo
+  // Guardar Datos de Empresa, Proyecto, Ubicación y Logo
   const compName = (document.getElementById('cfg-company-name')?.value || '').trim();
   if (compName) state.settings.companyName = compName;
   const projName = (document.getElementById('cfg-project-name')?.value || '').trim();
@@ -684,7 +684,7 @@ export function saveSettings() {
     renderEstimacionesView();
   }
 
-  showToast(`âœ… ConfiguraciÃ³n del despacho guardada. Moneda: ${newSymbol} (${newCurrency}) Â· IVA: ${applyIva ? `${state.settings.ivaPct}%` : 'Inactivo'}`, 'success');
+  showToast(`✅ Configuración del despacho guardada. Moneda: ${newSymbol} (${newCurrency}) · IVA: ${applyIva ? `${state.settings.ivaPct}%` : 'Inactivo'}`, 'success');
 }
 
 export function toggleApiKeyVisibility() {
@@ -701,17 +701,17 @@ export function toggleApiKeyVisibility() {
 }
 
 export function resetToDemoData() {
-  if (!confirm('Â¿Restablecer el catÃ¡logo al ejemplo demo? Se sobrescribirÃ¡n los datos actuales.')) return;
+  if (!confirm('¿Restablecer el catálogo al ejemplo demo? Se sobrescribirán los datos actuales.')) return;
   state.treeData = JSON.parse(JSON.stringify(defaultTreeData));
   saveState();
   closeSettingsModal();
   closeApuPanel();
   // closeApuPanel() ya limpia activeSelectedId y ejecuta renderTAB1() una sola vez
-  showToast('CatÃ¡logo demo restablecido', 'info');
+  showToast('Catálogo demo restablecido', 'info');
 }
 
 export function clearAllData() {
-  if (!confirm('Â¿EstÃ¡s seguro de vaciar todo el catÃ¡logo de obra?')) return;
+  if (!confirm('¿Estás seguro de vaciar todo el catálogo de obra?')) return;
   state.treeData = [];
   saveState();
   closeSettingsModal();
@@ -720,7 +720,7 @@ export function clearAllData() {
   showToast('Presupuesto vaciado', 'warning');
 }
 
-// Cambio de pestaÃ±as principales del proyecto de arquitectura:
+// Cambio de pestañas principales del proyecto de arquitectura:
 // Alcances vs Presupuesto vs Seguimiento vs Calendario vs Estimaciones
 export function switchTab(tab) {
   // Mapear compatibilidad de nombres
@@ -740,7 +740,7 @@ export function switchTab(tab) {
       calendario: 'Calendario',
       estimaciones: 'Estimaciones'
     };
-    showToast(`ðŸ”’ No tienes permiso asignado para acceder a la pestaÃ±a "${tabNames[tab] || tab}". Esta pestaÃ±a estÃ¡ restringida solo a los miembros autorizados por el administrador.`, 'warning');
+    showToast(`🔒 No tienes permiso asignado para acceder a la pestaña "${tabNames[tab] || tab}". Esta pestaña está restringida solo a los miembros autorizados por el administrador.`, 'warning');
     return;
   }
 
@@ -769,11 +769,11 @@ export function switchTab(tab) {
     if (btns[key]) btns[key].className = inactiveClass;
   });
 
-  // Activar pestaÃ±a solicitada
+  // Activar pestaña solicitada
   if (views[tab]) views[tab].classList.remove('hidden');
   if (btns[tab]) btns[tab].className = activeClass;
 
-  // Renderizadores especÃ­ficos de cada vista
+  // Renderizadores específicos de cada vista
   if (tab === 'alcances') {
     renderTAB1();
   } else if (tab === 'presupuesto') {
@@ -821,7 +821,7 @@ export function closeComparisonModal() {
   }
 }
 
-// Modal de InformaciÃ³n de la Plataforma (Hero, Funciones Estrella y Comparativo)
+// Modal de Información de la Plataforma (Hero, Funciones Estrella y Comparativo)
 export function openPlatformInfoModal() {
   const modal = document.getElementById('modal-platform-info');
   if (modal) {
@@ -900,7 +900,7 @@ export function closeModalElement(modalEl) {
   if (!modalEl || !(modalEl instanceof HTMLElement)) return false;
   const modalId = modalEl.id;
 
-  // 1. Invocar funciÃ³n registrada en MODAL_CLOSE_MAP si existe
+  // 1. Invocar función registrada en MODAL_CLOSE_MAP si existe
   if (modalId && MODAL_CLOSE_MAP[modalId]) {
     try {
       MODAL_CLOSE_MAP[modalId]();
@@ -910,14 +910,14 @@ export function closeModalElement(modalEl) {
     }
   }
 
-  // 2. Intentar buscar y hacer clic en el botÃ³n de cerrar interno
+  // 2. Intentar buscar y hacer clic en el botón de cerrar interno
   const closeBtn = modalEl.querySelector('button[onclick*="close"], button[onclick*="Close"], button[onclick*="toggleComparisonModal"]');
   if (closeBtn && typeof closeBtn.click === 'function') {
     closeBtn.click();
     return true;
   }
 
-  // 3. Fallback genÃ©rico para cualquier modal no contemplado
+  // 3. Fallback genérico para cualquier modal no contemplado
   modalEl.classList.add('hidden');
   modalEl.classList.remove('flex');
   modalEl.style.display = 'none';
@@ -930,10 +930,10 @@ export function isModalBackdropElement(el) {
   // Ignorar contenedor de toasts o elementos no interactivos
   if (el.id === 'toast-container' || el.classList.contains('pointer-events-none')) return false;
 
-  // Verificar si estÃ¡ visible
+  // Verificar si está visible
   if (el.classList.contains('hidden') || el.style.display === 'none') return false;
 
-  // Si estÃ¡ registrado en el mapa de modales
+  // Si está registrado en el mapa de modales
   if (el.id && MODAL_CLOSE_MAP[el.id]) return true;
 
   // Si tiene clases de backdrop de modal flotante fijo de pantalla completa
@@ -958,7 +958,7 @@ export function getTopmostOpenModal() {
   return allModals[allModals.length - 1];
 }
 
-// Variable para prevenir cierre involuntario al soltar selecciÃ³n de texto arrastrada fuera del modal
+// Variable para prevenir cierre involuntario al soltar selección de texto arrastrada fuera del modal
 let modalMouseDownTarget = null;
 let isUniversalModalBackdropInitialized = false;
 
@@ -966,12 +966,12 @@ export function initUniversalModalBackdrop() {
   if (typeof document === 'undefined' || isUniversalModalBackdropInitialized) return;
   isUniversalModalBackdropInitialized = true;
 
-  // Rastrear dÃ³nde iniciÃ³ el mousedown
+  // Rastrear dónde inició el mousedown
   document.addEventListener('mousedown', (e) => {
     modalMouseDownTarget = e.target;
   }, true);
 
-  // Al hacer clic, solo cerrar si el clic iniciÃ³ y terminÃ³ en el mismo fondo exterior
+  // Al hacer clic, solo cerrar si el clic inició y terminó en el mismo fondo exterior
   document.addEventListener('click', (e) => {
     if (!modalMouseDownTarget || modalMouseDownTarget !== e.target) {
       modalMouseDownTarget = null;
@@ -987,7 +987,7 @@ export function initUniversalModalBackdrop() {
   // Atajo universal: tecla Escape cierra el modal superior abierto
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      // Si hay un menÃº dropdown abierto, permitir que se cierre primero
+      // Si hay un menú dropdown abierto, permitir que se cierre primero
       if (document.querySelector('.dropdown-menu.show')) {
         return;
       }

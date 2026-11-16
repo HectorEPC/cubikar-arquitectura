@@ -1,12 +1,12 @@
-﻿import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
-import { formatMoney, formatQty, getCurrencySymbol, round2, round5, formatMatrixQty, getInsumoRowColorClass } from '../../core/formatters.js?v=20261116_cf3';
-import { getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf3';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf3';
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf3';
-import { updateModalIfOpen } from './matrizModal.js?v=20261116_cf3';
-import { getExactOpusInsumosForClave } from '../io/casaLauraData.js?v=20261116_cf3';
-import { isTabLocked } from '../../ui/tabLockController.js?v=20261116_cf3';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf4';
+import { formatMoney, formatQty, getCurrencySymbol, round2, round5, formatMatrixQty, getInsumoRowColorClass } from '../../core/formatters.js?v=20261116_cf4';
+import { getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf4';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf4';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf4';
+import { updateModalIfOpen } from './matrizModal.js?v=20261116_cf4';
+import { getExactOpusInsumosForClave } from '../io/casaLauraData.js?v=20261116_cf4';
+import { isTabLocked } from '../../ui/tabLockController.js?v=20261116_cf4';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf4';
 
 // Renderizar tabla Matriz APU del concepto seleccionado
 let selectedApuInsumoIdx = null;
@@ -29,7 +29,7 @@ export function renderAPUInsumos(node) {
   if (!node) return;
   if (!node.insumos) node.insumos = [];
 
-  // Si es un concepto final de obra y aÃºn no tiene matriz inicializada ni personalizada
+  // Si es un concepto final de obra y aún no tiene matriz inicializada ni personalizada
   const isLeaf = !node.children || node.children.length === 0;
   const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => c.isGanador);
   if (isLeaf && !hasWinnerQuote && !node.isMatrixCustomized && !node.userClearedMatrix && (!Array.isArray(node.insumos) || node.insumos.length === 0)) {
@@ -50,7 +50,7 @@ export function renderAPUInsumos(node) {
   const tbody = document.getElementById('apu-insumos-body');
   if (!tbody) return;
 
-  // Actualizar encabezado dinÃ¡micamente con la unidad del concepto (ej. Cant. para 1 m2)
+  // Actualizar encabezado dinámicamente con la unidad del concepto (ej. Cant. para 1 m2)
   const thCant = document.getElementById('th-apu-cantidad');
   if (thCant) {
     const cUnid = node.unidad || 'ud';
@@ -103,7 +103,7 @@ export function renderAPUInsumos(node) {
       <td class="p-1 border-b border-slate-100 min-w-[200px] text-justify align-top">
         <textarea ${isCatLocked ? 'disabled readonly' : ''} onchange="updateInsumo(${idx}, 'descripcion', this.value)" 
                   class="desc-input w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded text-[10px] font-sans text-justify leading-snug break-words whitespace-normal font-medium block" 
-                  placeholder="DescripciÃ³n insumo">${ins.descripcion || ''}</textarea>
+                  placeholder="Descripción insumo">${ins.descripcion || ''}</textarea>
         <div class="flex items-center gap-2 mt-0.5">
           <input type="text" ${isCatLocked ? 'disabled readonly' : ''} value="${ins.clave || ''}" onchange="updateInsumo(${idx}, 'clave', this.value)" 
                  placeholder="Clave" title="Clave del insumo" 
@@ -199,7 +199,7 @@ export function renderAPUInsumos(node) {
   const puEl = document.getElementById('apu-calculated-pu');
   if (puEl) puEl.innerText = formatMoney(totalPU);
 
-  // Renderizar recuadro de Google Search Grounding si hay bÃºsquedas o fuentes
+  // Renderizar recuadro de Google Search Grounding si hay búsquedas o fuentes
   const groundingBox = document.getElementById('apu-grounding-box');
   if (groundingBox) {
     const queriesContainer = document.getElementById('apu-grounding-queries-container');
@@ -313,7 +313,7 @@ export function renderInsumosUnitarios(node) {
         ${ins.clave || (ins.tipo ? ins.tipo.substring(0, 3).toUpperCase() : 'INS')}
       </td>
       <td class="p-1 border-b border-slate-100 text-[9px] text-slate-700 text-justify leading-snug break-words align-top" title="${ins.descripcion || ''}">
-        ${ins.descripcion || 'Sin descripciÃ³n'}
+        ${ins.descripcion || 'Sin descripción'}
       </td>
       <td class="p-1 border-b border-slate-100 text-right text-[9px] font-bold text-blue-900 align-top">
         ${formatQty(cantidadTotalObra)}

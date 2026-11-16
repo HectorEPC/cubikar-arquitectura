@@ -1,14 +1,14 @@
-﻿// js/modules/presupuesto/presupuestoView.js
+// js/modules/presupuesto/presupuestoView.js
 // Pestaña 1: Presupuesto al Cliente (Barra de botones, Desglose de Presupuesto, Resumen Ejecutivo y Notas)
 
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf3';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf3';
-import { formatMoney, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf3';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf3';
-import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf3';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf3';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf3';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261116_cf3';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf4';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf4';
+import { formatMoney, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf4';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
+import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf4';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf4';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf4';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261116_cf4';
 
 import {
   getProjectPresupuestoConfig,
@@ -16,12 +16,12 @@ import {
   calcularResumenPresupuesto,
   savePresupuestoSettings,
   isSubtituloNode
-} from './presupuestoModel.js?v=20261116_cf3';
+} from './presupuestoModel.js?v=20261116_cf4';
 import {
   buildPresupuestoPrintTableHtml,
   printPresupuestoCotizacion,
   exportPresupuestoExcel
-} from './presupuestoExport.js?v=20261116_cf3';
+} from './presupuestoExport.js?v=20261116_cf4';
 
 export {
   getProjectPresupuestoConfig,
