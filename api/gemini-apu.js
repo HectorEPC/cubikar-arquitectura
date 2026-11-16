@@ -115,14 +115,16 @@ export default async function handler(req, res) {
 
   if (!envKey) {
     for (const [k, v] of Object.entries(process.env)) {
-      if (typeof v === 'string' && (v.startsWith('AIzaSy') || k.toLowerCase().includes('gemini'))) {
+      if (typeof v === 'string' && (v.startsWith('AIzaSy') || v.startsWith('AQ.') || k.toLowerCase().includes('gemini'))) {
         envKey = v;
         break;
       }
     }
   }
 
-  const apiKey = (envKey || req.headers['x-gemini-key'] || req.body?.userApiKey || '').trim();
+  const body = req.body || {};
+  const userProvidedKey = String(req.headers['x-gemini-key'] || body.userApiKey || '').trim();
+  const apiKey = userProvidedKey || String(envKey || '').trim();
 
   if (!apiKey) {
     return res.status(500).json({
@@ -132,7 +134,6 @@ export default async function handler(req, res) {
   }
 
   // 4. Validación y Sanitización del Input
-  const body = req.body || {};
   const node = body.node || {};
   const descripcion = String(node.descripcion || body.descripcion || '').trim().slice(0, 500);
   const unidad = String(node.unidad || body.unidad || 'pza').trim().slice(0, 20);
@@ -208,10 +209,9 @@ Instrucciones prioritarias con Google Search:
   const attempts = [
     { model: 'gemini-2.5-flash', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.5-flash', tools: null },
+    { model: 'gemini-2.5-flash-lite', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.0-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-2.0-flash', tools: null },
-    { model: 'gemini-1.5-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-1.5-flash', tools: null }
+    { model: 'gemini-2.0-flash', tools: null }
   ];
 
   let lastError = '';
@@ -231,11 +231,15 @@ Instrucciones prioritarias con Google Search:
       }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${att.model}:generateContent?key=${apiKey}`;
-      const response = await fetch(url, {
+      const fetchOpts = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reqPayload)
-      });
+      };
+      if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+        fetchOpts.signal = AbortSignal.timeout(22000);
+      }
+      const response = await fetch(url, fetchOpts);
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));

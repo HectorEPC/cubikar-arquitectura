@@ -13,13 +13,13 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf4';
+} from '../../config/constants.js?v=20261116_cf5';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf4';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf4';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf4';
-import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf4';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf5';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf5';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf5';
+import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf5';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -1634,10 +1634,15 @@ export async function deleteProject(projectId) {
       modified = true;
     }
     const delIds = getDeletedProjectsList();
-    cs.deletedProjectIds = Array.isArray(delIds) ? delIds.slice(-500) : [];
-    if (modified) {
+    const compactDelIds = Array.isArray(delIds) ? delIds.slice(-40) : [];
+    const hadMoreDelIds = Array.isArray(cs.deletedProjectIds) && cs.deletedProjectIds.length > 40;
+    cs.deletedProjectIds = compactDelIds;
+    if (modified || hadMoreDelIds) {
       saveCurrentUser(user);
       try {
+        if (typeof window !== 'undefined' && typeof window.markInternalCloudAuthUpdate === 'function') {
+          window.markInternalCloudAuthUpdate();
+        }
         const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
         if (sb && typeof sb.auth?.updateUser === 'function') {
           await sb.auth.updateUser({ data: { cubikar_cloud_state_v2: cs } });

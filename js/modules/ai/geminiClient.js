@@ -1,12 +1,12 @@
-import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261116_cf4';
-import { saveState } from '../../state/history.js?v=20261116_cf4';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261116_cf4';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf4';
-import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261116_cf4';
-import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261116_cf4';
-import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf4';
-import { round5 } from '../../core/formatters.js?v=20261116_cf4';
+import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261116_cf5';
+import { saveState } from '../../state/history.js?v=20261116_cf5';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf5';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261116_cf5';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf5';
+import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261116_cf5';
+import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261116_cf5';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf5';
+import { round5 } from '../../core/formatters.js?v=20261116_cf5';
 
 // Extractor robusto de JSON para respuestas de Gemini
 export function extractJsonFromAiResponse(text) {
@@ -148,11 +148,33 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
       headers['X-Gemini-Key'] = state.settings.apiKey;
     }
 
-    const response = await fetch('/api/gemini-apu', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
+    const serializedBody = JSON.stringify(payload);
+    let response = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timerId = controller ? setTimeout(() => controller.abort(), 45000) : null;
+      try {
+        const fetchOpts = {
+          method: 'POST',
+          headers,
+          body: serializedBody
+        };
+        if (controller) fetchOpts.signal = controller.signal;
+        response = await fetch('/api/gemini-apu', fetchOpts);
+        break;
+      } catch (netErr) {
+        const isAbort = netErr && (netErr.name === 'AbortError' || /aborted/i.test(netErr.message || ''));
+        if (attempt === 0 && !isAbort) {
+          await new Promise((r) => setTimeout(r, 650));
+          continue;
+        }
+        throw new Error(isAbort
+          ? 'El servidor de IA tardó demasiado en responder. Inténtalo nuevamente.'
+          : 'No se pudo conectar con el servidor de IA (/api/gemini-apu). Verifica tu conexión o recarga la página.');
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+    }
 
     const data = await response.json();
 
@@ -335,9 +357,9 @@ Instrucciones prioritarias con Google Search:
   const attempts = [
     { model: 'gemini-2.5-flash', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.5-flash', tools: null },
+    { model: 'gemini-2.5-flash-lite', tools: [{ googleSearch: {} }] },
     { model: 'gemini-2.0-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-1.5-flash', tools: [{ googleSearch: {} }] },
-    { model: 'gemini-1.5-flash', tools: null }
+    { model: 'gemini-2.0-flash', tools: null }
   ];
 
   let lastError = '';

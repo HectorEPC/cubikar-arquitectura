@@ -2,9 +2,9 @@
 // Sincronización integral de módulos operativos con Supabase (ADM_ARQ):
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf4';
-import { isValidUUID } from './cloudProjectService.js?v=20261116_cf4';
-import { getActiveProjectId, getProjectById } from '../modules/portal/projectService.js?v=20261116_cf4';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf5';
+import { isValidUUID } from './cloudProjectService.js?v=20261116_cf5';
+import { getActiveProjectId, getProjectById } from '../modules/portal/projectService.js?v=20261116_cf5';
 
 const syncTimers = {
   bitacora: null,

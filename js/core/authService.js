@@ -1,12 +1,12 @@
 // js/core/authService.js
 // Servicio de Autenticación integrado con Supabase Auth y tabla public.perfiles
 
-import { STORAGE_KEY_USER } from '../config/constants.js?v=20261116_cf4';
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf4';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261116_cf4';
+import { STORAGE_KEY_USER } from '../config/constants.js?v=20261116_cf5';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf5';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261116_cf5';
 
 export { enforceGlobalSessionRevocation };
-import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261116_cf4';
+import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261116_cf5';
 import {
   writeSharedSsoCookie,
   clearSharedSsoCookie,
@@ -16,7 +16,7 @@ import {
   scrubSsoHashParams,
   hasPendingIncomingSso,
   getLastSignOutTimestamp
-} from './ssoHelper.js?v=20261116_cf4';
+} from './ssoHelper.js?v=20261116_cf5';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -672,6 +672,8 @@ export async function fetchUserProfile(userId, forceRefresh = false) {
 /**
  * Sincroniza la sesión con el estado local del portal
  */
+const initialSyncedUserIds = new Set();
+
 export function syncLocalUserSession(user, perfil, force = false, remember = null) {
   if (!user) return;
   const current = getCurrentUser();
@@ -772,12 +774,16 @@ export function syncLocalUserSession(user, perfil, force = false, remember = nul
     if (typeof window !== 'undefined' && typeof window.refreshProjectsGridUI === 'function') {
       window.refreshProjectsGridUI();
     }
-    setTimeout(() => {
-      try {
-        restoreUserCollaborationFromCloud(user);
-      } catch (_) {}
-      autoSyncCollaborationOnStartup(user);
-    }, 50);
+    const shouldTriggerInitialSync = Boolean(force) || !initialSyncedUserIds.has(user.id);
+    if (shouldTriggerInitialSync) {
+      initialSyncedUserIds.add(user.id);
+      setTimeout(() => {
+        try {
+          restoreUserCollaborationFromCloud(user);
+        } catch (_) {}
+        autoSyncCollaborationOnStartup(user, { force: Boolean(force) });
+      }, 50);
+    }
   } catch (e) {}
   return localUser;
 }
@@ -1001,9 +1007,9 @@ export function initAuthListener(onAuthChangeCallback) {
       syncLocalUserSession(session.user, initialPerfil, isExplicitLogin, rememberPref);
 
       setTimeout(() => {
-        if (!isInternalSync) {
+        if (!isInternalSync && event !== 'TOKEN_REFRESHED') {
           try {
-            autoSyncCollaborationOnStartup(session.user);
+            autoSyncCollaborationOnStartup(session.user, { force: isExplicitLogin });
           } catch (e) {}
         }
         if (onAuthChangeCallback) onAuthChangeCallback(event, session, initialPerfil);
@@ -1013,7 +1019,7 @@ export function initAuthListener(onAuthChangeCallback) {
             if (perfil && getCurrentUser()?.id === session.user.id) {
               syncLocalUserSession(session.user, perfil, false, null);
               if (onAuthChangeCallback) {
-                onAuthChangeCallback('USER_UPDATED', session, perfil);
+                onAuthChangeCallback('PROFILE_LOADED', session, perfil);
               }
             }
           }).catch(() => {});
@@ -1021,6 +1027,7 @@ export function initAuthListener(onAuthChangeCallback) {
       }, 0);
     } else {
       if (event === 'SIGNED_OUT') {
+        initialSyncedUserIds.clear();
         clearCachedUserProfiles();
         clearSharedSsoCookie({ markSignOut: true });
       }

@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261116_cf4';
+} from '../../config/constants.js?v=20261116_cf5';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -64,15 +64,15 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261116_cf4';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
-import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf4';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf4';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf4';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf4';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf4';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf4';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf4';
+} from './projectService.js?v=20261116_cf5';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf5';
+import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf5';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf5';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf5';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf5';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf5';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf5';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf5';
 import {
   signUp,
   signInWithPassword,
@@ -83,16 +83,16 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261116_cf4';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf4';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf4';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf4';
+} from '../../core/authService.js?v=20261116_cf5';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf5';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf5';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf5';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261116_cf4';
-import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf4';
+} from '../admin/cubikarAdmin.js?v=20261116_cf5';
+import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf5';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -1494,7 +1494,7 @@ export function renderPortalDashboard() {
           return true;
         });
 
-        // 2. Incorporar y actualizar proyectos vigentes devueltos por la nube
+        // 2. Incorporar y actualizar proyectos vigentes devueltos por la nube solo si hay diferencia real
         cloudList.forEach(cp => {
           if (isDeleted(cp.id) || isDeleted(cp.cloudId)) return;
           const idx = cleanedList.findIndex(lp => lp.id === cp.id || lp.cloudId === cp.id);
@@ -1502,8 +1502,12 @@ export function renderPortalDashboard() {
             cleanedList.unshift(cp);
             changed = true;
           } else {
-            cleanedList[idx] = { ...cleanedList[idx], ...cp, isCloudSynced: true };
-            changed = true;
+            const prevJson = JSON.stringify(cleanedList[idx]);
+            const merged = { ...cleanedList[idx], ...cp, isCloudSynced: true };
+            if (JSON.stringify(merged) !== prevJson) {
+              cleanedList[idx] = merged;
+              changed = true;
+            }
           }
         });
 

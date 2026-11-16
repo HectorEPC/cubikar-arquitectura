@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf4';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf4';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf4';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf4';
-import { formatMoney } from '../../core/formatters.js?v=20261116_cf4';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf4';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf4';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf4';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf4';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf5';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf5';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf5';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf5';
+import { formatMoney } from '../../core/formatters.js?v=20261116_cf5';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf5';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf5';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf5';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf5';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
