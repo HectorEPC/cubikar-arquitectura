@@ -4,6 +4,7 @@
 import {
   setActiveProjectId,
   getActiveProjectId,
+  getStorageKey,
   getSettingsKey
 } from '../../config/constants.js?v=20261115_cubikar_arq_v16';
 import {
@@ -2375,7 +2376,7 @@ export function exportProjectToExcelAction(projectId) {
 
   let tree = [];
   try {
-    const raw = localStorage.getItem(`adm_const_tree_${projectId}`);
+    const raw = localStorage.getItem(getStorageKey(projectId));
     if (raw) tree = JSON.parse(raw);
   } catch (e) {}
 
@@ -2767,8 +2768,8 @@ export function finalizeCreateProject() {
 
   // Sincronizar en segundo plano a Supabase PostgreSQL
   try {
-    const rawTree = localStorage.getItem(`adm_const_tree_${newProj.id}`);
-    const rawSettings = localStorage.getItem(`adm_const_settings_${newProj.id}`);
+    const rawTree = localStorage.getItem(getStorageKey(newProj.id));
+    const rawSettings = localStorage.getItem(getSettingsKey(newProj.id));
     const pTree = rawTree ? JSON.parse(rawTree) : [];
     const pSettings = rawSettings ? JSON.parse(rawSettings) : projPayload;
     syncProjectToCloud(newProj, pSettings, pTree).then(res => {
@@ -2806,8 +2807,8 @@ export async function syncProjectToCloudAction(projectId, event) {
   try {
     let tree = [];
     let settings = {};
-    const rawT = localStorage.getItem(`adm_const_tree_${projectId}`);
-    const rawS = localStorage.getItem(`adm_const_settings_${projectId}`);
+    const rawT = localStorage.getItem(getStorageKey(projectId));
+    const rawS = localStorage.getItem(getSettingsKey(projectId));
     if (rawT) tree = JSON.parse(rawT);
     if (rawS) settings = JSON.parse(rawS);
 

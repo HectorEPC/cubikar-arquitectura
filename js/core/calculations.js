@@ -304,7 +304,7 @@ export function calculateParentTotal(node) {
     return round2(cant * getEffectivePrecioUnitario(node));
   }
 
-  if (!node.children || node.children.length === 0) {
+  if (!node.children || !Array.isArray(node.children) || node.children.length === 0) {
     return round2(cant * getEffectivePrecioUnitario(node));
   }
 
@@ -326,7 +326,7 @@ export function calculateParentDirectTotal(node) {
     return round2(cant * round2(cdVal || 0));
   }
 
-  if (!node.children || node.children.length === 0) {
+  if (!node.children || !Array.isArray(node.children) || node.children.length === 0) {
     const cdVal = (node.costoDirecto !== undefined && node.costoDirecto > 0)
       ? node.costoDirecto
       : (node.importe_calculado !== undefined ? node.importe_calculado / (cant > 0 ? cant : 1) : (node.precioUnitario || 0));
