@@ -1,10 +1,10 @@
 // js/ui/brandingController.js
 // Controlador para personalización de Nombre de Empresa, Proyecto, Ubicación y Logotipo con visor interactivo, recorte y zoom
 
-import { state, persistSettings } from '../state/store.js?v=20261116_cf10';
-import { showToast } from './notifications.js?v=20261116_cf10';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf10';
-import { guardTabUnlocked } from './tabLockController.js?v=20261116_cf10';
+import { state, persistSettings } from '../state/store.js?v=20261116_cf11';
+import { showToast } from './notifications.js?v=20261116_cf11';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf11';
+import { guardTabUnlocked } from './tabLockController.js?v=20261116_cf11';
 
 // Dimensiones estándar del área de recorte para el logotipo (cuadrado 1:1)
 const CROP_WIDTH = 180;

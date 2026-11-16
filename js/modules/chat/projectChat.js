@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf10';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf10';
+import { state } from '../../state/store.js?v=20261116_cf11';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf11';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf10';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf10';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf10';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf10';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf10';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf10';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf10';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf10';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf10';
+} from '../portal/projectService.js?v=20261116_cf11';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf11';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf11';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf11';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf11';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf11';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf11';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf11';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf11';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -822,10 +822,18 @@ export function loadProjectChatMessages(projectId = null) {
     const raw = localStorage.getItem(arqKey) || localStorage.getItem(constKey);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const { list, migrated } = normalizeProjectChatMessagesList(parsed);
+      if (Array.isArray(parsed)) {
+        const withoutSeeds = parsed.filter(m => !(m && typeof m.id === 'string' && m.id.startsWith('seed_msg_')));
+        const hadSeeds = withoutSeeds.length !== parsed.length;
+        if (withoutSeeds.length === 0) {
+          if (hadSeeds) {
+            saveProjectChatMessages([], pid, { skipCloudSync: true });
+          }
+          return [];
+        }
+        const { list, migrated } = normalizeProjectChatMessagesList(withoutSeeds);
         const deduped = dedupeChatMessages(list);
-        if (migrated || deduped.length !== parsed.length) {
+        if (hadSeeds || migrated || deduped.length !== parsed.length) {
           saveProjectChatMessages(deduped, pid, { skipCloudSync: true });
         }
         return deduped;
@@ -833,10 +841,7 @@ export function loadProjectChatMessages(projectId = null) {
     }
   } catch (e) {}
 
-  // Si no hay mensajes o es un proyecto nuevo, generar asientos semilla distribuidos en las 3 divisiones
-  const seedMessages = dedupeChatMessages(generateSeedProjectChatMessages(pid));
-  saveProjectChatMessages(seedMessages, pid, { skipCloudSync: true });
-  return seedMessages;
+  return [];
 }
 
 export function saveProjectChatMessages(messages, projectId = null, opts = {}) {
@@ -986,10 +991,7 @@ function getAssignedProjectUsers(projectId = null) {
 
   return rawMembers.map(m => {
     const cleanName = (m.name || 'Usuario').trim();
-    let shortHandle = '@' + cleanName.replace(/\s+/g, '.');
-    if (m.role === 'editar' && (cleanName.includes('Admin') || cleanName.includes('Hepc'))) {
-      shortHandle = '@Arq.Director';
-    }
+    const shortHandle = '@' + cleanName.replace(/\s+/g, '.');
     const parts = cleanName.split(/\s+/).filter(Boolean);
     const initials = parts.length >= 2
       ? (parts[0][0] + parts[1][0]).toUpperCase()
@@ -1432,6 +1434,8 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
 
   const activePid = getActiveProjectId() || 'proj-default-01';
   const activeProjObj = getProjectById(activePid);
+  const currentUser = getCurrentUser() || getLastKnownUser();
+  const myEmail = String(currentUser?.email || '').toLowerCase().trim();
   const projects = scope === 'current'
     ? [{
         id: activePid,
@@ -1445,6 +1449,8 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
     const selfTokens = isSelfHandle ? getSelfMentionTokens(getAssignedProjectUsers(proj.id)) : [];
     msgs.forEach(m => {
       if (m.dismissed || dismissedSet.has(`${proj.id}:${m.id}`) || dismissedSet.has(String(m.id))) return;
+      const authorEmail = String(m.authorEmail || '').toLowerCase().trim();
+      if (isSelfHandle && myEmail && authorEmail && authorEmail === myEmail) return;
       const mentionsList = extractMentionsFromMessage(m);
       if (mentionsList.length === 0) return;
 
@@ -1453,10 +1459,9 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
         : (isSelfHandle
             ? (selfTokens.length > 0 && (
                 mentionsList.some(tag => selfTokens.includes(String(tag).toLowerCase())) ||
-                (m.text && selfTokens.some(tok => String(m.text).toLowerCase().includes(tok)))
+                (myEmail && m.text && String(m.text).toLowerCase().split(/\s+/).includes(myEmail))
               ))
-            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
-                || (m.text && String(m.text).toLowerCase().includes(handleLower))));
+            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)));
 
       if (isMentioned) {
         const readBy = Array.isArray(m.readBy) ? m.readBy : [];

@@ -2,11 +2,11 @@
 // Servicio de persistencia y sincronización de Proyectos Arquitectónicos y Presupuestos con Supabase PostgreSQL
 // Diseñado para operar en segundo plano con alta resiliencia y sincronización multiusuario en la nube.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf10';
-import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf10';
-import { getSettingsKey } from '../config/constants.js?v=20261116_cf10';
-import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf10';
-import { showToast } from '../ui/notifications.js?v=20261116_cf10';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf11';
+import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf11';
+import { getSettingsKey } from '../config/constants.js?v=20261116_cf11';
+import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf11';
+import { showToast } from '../ui/notifications.js?v=20261116_cf11';
 
 function extractArqNodeMeta(node, conceptUuid) {
   if (!node || typeof node !== 'object') return null;
@@ -113,6 +113,7 @@ export async function resolveUserEmpresaId(sb, user) {
 
     if (perfil?.empresa_id && isValidUUID(perfil.empresa_id)) {
       user.empresaId = perfil.empresa_id;
+      try { saveCurrentUser(user); } catch (_) {}
       return perfil.empresa_id;
     }
 
@@ -129,6 +130,7 @@ export async function resolveUserEmpresaId(sb, user) {
 
     if (!empErr && newEmpresa?.id) {
       user.empresaId = newEmpresa.id;
+      try { saveCurrentUser(user); } catch (_) {}
       await sb.from('perfiles').upsert({
         id: user.id,
         empresa_id: newEmpresa.id,
@@ -148,7 +150,7 @@ export async function resolveUserEmpresaId(sb, user) {
 /**
  * Sincronizar un proyecto completo (datos generales, colaboradores y catálogo de conceptos) hacia Supabase PostgreSQL
  */
-export async function syncProjectToCloud(project, settings = {}, treeData = null) {
+export async function syncProjectToCloud(project, settings = {}, treeData = null, opts = {}) {
   const sb = getSupabaseClient();
   let user = getCurrentUser();
 
@@ -267,6 +269,8 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
       console.warn('[CloudProjectService] Error al guardar proyecto en Supabase:', projError.message);
       return { success: false, error: projError };
     }
+    project.isCloudSynced = true;
+    project.lastCloudSyncAt = Date.now();
 
     // 2. Registrar al propietario en 'public.proyecto_colaboradores' (garantiza acceso multiusuario)
     const ownerColab = {
@@ -280,6 +284,12 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
     await sb
       .from('proyecto_colaboradores')
       .upsert(ownerColab, { onConflict: 'proyecto_id,email_colaborador' });
+
+    if (typeof opts?.onHeaderSynced === 'function') {
+      try {
+        opts.onHeaderSynced(projectId);
+      } catch (_) {}
+    }
 
     // 3. Sincronizar todos los colaboradores registrados en el proyecto
     if (Array.isArray(project.members) && project.members.length > 0) {
@@ -486,7 +496,7 @@ export async function fetchCloudProjects() {
   const user = getCurrentUser();
 
   if (!isSupabaseConfigured() || !sb || !user?.id) {
-    return [];
+    return null;
   }
 
   try {
@@ -500,10 +510,10 @@ export async function fetchCloudProjects() {
 
     if (error) {
       console.warn('[CloudProjectService] Error al obtener proyectos de la nube:', error.message);
-      return [];
+      return null;
     }
 
-    if (!Array.isArray(cloudList)) return [];
+    if (!Array.isArray(cloudList)) return null;
 
     let deletedList = [];
     try {
@@ -627,7 +637,7 @@ export async function fetchCloudProjects() {
       .filter(Boolean);
   } catch (err) {
     console.error('[CloudProjectService] Excepción al consultar proyectos en la nube:', err);
-    return [];
+    return null;
   }
 }
 

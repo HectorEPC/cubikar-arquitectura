@@ -1,10 +1,10 @@
-import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261116_cf10';
-import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261116_cf10';
-import { syncActiveProjectSummary, getProjectById, isProjectMarkedDeleted } from '../modules/portal/projectService.js?v=20261116_cf10';
-import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261116_cf10';
-import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261116_cf10';
-import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261116_cf10';
-import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261116_cf10';
+import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261116_cf11';
+import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261116_cf11';
+import { syncActiveProjectSummary, getProjectById, getProjectsList, saveProjectsList, isProjectMarkedDeleted } from '../modules/portal/projectService.js?v=20261116_cf11';
+import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261116_cf11';
+import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261116_cf11';
+import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261116_cf11';
+import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261116_cf11';
 
 // Estado global reactivo y centralizado de la aplicación
 export const state = {
@@ -131,6 +131,12 @@ export function initStore() {
     if (activePId) {
       loadProjectTreeFromCloud(activePId).then(cloudTree => {
         if (Array.isArray(cloudTree)) {
+          const currentProjMeta = getProjectById(activePId);
+          const localHasNodes = savedData && Array.isArray(state.treeData) && state.treeData.length > 0;
+          if (!currentProjMeta?.isCloudSynced && localHasNodes && cloudTree.length < state.treeData.length) {
+            triggerDebouncedCloudSync();
+            return;
+          }
           if (cloudTree.length > 0) {
             clearLegacyUnquotedDefaultPrices(cloudTree);
           }
@@ -279,7 +285,17 @@ export function triggerDebouncedCloudSync() {
     if (!project) return;
     if (typeof isProjectMarkedDeleted === 'function' && project.cloudId && isProjectMarkedDeleted(project.cloudId)) return;
     try {
-      await syncProjectToCloud(project, state.settings, state.treeData);
+      const syncRes = await syncProjectToCloud(project, state.settings, state.treeData);
+      if (syncRes && syncRes.success) {
+        const list = getProjectsList();
+        const idx = list.findIndex(p => p.id === project.id || (syncRes.projectId && p.cloudId === syncRes.projectId));
+        if (idx !== -1) {
+          list[idx].isCloudSynced = true;
+          list[idx].cloudId = syncRes.projectId || list[idx].cloudId || list[idx].id;
+          list[idx].lastCloudSyncAt = Date.now();
+          saveProjectsList(list);
+        }
+      }
     } catch (e) {
       console.warn('[CloudSync] Fallo silencioso en autosincronización:', e);
     }

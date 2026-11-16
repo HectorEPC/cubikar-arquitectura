@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261116_cf10';
+} from '../../config/constants.js?v=20261116_cf11';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -64,15 +64,15 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261116_cf10';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf10';
-import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf10';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf10';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf10';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf10';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf10';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf10';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf10';
+} from './projectService.js?v=20261116_cf11';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf11';
+import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf11';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf11';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf11';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf11';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf11';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf11';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf11';
 import {
   signUp,
   signInWithPassword,
@@ -83,16 +83,16 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261116_cf10';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf10';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf10';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf10';
+} from '../../core/authService.js?v=20261116_cf11';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf11';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf11';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf11';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261116_cf10';
-import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf10';
+} from '../admin/cubikarAdmin.js?v=20261116_cf11';
+import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf11';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -1436,6 +1436,7 @@ export function renderPortalDashboard() {
 
   // Sincronizar en segundo plano proyectos desde Supabase si hay sesión activa
   if (isSupabaseConfigured() && user?.id) {
+    const cloudFetchStartedAt = Date.now();
     fetchCloudProjects().then(cloudList => {
       if (Array.isArray(cloudList)) {
         const deletedList = getDeletedProjectsList();
@@ -1483,8 +1484,10 @@ export function renderPortalDashboard() {
               }
             }
           } else {
-            // Proyecto propio: si estaba sincronizado con la nube pero ya no existe en Supabase (fue eliminado)
-            if (lp.isCloudSynced && !cloudIds.has(lp.id) && !cloudIds.has(lp.cloudId)) {
+            // Proyecto propio: si estaba sincronizado con la nube pero ya no existe en Supabase (fue eliminado),
+            // respetando proyectos recién sincronizados durante o después de esta consulta.
+            const justSyncedLocally = Boolean(lp.lastCloudSyncAt && lp.lastCloudSyncAt >= cloudFetchStartedAt);
+            if (lp.isCloudSynced && !justSyncedLocally && !cloudIds.has(lp.id) && !cloudIds.has(lp.cloudId)) {
               console.info(`[PortalReconcile] Proyecto propio eliminado en la nube: ${lp.projectName} (${lp.id})`);
               changed = true;
               return false;
@@ -2641,7 +2644,12 @@ export function openProjectInNewTab(projectId) {
 
 export function goToProjectsDashboard() {
   setSimulatedUserView(null);
-  persistLocalData(true);
+  const departingProjectId = getActiveProjectId();
+  const departingProj = departingProjectId ? getProjectById(departingProjectId) : null;
+  const departingSettings = state?.settings ? JSON.parse(JSON.stringify(state.settings)) : {};
+  const departingTree = Array.isArray(state?.treeData) ? JSON.parse(JSON.stringify(state.treeData)) : [];
+
+  persistLocalData(true, { skipFullCloudSync: true });
   try {
     window.unsubscribeFromProjectRealtime?.();
   } catch (_) {}
@@ -2650,6 +2658,27 @@ export function goToProjectsDashboard() {
   if (!user) {
     showPortalView('login');
     return;
+  }
+  if (departingProj && isSupabaseConfigured() && typeof syncProjectToCloud === 'function') {
+    const markDepartingSynced = (syncedId) => {
+      const targetId = syncedId || departingProj.cloudId || departingProj.id;
+      const list = getProjectsList();
+      const idx = list.findIndex(p => p.id === departingProj.id || p.cloudId === targetId);
+      if (idx !== -1) {
+        list[idx].isCloudSynced = true;
+        list[idx].cloudId = targetId;
+        list[idx].lastCloudSyncAt = Date.now();
+        saveProjectsList(list);
+      }
+    };
+    syncProjectToCloud(departingProj, departingSettings, departingTree, {
+      onHeaderSynced: markDepartingSynced
+    }).then((res) => {
+      if (res && res.success) {
+        markDepartingSynced(res.projectId);
+        refreshProjectsGridUI();
+      }
+    }).catch(() => {});
   }
   try {
     const url = new URL(window.location.href);
@@ -3001,7 +3030,7 @@ export async function finalizeCreateProject() {
     const assignedUuid = isValidUUID(newProj.id) ? newProj.id : (newProj.cloudId && isValidUUID(newProj.cloudId) ? newProj.cloudId : generateUUID());
     newProj.id = assignedUuid;
     newProj.cloudId = assignedUuid;
-    newProj.isCloudSynced = true;
+    newProj.isCloudSynced = false;
 
     const rawTree = localStorage.getItem(getStorageKey(oldId));
     const rawSettings = localStorage.getItem(getSettingsKey(oldId));
@@ -3010,10 +3039,29 @@ export async function finalizeCreateProject() {
       if (rawSettings) localStorage.setItem(getSettingsKey(newProj.id), rawSettings);
     }
 
+    const markProjectSyncedInStorage = (syncedId) => {
+      const targetId = syncedId || assignedUuid;
+      newProj.isCloudSynced = true;
+      newProj.cloudId = targetId;
+      newProj.lastCloudSyncAt = Date.now();
+      const latest = getProjectsList();
+      const idx = latest.findIndex(p => p.id === oldId || p.id === newProj.id || p.cloudId === targetId);
+      if (idx !== -1) {
+        latest[idx] = {
+          ...latest[idx],
+          id: newProj.id,
+          cloudId: targetId,
+          isCloudSynced: true,
+          lastCloudSyncAt: newProj.lastCloudSyncAt
+        };
+        saveProjectsList(latest);
+      }
+    };
+
     const projects = getProjectsList();
     const pIdx = projects.findIndex(p => p.id === oldId || p.id === newProj.id);
     if (pIdx !== -1) {
-      projects[pIdx] = { ...projects[pIdx], ...newProj, id: newProj.id, cloudId: newProj.cloudId, isCloudSynced: true };
+      projects[pIdx] = { ...projects[pIdx], ...newProj, id: newProj.id, cloudId: newProj.cloudId, isCloudSynced: false };
     } else {
       projects.unshift(newProj);
     }
@@ -3021,9 +3069,21 @@ export async function finalizeCreateProject() {
 
     const pTree = rawTree ? JSON.parse(rawTree) : [];
     const pSettings = rawSettings ? JSON.parse(rawSettings) : projPayload;
+    const syncTask = syncProjectToCloud(newProj, pSettings, pTree, {
+      onHeaderSynced: (syncedId) => markProjectSyncedInStorage(syncedId)
+    }).then((res) => {
+      if (res && res.success) {
+        markProjectSyncedInStorage(res.projectId || assignedUuid);
+      }
+      return res;
+    }).catch((err) => {
+      console.warn('[CloudSync] Aviso al respaldar nuevo proyecto:', err);
+      return null;
+    });
+
     await Promise.race([
-      syncProjectToCloud(newProj, pSettings, pTree),
-      new Promise(resolve => setTimeout(resolve, 1200))
+      syncTask,
+      new Promise(resolve => setTimeout(resolve, 6000))
     ]);
   } catch (err) {
     console.warn('[CloudSync] Aviso al respaldar nuevo proyecto:', err);

@@ -1,8 +1,8 @@
 // js/core/realtimeSync.js
 // Sincronización en tiempo real vía WebSockets (Supabase Realtime) y Colaboración en vivo
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf10';
-import { state } from '../state/store.js?v=20261116_cf10';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf11';
+import { state } from '../state/store.js?v=20261116_cf11';
 import {
   getCurrentUser,
   getStoredInvitations,
@@ -17,10 +17,10 @@ import {
   markProjectDeleted,
   isProjectMarkedDeleted,
   saveCurrentUser
-} from '../modules/portal/projectService.js?v=20261116_cf10';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261116_cf10';
-import { findNodeById } from '../modules/catalog/treeService.js?v=20261116_cf10';
-import { showToast } from '../ui/notifications.js?v=20261116_cf10';
+} from '../modules/portal/projectService.js?v=20261116_cf11';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261116_cf11';
+import { findNodeById } from '../modules/catalog/treeService.js?v=20261116_cf11';
+import { showToast } from '../ui/notifications.js?v=20261116_cf11';
 
 let activeChannel = null;
 let currentSubscribedProjectId = null;
@@ -2282,6 +2282,7 @@ export async function hydrateProjectChatFromCloud(projectId) {
       localMessages.forEach(m => {
         if (m && m.id) {
           const normId = String(m.id).replace(/^.*?(?:__|::)/, '');
+          if (normId.startsWith('seed_msg_')) return;
           map.set(normId, { ...m, id: normId });
         }
       });
@@ -2291,7 +2292,7 @@ export async function hydrateProjectChatFromCloud(projectId) {
           ? row.payload_json
           : ((row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : null);
         const cleanId = String(rawJson?.id || row.id || '').replace(/^.*?(?:__|::)/, '');
-        if (!cleanId) return;
+        if (!cleanId || cleanId.startsWith('seed_msg_')) return;
         const msg = rawJson
           ? { ...rawJson, id: cleanId }
           : {
