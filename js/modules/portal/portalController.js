@@ -15,6 +15,9 @@ import {
   getProjectsList,
   saveProjectsList,
   getProjectById,
+  getDeletedProjectsList,
+  markProjectDeleted,
+  isProjectMarkedDeleted,
   createNewProject,
   duplicateProject,
   deleteProject,
@@ -1952,8 +1955,6 @@ export function getFilteredProjectsList(allProjects) {
       filtered = filtered.filter(p => (p.ownerEmail || '').toLowerCase().trim() !== uEmail);
     } else if (currentScopeFilter.startsWith('owner:')) {
       const targetOwner = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
-      const deletedList = getDeletedProjectsList();
-      const isDeleted = (id) => Array.isArray(deletedList) && deletedList.includes(id);
 
       filtered = filtered.filter(p => {
         // CONFIRMACIÓN 1: El proyecto debe pertenecer efectivamente al anfitrión seleccionado
@@ -1961,14 +1962,29 @@ export function getFilteredProjectsList(allProjects) {
         if (!isHost) return false;
 
         // Si fue marcado como eliminado, excluir
-        if (isDeleted(p.id) || isDeleted(p.cloudId)) return false;
+        if (isProjectMarkedDeleted(p.id) || isProjectMarkedDeleted(p.cloudId)) return false;
 
         // CONFIRMACIÓN 2: El usuario invitado DEBE tener una invitación activa aceptada en este proyecto
         const members = Array.isArray(p.members) ? p.members : [];
         const myMem = members.find(m => (m.email || '').toLowerCase().trim() === uEmail);
         if (!myMem) return false;
         const status = (myMem.status || '').toLowerCase().trim();
-        return status === 'active' || status === 'accepted';
+        if (status !== 'active' && status !== 'accepted') return false;
+
+        // Verificación de manifiesto activo del anfitrión (si está disponible)
+        if (typeof window !== 'undefined' && window.__hostActiveManifest && window.__hostActiveManifest[targetOwner]) {
+          const hostManifest = window.__hostActiveManifest[targetOwner];
+          if (Array.isArray(hostManifest)) {
+            const existsInHost = hostManifest.some(activeId => activeId === p.id || (p.cloudId && activeId === p.cloudId));
+            if (!existsInHost) {
+              markProjectDeleted(p.id);
+              if (p.cloudId) markProjectDeleted(p.cloudId);
+              return false;
+            }
+          }
+        }
+
+        return true;
       });
     }
   }
