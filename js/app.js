@@ -71,9 +71,9 @@ import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback
 import { showToast } from './ui/notifications.js';
 import { formatMoney, formatQty } from './core/formatters.js';
 import { getFactorSobrecosto, updateSobrecostoBadge, updateGrandTotal } from './core/calculations.js';
-import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261115_cubikar_arq_v19_purge_fix';
+import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261115_cubikar_arq_v20_live_fix';
 import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession } from './core/authService.js?v=20261115_v10';
-import { getCurrentUser } from './modules/portal/projectService.js?v=20261115_cubikar_arq_v19_purge_fix';
+import { getCurrentUser } from './modules/portal/projectService.js?v=20261115_cubikar_arq_v20_live_fix';
 import { initAppSwitcher } from './ui/appSwitcher.js?v=20261115_v10';
 
 import {
@@ -473,7 +473,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261115_cubikar_arq_v19_purge_fix';
+} from './modules/portal/portalController.js?v=20261115_cubikar_arq_v20_live_fix';
 
 import {
   openCubikarAdminModal,
