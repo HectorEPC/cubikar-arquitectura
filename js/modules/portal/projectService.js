@@ -13,13 +13,13 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf11';
+} from '../../config/constants.js?v=20261116_cf12';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf11';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf11';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf11';
-import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf11';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf12';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf12';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf12';
+import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf12';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -903,12 +903,13 @@ export function getProjectsList() {
   return initializeDefaultProjects();
 }
 
-export function saveProjectsList(projects) {
+export function saveProjectsList(projects, opts = {}) {
   try {
     localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
   } catch (e) {
     console.error('Error guardando proyectos:', e);
   }
+  return opts;
 }
 
 // Obtener proyectos accesibles para un usuario dado

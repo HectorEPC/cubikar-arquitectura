@@ -1,14 +1,14 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf11';
-import { saveState } from '../../state/history.js?v=20261116_cf11';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf11';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf11';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf11';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf11';
-import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf11';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf11';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf11';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf11';
-import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf11';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf12';
+import { saveState } from '../../state/history.js?v=20261116_cf12';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf12';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf12';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf12';
+import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf12';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf12';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf12';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf12';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf12';
 
 function createNodeUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -542,6 +542,15 @@ export function moverSelectedRow(direction) {
   moverNode(state.activeSelectedId, direction);
 }
 
+function collectSubtreeUuids(node, out = []) {
+  if (!node || typeof node !== 'object') return out;
+  if (node.uuid) out.push(node.uuid);
+  if (Array.isArray(node.children)) {
+    node.children.forEach(c => collectSubtreeUuids(c, out));
+  }
+  return out;
+}
+
 // Eliminar nodo individual
 export function deleteNode(id, e) {
   if (e) e.stopPropagation();
@@ -550,6 +559,10 @@ export function deleteNode(id, e) {
     return;
   }
   if (!guardTabUnlocked('cat')) return;
+  const targetNode = findNodeById(state.treeData, id);
+  const targetUuid = targetNode?.uuid || null;
+  const targetClave = targetNode?.clave || null;
+  const descendantUuids = targetNode ? collectSubtreeUuids(targetNode) : [];
   saveState();
   function removeRecursive(nodes) {
     return nodes.filter(node => {
@@ -564,7 +577,7 @@ export function deleteNode(id, e) {
   persistLocalData(true, {
     changeType: 'row_deleted',
     changeDescription: 'una fila del catálogo',
-    patch: { type: 'delete_node', id }
+    patch: { type: 'delete_node', id, uuid: targetUuid, clave: targetClave, descendantUuids }
   });
   renderTAB1();
   showToast('Fila eliminada', 'info');
@@ -593,13 +606,21 @@ export function deleteSelectedRow() {
     saveState();
 
     const deletedIds = [];
-    function collectCheckedIds(nodes) {
+    const deletedUuids = [];
+    const deletedTargets = [];
+    function collectCheckedTargets(nodes) {
       nodes.forEach(n => {
-        if (n.selected) deletedIds.push(n.id);
-        if (n.children) collectCheckedIds(n.children);
+        if (n.selected) {
+          deletedIds.push(n.id);
+          if (n.uuid) deletedUuids.push(n.uuid);
+          collectSubtreeUuids(n, deletedUuids);
+          deletedTargets.push({ id: n.id, uuid: n.uuid || null, clave: n.clave || null });
+        } else if (n.children) {
+          collectCheckedTargets(n.children);
+        }
       });
     }
-    collectCheckedIds(state.treeData);
+    collectCheckedTargets(state.treeData);
 
     function filterOutChecked(nodes) {
       return nodes.filter(n => {
@@ -620,7 +641,12 @@ export function deleteSelectedRow() {
     persistLocalData(true, {
       changeType: 'row_deleted',
       changeDescription: `${checkedTotal} fila(s) del catálogo`,
-      patch: { type: 'delete_nodes', ids: deletedIds }
+      patch: {
+        type: 'delete_nodes',
+        ids: deletedIds,
+        uuids: Array.from(new Set(deletedUuids)),
+        targets: deletedTargets
+      }
     });
   renderTAB1();
   showToast(`${checkedTotal} filas eliminadas`, 'info');
@@ -794,7 +820,12 @@ export function updateNodeColor(id, newColor, event) {
   if (!node) return;
   saveState();
   node.color = newColor;
-  persistLocalData(false, { changeType: 'color_updated', highlightId: id, changeDescription: `color de ${node.clave || 'partida'}` });
+  persistLocalData(false, {
+    changeType: 'color_updated',
+    highlightId: id,
+    changeDescription: `color de ${node.clave || 'partida'}`,
+    patch: { type: 'update_color', id, uuid: node.uuid || null, clave: node.clave || null, color: newColor }
+  });
   renderTAB1();
   showToast(`Color asignado a ${node.clave || 'partida'}`, 'success');
 }
@@ -810,7 +841,12 @@ export function clearNodeColor(id, event) {
   if (!node) return;
   saveState();
   delete node.color;
-  persistLocalData();
+  persistLocalData(false, {
+    changeType: 'color_updated',
+    highlightId: id,
+    changeDescription: `color de ${node.clave || 'partida'}`,
+    patch: { type: 'update_color', id, uuid: node.uuid || null, clave: node.clave || null, color: null }
+  });
   renderTAB1();
   showToast(`Color restablecido en ${node.clave || 'partida'}`, 'info');
 }

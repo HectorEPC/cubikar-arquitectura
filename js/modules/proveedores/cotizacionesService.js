@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf11';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf11';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf11';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf11';
-import { formatMoney } from '../../core/formatters.js?v=20261116_cf11';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf11';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf11';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf11';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf11';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf12';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf12';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf12';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
+import { formatMoney } from '../../core/formatters.js?v=20261116_cf12';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf12';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf12';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf12';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf12';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -188,6 +188,52 @@ function guardCotizacionMutation() {
   return guardTabUnlocked('alcances');
 }
 
+function buildCotizacionPatch(node) {
+  if (!node) return null;
+  const cloneQuotes = (stripHugeData = false) => (Array.isArray(node.cotizaciones) ? node.cotizaciones : []).map(c => {
+    const copy = { ...c };
+    if (stripHugeData && typeof copy.archivoData === 'string' && copy.archivoData.length > 4000) {
+      copy.archivoData = '';
+    }
+    return copy;
+  });
+  const basePatch = {
+    type: 'update_cotizaciones',
+    id: node.id,
+    uuid: node.uuid || null,
+    clave: node.clave || null,
+    cotizaciones: cloneQuotes(false),
+    proveedorElegidoId: node.proveedorElegidoId || null,
+    proveedorElegidoNombre: node.proveedorElegidoNombre || null,
+    costo_proveedor: node.costo_proveedor ?? null,
+    precioUnitario: Number(node.precioUnitario) || 0,
+    costoDirecto: Number(node.costoDirecto) || 0,
+    cantidad: Number(node.cantidad) || 0,
+    unidad: node.unidad || 'pza',
+    importe_calculado: node.importe_calculado ?? null,
+    deferAttachmentToCloud: false
+  };
+  try {
+    if (JSON.stringify(basePatch).length > 150000) {
+      basePatch.cotizaciones = cloneQuotes(true);
+      basePatch.deferAttachmentToCloud = true;
+    }
+  } catch (_) {}
+  return basePatch;
+}
+
+function finalizeCotizacionMutation(node, changeDescription) {
+  calculateProrrateoCascade(state.treeData);
+  persistLocalData(true, {
+    changeType: 'cotizacion_updated',
+    highlightId: node?.id || null,
+    changeDescription: changeDescription || `cotización de ${node?.clave || 'concepto'}`,
+    patch: buildCotizacionPatch(node)
+  });
+  renderTAB1();
+  renderCotizacionesSidePanel(node);
+}
+
 export function addCotizacion(nodeId, data) {
   if (!guardCotizacionMutation()) return null;
   const status = getCotizacionHierarchyStatus(nodeId);
@@ -257,10 +303,7 @@ export function addCotizacion(nodeId, data) {
 
   node.cotizaciones.push(newCot);
 
-  calculateProrrateoCascade(state.treeData);
-  persistLocalData();
-  renderTAB1();
-  renderCotizacionesSidePanel(node);
+  finalizeCotizacionMutation(node, `cotización de ${node.clave || 'concepto'}`);
 
   showToast(`Cotización de "${newCot.proveedor}" registrada con éxito.`, 'success');
   return newCot;
@@ -330,10 +373,7 @@ export function updateCotizacion(nodeId, cotId, data) {
     }
   }
 
-  calculateProrrateoCascade(state.treeData);
-  persistLocalData();
-  renderTAB1();
-  renderCotizacionesSidePanel(node);
+  finalizeCotizacionMutation(node, `cotización de ${node.clave || 'concepto'}`);
   showToast('Cotización actualizada.', 'success');
 }
 
@@ -357,10 +397,7 @@ export function deleteCotizacion(nodeId, cotId) {
     clearNodeWinnerSelection(node);
   }
 
-  calculateProrrateoCascade(state.treeData);
-  persistLocalData();
-  renderTAB1();
-  renderCotizacionesSidePanel(node);
+  finalizeCotizacionMutation(node, `cotización eliminada en ${node.clave || 'concepto'}`);
   showToast('Cotización eliminada.', 'info');
 }
 
@@ -403,10 +440,7 @@ export function setCotizacionGanadora(nodeId, cotId) {
     node.importe_calculado = chosenCost;
   }
 
-  calculateProrrateoCascade(state.treeData);
-  persistLocalData();
-  renderTAB1();
-  renderCotizacionesSidePanel(node);
+  finalizeCotizacionMutation(node, `proveedor ganador en ${node.clave || 'concepto'}`);
 
   showToast(`Proveedor seleccionado: ${chosen.proveedor} (${formatMoney(chosenCost)}) trasladado a Tabla de Alcances`, 'success');
 }
@@ -428,9 +462,6 @@ export function unsetCotizacionGanadora(nodeId, cotId) {
     clearNodeWinnerSelection(node);
   }
 
-  calculateProrrateoCascade(state.treeData);
-  persistLocalData();
-  renderTAB1();
-  renderCotizacionesSidePanel(node);
+  finalizeCotizacionMutation(node, `selección de proveedor en ${node.clave || 'concepto'}`);
   showToast('Se retiró la selección de proveedor ganador.', 'info');
 }
