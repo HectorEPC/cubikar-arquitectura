@@ -1,11 +1,11 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf20';
-import { saveState } from '../../state/history.js?v=20261116_cf20';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf20';
-import { calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261116_cf20';
-import { recalculateClaves } from '../catalog/treeService.js?v=20261116_cf20';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf20';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf20';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf20';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf21';
+import { saveState } from '../../state/history.js?v=20261116_cf21';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf21';
+import { calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261116_cf21';
+import { recalculateClaves } from '../catalog/treeService.js?v=20261116_cf21';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf21';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf21';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf21';
 
 // Abrir modal interactivo de selección de formato de exportación
 export function openExportModal() {

@@ -1,12 +1,12 @@
 // js/modules/reference/referenceDb.js
 // Gestor de base de datos local IndexedDB para Catálogos Maestros de Referencia
 
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf20';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261116_cf21';
 import {
   STORAGE_KEY_USER,
   STORAGE_KEY_ACTIVE_WORKSPACE,
   STORAGE_KEY_SUBSCRIPTION
-} from '../../config/constants.js?v=20261116_cf20';
+} from '../../config/constants.js?v=20261116_cf21';
 
 const DB_NAME = 'APU_REFERENCE_DB';
 const DB_VERSION = 1;
