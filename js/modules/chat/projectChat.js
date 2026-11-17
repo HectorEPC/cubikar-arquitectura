@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf16';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf16';
+import { state } from '../../state/store.js?v=20261116_cf17';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf17';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf16';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf16';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf16';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf16';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf16';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf16';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf16';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf16';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf16';
+} from '../portal/projectService.js?v=20261116_cf17';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf17';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf17';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf17';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf17';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf17';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf17';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf17';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf17';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -1889,14 +1889,23 @@ export function openMentionNotification(projectId, msgId, partidaId = '', event 
   }, 60);
 }
 
-export function handleAcceptInvitationAction(invId) {
+let isAcceptInvitationInFlight = false;
+
+export async function handleAcceptInvitationAction(invId) {
+  if (isAcceptInvitationInFlight) return;
   const currentUser = getCurrentUser();
   if (!currentUser) {
     showToast('Inicia sesión para aceptar la invitación', 'warning');
     return;
   }
-  const result = acceptProjectInvitation(invId, currentUser);
-  if (result.ok) {
+  isAcceptInvitationInFlight = true;
+  let result;
+  try {
+    result = await acceptProjectInvitation(invId, currentUser);
+  } finally {
+    isAcceptInvitationInFlight = false;
+  }
+  if (result?.ok) {
     showToast(`🎉 ¡Invitación aceptada! Accediendo a "${result.projectName}"...`);
     renderSidebarNotificationsUI();
     if (typeof window.refreshProjectsGridUI === 'function') {
@@ -1911,9 +1920,9 @@ export function handleAcceptInvitationAction(invId) {
       } else {
         window.location.reload();
       }
-    }, 400);
+    }, 350);
   } else {
-    showToast(result.error || 'No se pudo aceptar la invitación', 'warning');
+    showToast(result?.error || 'No se pudo aceptar la invitación', 'warning');
   }
 }
 

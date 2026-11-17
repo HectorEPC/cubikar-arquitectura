@@ -1,11 +1,11 @@
 // js/ui/firmasController.js
 // Controlador de Firmas y Responsables para el Formato de Impresión (Alcances y Presupuesto)
 
-import { state, persistSettings } from '../state/store.js?v=20261116_cf16';
-import { showToast } from './notifications.js?v=20261116_cf16';
-import { getProjectById, getCurrentUser, getProjectMembers, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf16';
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf16';
-import { guardTabUnlocked } from './tabLockController.js?v=20261116_cf16';
+import { state, persistSettings } from '../state/store.js?v=20261116_cf17';
+import { showToast } from './notifications.js?v=20261116_cf17';
+import { getProjectById, getCurrentUser, getProjectMembers, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261116_cf17';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf17';
+import { guardTabUnlocked } from './tabLockController.js?v=20261116_cf17';
 
 export const DEFAULT_FIRMAS_CONFIG = [
   {

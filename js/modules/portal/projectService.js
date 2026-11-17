@@ -13,13 +13,14 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf16';
+} from '../../config/constants.js?v=20261116_cf17';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf16';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf16';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf16';
-import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf16';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf17';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf17';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf17';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects } from '../../core/cloudProjectService.js?v=20261116_cf17';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261116_cf17';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -887,7 +888,7 @@ export function getProjectsList() {
           changed = true;
         }
       });
-      if (changed) saveProjectsList(list);
+      if (changed) saveProjectsList(list, { skipCloudSync: true });
       return list;
     }
   } catch (e) {
@@ -903,11 +904,24 @@ export function getProjectsList() {
   return initializeDefaultProjects();
 }
 
+function triggerCloudCollabSync(user) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.triggerDebouncedCloudStateSync === 'function') {
+      window.triggerDebouncedCloudStateSync(user);
+    } else if (typeof window !== 'undefined' && typeof window.syncUserCollaborationToCloud === 'function') {
+      window.syncUserCollaborationToCloud(user);
+    }
+  } catch (_) {}
+}
+
 export function saveProjectsList(projects, opts = {}) {
   try {
     localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
   } catch (e) {
     console.error('Error guardando proyectos:', e);
+  }
+  if (!opts?.skipCloudSync) {
+    triggerCloudCollabSync();
   }
   return opts;
 }
@@ -1770,10 +1784,13 @@ export function getStoredInvitations() {
   }
 }
 
-export function saveStoredInvitations(invitations) {
+export function saveStoredInvitations(invitations, opts = {}) {
   try {
     localStorage.setItem(STORAGE_KEY_INVITATIONS, JSON.stringify(invitations || []));
   } catch (e) {}
+  if (!opts?.skipCloudSync) {
+    triggerCloudCollabSync();
+  }
 }
 
 // Obtener invitaciones pendientes para un usuario específico (por email)
@@ -1941,8 +1958,80 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
   return newInvitation;
 }
 
+async function syncAcceptedCloudWorkspacesAfterAccept(user, userEmail, hostEmail, roleToUse, cloudPromises) {
+  if (hostEmail && userEmail) {
+    try {
+      const sb = typeof getSupabaseClient === 'function' ? getSupabaseClient() : null;
+      if (sb && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function' && !window.__cubikarOversizedJwtBlocked) {
+        if (typeof sb.rpc === 'function') {
+          const { data: rpcRows, error: rpcErr } = await sb.rpc('get_my_collaboration_workspaces');
+          if (!rpcErr && Array.isArray(rpcRows)) {
+            rpcRows
+              .filter(r =>
+                (r?.owner_email || '').toLowerCase().trim() === hostEmail &&
+                (r?.estado_invitacion || '').toLowerCase().trim() === 'pending' &&
+                r?.proyecto_id
+              )
+              .forEach(r => {
+                cloudPromises.push(window.addCollaboratorToCloud(r.proyecto_id, userEmail, r.rol || roleToUse || 'editar', 'accepted'));
+              });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (cloudPromises.length > 0) {
+    try { await Promise.allSettled(cloudPromises); } catch (_) {}
+  }
+
+  try { invalidateCloudProjectsCache(); } catch (_) {}
+
+  try {
+    let timerId = null;
+    const cloudList = await Promise.race([
+      fetchCloudProjects({ force: true }),
+      new Promise(resolve => { timerId = setTimeout(() => resolve(null), 3000); })
+    ]).finally(() => { if (timerId) clearTimeout(timerId); });
+
+    if (Array.isArray(cloudList) && cloudList.length > 0) {
+      const curList = getProjectsList();
+      let changed = false;
+      cloudList.forEach(cp => {
+        if (!cp || isProjectMarkedDeleted(cp.id) || (cp.cloudId && isProjectMarkedDeleted(cp.cloudId))) return;
+        const idx = curList.findIndex(lp => lp.id === cp.id || lp.cloudId === cp.id);
+        if (idx === -1) {
+          curList.unshift(cp);
+          changed = true;
+        } else {
+          const merged = { ...curList[idx], ...cp, id: curList[idx].id || cp.id, cloudId: cp.id, isCloudSynced: true };
+          if (JSON.stringify(merged) !== JSON.stringify(curList[idx])) {
+            curList[idx] = merged;
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        saveProjectsList(curList, { skipCloudSync: true });
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (typeof window !== 'undefined' && typeof window.syncUserCollaborationToCloud === 'function') {
+      let syncTimer = null;
+      await Promise.race([
+        window.syncUserCollaborationToCloud(user, { force: true }),
+        new Promise(resolve => { syncTimer = setTimeout(() => resolve(false), 2500); })
+      ]).finally(() => { if (syncTimer) clearTimeout(syncTimer); });
+    } else {
+      triggerCloudCollabSync(user);
+    }
+  } catch (_) {}
+}
+
 // Aceptar invitación a un proyecto o al plan de un anfitrión
-export function acceptProjectInvitation(invitationId, currentUser = null) {
+export async function acceptProjectInvitation(invitationId, currentUser = null) {
   const user = currentUser || getCurrentUser();
   const userEmail = (user?.email || '').toLowerCase().trim();
 
@@ -2019,6 +2108,22 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
           }
         } catch (e) {}
 
+        const cloudPromises = [];
+        try {
+          if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+            const cid = projWithMember.cloudId || projWithMember.id;
+            if (cid) {
+              cloudPromises.push(window.addCollaboratorToCloud(cid, userEmail, mem.role || 'editar', 'accepted'));
+            }
+          }
+        } catch (_) {}
+        await syncAcceptedCloudWorkspacesAfterAccept(
+          user,
+          userEmail,
+          (projWithMember.ownerEmail || '').toLowerCase().trim(),
+          mem.role || 'editar',
+          cloudPromises
+        );
         return { ok: true, projectId: projWithMember.id, projectName: projWithMember.projectName };
       }
     }
@@ -2063,19 +2168,22 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
     }
 
     // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
+    const cloudPromisesInv = [];
+    const roleToUse = targetInv.role || targetPlanInv?.role || 'editar';
+    const acceptedEmailInv = (targetInv.email || userEmail).toLowerCase().trim();
     try {
       if (targetInv && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-        const roleToUse = targetInv.role || targetPlanInv?.role || 'editar';
-        if (targetProjectId) {
-          window.addCollaboratorToCloud(targetProjectId, userEmail, roleToUse, 'accepted');
+        const cidPrimary = proj?.cloudId || targetProjectId;
+        if (cidPrimary) {
+          cloudPromisesInv.push(window.addCollaboratorToCloud(cidPrimary, acceptedEmailInv, roleToUse, 'accepted'));
         }
         if (targetInv.ownerEmail) {
           const hostEm = (targetInv.ownerEmail || '').toLowerCase().trim();
           const hostProjects = list.filter(p => (p.ownerEmail || '').toLowerCase().trim() === hostEm);
           hostProjects.forEach(hp => {
             const cid = hp.cloudId || hp.id;
-            if (cid && cid !== targetProjectId && hp.id === targetProjectId) {
-              window.addCollaboratorToCloud(cid, userEmail, roleToUse, 'accepted');
+            if (cid && cid !== cidPrimary && hp.id === targetProjectId) {
+              cloudPromisesInv.push(window.addCollaboratorToCloud(cid, acceptedEmailInv, roleToUse, 'accepted'));
             }
           });
         }
@@ -2085,7 +2193,7 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
     // Si también existía invitación de plan con este anfitrión, marcarla como aceptada
     if (targetInv.ownerEmail) {
       const hostEmail = (targetInv.ownerEmail || '').toLowerCase().trim();
-      const pInv = planInvs.find(pi => (pi.ownerEmail || '').toLowerCase().trim() === hostEmail && (pi.email || '').toLowerCase().trim() === (targetInv.email || userEmail).toLowerCase().trim());
+      const pInv = planInvs.find(pi => (pi.ownerEmail || '').toLowerCase().trim() === hostEmail && (pi.email || '').toLowerCase().trim() === acceptedEmailInv);
       if (pInv) {
         pInv.status = 'accepted';
         pInv.acceptedAt = new Date().toISOString();
@@ -2099,6 +2207,13 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
       }
     } catch (e) {}
 
+    await syncAcceptedCloudWorkspacesAfterAccept(
+      user,
+      acceptedEmailInv,
+      (targetInv.ownerEmail || proj?.ownerEmail || '').toLowerCase().trim(),
+      roleToUse,
+      cloudPromisesInv
+    );
     return { ok: true, projectId: targetProjectId, projectName: targetProjectName || 'Proyecto de Obra' };
   }
 
@@ -2147,16 +2262,17 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
     }
 
     // Actualizar colaborador en Supabase PostgreSQL (public.proyecto_colaboradores)
+    const cloudPromisesPlan = [];
+    const planRole = targetPlanInv.role || 'editar';
     try {
       if (targetPlanInv && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-        const planRole = targetPlanInv.role || 'editar';
         if (targetProjectId) {
-          window.addCollaboratorToCloud(targetProjectId, userEmail, planRole, 'accepted');
+          cloudPromisesPlan.push(window.addCollaboratorToCloud(targetProjectId, userEmail, planRole, 'accepted'));
         }
         hostProjects.forEach(hp => {
           const cid = hp.cloudId || hp.id;
-          if (cid) {
-            window.addCollaboratorToCloud(cid, userEmail, planRole, 'accepted');
+          if (cid && cid !== targetProjectId) {
+            cloudPromisesPlan.push(window.addCollaboratorToCloud(cid, userEmail, planRole, 'accepted'));
           }
         });
       }
@@ -2188,6 +2304,7 @@ export function acceptProjectInvitation(invitationId, currentUser = null) {
       }
     } catch (e) {}
 
+    await syncAcceptedCloudWorkspacesAfterAccept(user, userEmail, hostEmail, planRole, cloudPromisesPlan);
     return { ok: true, projectId: finalProjId, projectName: finalProjName };
   }
 
@@ -2775,24 +2892,46 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
     }
   });
 
-  // 2. Enriquecer roles con invitaciones aceptadas al plan de suscripción, pero SOLO para anfitriones con al menos 1 obra activa
+  // 2. Incluir y enriquecer roles con invitaciones aceptadas al plan de suscripción
   const planInvs = getStoredPlanInvitations();
   planInvs.forEach(pInv => {
     const oEmail = (pInv.ownerEmail || '').toLowerCase().trim();
     const guestEmail = (pInv.email || '').toLowerCase().trim();
-    if (guestEmail === uEmail && oEmail && oEmail !== uEmail && !SYSTEM_EXCLUDED_EMAILS.has(oEmail) && pInv.status === 'accepted') {
-      if (map.has(oEmail)) {
+    const isExplicitPlanInv = !String(pInv.id || '').startsWith('plan-inv-cloud-');
+    if (guestEmail === uEmail && oEmail && oEmail !== uEmail && !SYSTEM_EXCLUDED_EMAILS.has(oEmail) && (pInv.status === 'accepted' || pInv.status === 'active')) {
+      if (!map.has(oEmail)) {
+        const hostName = resolveCleanHostName(oEmail, pInv.ownerName, null, uEmail);
+        const planId = getUserPlanId(oEmail) || pInv.ownerPlanId || 'free';
+        const planLimits = getPlanLimits(planId);
+        map.set(oEmail, {
+          email: oEmail,
+          name: hostName,
+          companyName: hostName,
+          planId: planId,
+          planName: planLimits.name,
+          maxProjects: planLimits.maxProjects,
+          maxMembers: planLimits.maxMembers,
+          count: 0,
+          isEditor: pInv.role === 'editar',
+          hasAcceptedPlanInv: isExplicitPlanInv,
+          roles: new Set([pInv.role || 'editar'])
+        });
+      } else {
         const entry = map.get(oEmail);
+        if (isExplicitPlanInv) entry.hasAcceptedPlanInv = true;
         if (pInv.role === 'editar') entry.isEditor = true;
         entry.roles.add(pInv.role || 'editar');
       }
     }
   });
 
-  // Filtrar para devolver únicamente anfitriones con al menos 1 proyecto activo (no eliminado) donde el usuario es miembro activo/aceptado
+  // Filtrar para devolver anfitriones con >= 1 proyecto activo o con invitación de plan explícitamente aceptada
   return Array.from(map.entries())
     .filter(([ownerKey, inv]) => {
-      if (!inv || inv.count <= 0) return false;
+      if (!inv) return false;
+      if (inv.count <= 0) {
+        return Boolean(inv.hasAcceptedPlanInv);
+      }
       return allProjects.some(p => {
         if (!p || isProjectMarkedDeleted(p.id) || (p.cloudId && isProjectMarkedDeleted(p.cloudId))) return false;
         if (p.isSample || p.id === 'proj-opus-casa-laura' || p.id === 'proj-default-01' || p.id === 'proj-demo-02' || (typeof p.id === 'string' && p.id.startsWith('proj-demo'))) return false;
@@ -2948,10 +3087,13 @@ export function getStoredPlanInvitations() {
   }
 }
 
-export function saveStoredPlanInvitations(invitations) {
+export function saveStoredPlanInvitations(invitations, opts = {}) {
   try {
     localStorage.setItem(STORAGE_KEY_PLAN_INVITATIONS, JSON.stringify(invitations || []));
   } catch (e) {}
+  if (!opts?.skipCloudSync) {
+    triggerCloudCollabSync();
+  }
 }
 
 export function getPlanCollaboratorsForOwner(ownerEmail) {
@@ -3157,6 +3299,16 @@ export function createPlanInvitation({ email, name, role = 'editar', avatar = nu
           }
         } catch (e) {}
       }
+
+      // Sincronizar fila de colaborador en Supabase PostgreSQL para acceso Multi-PC
+      try {
+        const cid = proj.cloudId || proj.id;
+        const existingMem = Array.isArray(proj.members) ? proj.members.find(m => (m.email || '').toLowerCase().trim() === cleanEmail) : null;
+        const cloudStatus = (existingMem && (existingMem.status === 'active' || existingMem.status === 'accepted')) ? 'accepted' : 'pending';
+        if (cid && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+          window.addCollaboratorToCloud(cid, cleanEmail, newInv.role || 'editar', cloudStatus);
+        }
+      } catch (_) {}
     }
   });
   saveStoredInvitations(allStoredInvs);
