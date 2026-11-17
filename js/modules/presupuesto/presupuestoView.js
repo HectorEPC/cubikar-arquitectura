@@ -1,14 +1,14 @@
 // js/modules/presupuesto/presupuestoView.js
 // Pestaña 1: Presupuesto al Cliente (Barra de botones, Desglose de Presupuesto, Resumen Ejecutivo y Notas)
 
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf15';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf15';
-import { formatMoney, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf15';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf15';
-import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf15';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf15';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf15';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261116_cf15';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf16';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf16';
+import { formatMoney, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf16';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf16';
+import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf16';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf16';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf16';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261116_cf16';
 
 import {
   getProjectPresupuestoConfig,
@@ -16,12 +16,12 @@ import {
   calcularResumenPresupuesto,
   savePresupuestoSettings,
   isSubtituloNode
-} from './presupuestoModel.js?v=20261116_cf15';
+} from './presupuestoModel.js?v=20261116_cf16';
 import {
   buildPresupuestoPrintTableHtml,
   printPresupuestoCotizacion,
   exportPresupuestoExcel
-} from './presupuestoExport.js?v=20261116_cf15';
+} from './presupuestoExport.js?v=20261116_cf16';
 
 export {
   getProjectPresupuestoConfig,

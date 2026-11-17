@@ -1,4 +1,4 @@
-import { APU_WIDTH_KEY } from '../config/constants.js?v=20261116_cf15';
+import { APU_WIDTH_KEY } from '../config/constants.js?v=20261116_cf16';
 
 let isResizingApu = false;
 let startResizeX = 0;

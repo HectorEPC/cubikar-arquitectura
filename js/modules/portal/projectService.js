@@ -13,13 +13,13 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf15';
+} from '../../config/constants.js?v=20261116_cf16';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf15';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf15';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf15';
-import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf15';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf16';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf16';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf16';
+import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf16';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
