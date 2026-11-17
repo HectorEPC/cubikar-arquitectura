@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf13';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf13';
+import { state } from '../../state/store.js?v=20261116_cf14';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf14';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf13';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf13';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf13';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf13';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf13';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf13';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf13';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf13';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf13';
+} from '../portal/projectService.js?v=20261116_cf14';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf14';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf14';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf14';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf14';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf14';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf14';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf14';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf14';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -697,6 +697,35 @@ export function normalizeChatMsgId(rawId) {
   return String(rawId || '').replace(/^.*?(?:__|::)/, '');
 }
 
+function normalizeMentionToken(val) {
+  return String(val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function resolveCanonicalChatPid(projectId = null) {
+  const rawPid = projectId || getActiveProjectId() || 'proj-default-01';
+  try {
+    const projects = getProjectsList();
+    if (Array.isArray(projects)) {
+      const match = projects.find(p => p && (p.id === rawPid || p.cloudId === rawPid));
+      if (match && match.id) return match.id;
+    }
+  } catch (_) {}
+  return rawPid;
+}
+
+function getScopedNotifStorageKey(baseKey) {
+  try {
+    const email = ((getCurrentUser() || getLastKnownUser())?.email || '').toLowerCase().trim();
+    return email ? `${baseKey}__${email}` : baseKey;
+  } catch (_) {
+    return baseKey;
+  }
+}
+
 export function dedupeChatMessages(list) {
   if (!Array.isArray(list)) return [];
   const seenIds = new Set();
@@ -734,35 +763,53 @@ export function dedupeChatMessages(list) {
 
 export function isChatMessageReadForCurrentUser(m, projectId = null, myEmailOverride = null, readSetOverride = null) {
   if (!m || typeof m !== 'object') return true;
-  if (Boolean(m.isRead) || Boolean(m.dismissed)) return true;
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
-  const myEmail = myEmailOverride !== null
+  const pid = resolveCanonicalChatPid(projectId);
+  const myEmail = (myEmailOverride !== null
     ? myEmailOverride
-    : ((getCurrentUser() || getLastKnownUser())?.email || '').toLowerCase().trim();
+    : ((getCurrentUser() || getLastKnownUser())?.email || '')
+  ).toLowerCase().trim();
   const authorEmail = String(m.authorEmail || '').toLowerCase().trim();
   if (myEmail && authorEmail && authorEmail === myEmail) return true;
-  const readBy = Array.isArray(m.readBy) ? m.readBy : [];
-  if (readBy.includes('__all__')) return true;
-  if (myEmail && readBy.some(r => String(r || '').toLowerCase().trim() === myEmail)) return true;
-  const readSet = readSetOverride || new Set(getReadMentionIds());
-  const cleanId = normalizeChatMsgId(m.id);
-  if (readSet.has(`${pid}:${cleanId}`) || readSet.has(cleanId) || readSet.has(`${pid}:${m.id}`) || readSet.has(String(m.id))) {
+
+  const userKey = myEmail || '__local__';
+  if ((m.localReadBy && m.localReadBy[userKey]) || (m.localDismissedBy && m.localDismissedBy[userKey])) {
     return true;
   }
+
+  const readSet = readSetOverride || new Set(getReadMentionIds());
+  const cleanId = normalizeChatMsgId(m.id);
+  if (
+    readSet.has(`${pid}:${cleanId}`) ||
+    readSet.has(cleanId) ||
+    readSet.has(`${pid}:${m.id}`) ||
+    readSet.has(String(m.id)) ||
+    (projectId && readSet.has(`${projectId}:${cleanId}`))
+  ) {
+    return true;
+  }
+
+  const readBy = Array.isArray(m.readBy) ? m.readBy : [];
+  if (myEmail && readBy.some(r => String(r || '').toLowerCase().trim() === myEmail)) {
+    return true;
+  }
+
+  // En mensajes nuevos (perUserRead) o heredados de sendProjectChatMessage (readBy=[] con isRead=true),
+  // nunca asumir lectura global para todos los usuarios.
+  if (!m.perUserRead && readBy.includes('__all__')) return true;
+  if (!m.perUserRead && Boolean(m.dismissed)) return true;
   return false;
 }
 
 export function markActiveProjectChatMessagesAsRead(projectId = null) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
+  const pid = resolveCanonicalChatPid(projectId);
   const arqKey = `adm_arq_project_chat_${pid}`;
   const constKey = `adm_const_project_chat_${pid}`;
   try {
-    const raw = localStorage.getItem(arqKey) || localStorage.getItem(constKey);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
+    const parsed = loadProjectChatMessages(pid);
     if (!Array.isArray(parsed) || parsed.length === 0) return false;
     const currentUser = getCurrentUser() || getLastKnownUser();
     const myEmail = (currentUser?.email || '').toLowerCase().trim();
+    const userKey = myEmail || '__local__';
     const readList = getReadMentionIds();
     const readSet = new Set(readList);
     let readKeysAdded = false;
@@ -780,46 +827,54 @@ export function markActiveProjectChatMessagesAsRead(projectId = null) {
         readList.push(cleanId);
         readKeysAdded = true;
       }
-      const nextReadBy = Array.isArray(m.readBy) ? [...m.readBy] : [];
-      if (!nextReadBy.includes('__all__')) {
-        nextReadBy.push('__all__');
-        changed = true;
-      }
-      if (myEmail && !nextReadBy.includes(myEmail)) {
+      const nextReadBy = Array.isArray(m.readBy) ? m.readBy.filter(r => r !== '__all__') : [];
+      if (myEmail && !nextReadBy.some(r => String(r || '').toLowerCase().trim() === myEmail)) {
         nextReadBy.push(myEmail);
         changed = true;
       }
-      if (!m.isRead) {
+      const prevLocalReadBy = (m.localReadBy && typeof m.localReadBy === 'object') ? m.localReadBy : {};
+      if (!prevLocalReadBy[userKey]) {
         changed = true;
       }
-      return { ...m, isRead: true, readBy: nextReadBy };
+      return {
+        ...m,
+        perUserRead: true,
+        localReadBy: { ...prevLocalReadBy, [userKey]: true },
+        readBy: nextReadBy
+      };
     });
     if (deduped.length !== parsed.length) changed = true;
     if (readKeysAdded && typeof localStorage !== 'undefined') {
       if (readList.length > 500) readList.splice(0, readList.length - 500);
-      localStorage.setItem(READ_MENTIONS_KEY, JSON.stringify(readList));
+      localStorage.setItem(getScopedNotifStorageKey(READ_MENTIONS_KEY), JSON.stringify(readList));
     }
     if (changed) {
       const data = JSON.stringify(deduped);
       localStorage.setItem(arqKey, data);
       localStorage.setItem(constKey, data);
-      scheduleChatCloudSync(pid);
     }
     if (changed || readKeysAdded) {
       syncNotificationStateToCloud();
     }
-    return changed;
+    return changed || readKeysAdded;
   } catch (_) {
     return false;
   }
 }
 
 export function loadProjectChatMessages(projectId = null) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
-  const arqKey = `adm_arq_project_chat_${pid}`;
-  const constKey = `adm_const_project_chat_${pid}`;
+  const pid = resolveCanonicalChatPid(projectId);
+  const candidatePids = Array.from(new Set([pid, projectId || ''].filter(Boolean)));
   try {
-    const raw = localStorage.getItem(arqKey) || localStorage.getItem(constKey);
+    const pObj = getProjectById(pid);
+    if (pObj?.cloudId && !candidatePids.includes(pObj.cloudId)) candidatePids.push(pObj.cloudId);
+  } catch (_) {}
+  try {
+    let raw = null;
+    for (const cPid of candidatePids) {
+      raw = localStorage.getItem(`adm_arq_project_chat_${cPid}`) || localStorage.getItem(`adm_const_project_chat_${cPid}`);
+      if (raw) break;
+    }
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -845,7 +900,7 @@ export function loadProjectChatMessages(projectId = null) {
 }
 
 export function saveProjectChatMessages(messages, projectId = null, opts = {}) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
+  const pid = resolveCanonicalChatPid(projectId);
   try {
     const deduped = dedupeChatMessages(messages || []);
     const data = JSON.stringify(deduped);
@@ -978,15 +1033,41 @@ export function renderPartidaNivel1ChatButton(nodeId, clave = '', descripcion = 
 
 // Obtener usuarios asignados al proyecto activo
 function getAssignedProjectUsers(projectId = null) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
+  const pid = resolveCanonicalChatPid(projectId);
   const proj = getProjectById(pid);
   const currentUser = getCurrentUser() || getLastKnownUser();
-  let rawMembers = (proj && Array.isArray(proj.members) && proj.members.length > 0)
-    ? [...proj.members]
-    : [];
+  const seenEmails = new Set();
+  const rawMembers = [];
 
-  if (rawMembers.length === 0) {
-    rawMembers = [];
+  const pushRawMember = (m) => {
+    if (!m || typeof m !== 'object') return;
+    const em = String(m.email || '').toLowerCase().trim();
+    if (em) {
+      if (seenEmails.has(em)) return;
+      seenEmails.add(em);
+    }
+    rawMembers.push(m);
+  };
+
+  if (proj && Array.isArray(proj.members)) {
+    proj.members.forEach(pushRawMember);
+  }
+  if (proj && proj.ownerEmail) {
+    pushRawMember({
+      id: `mem-${proj.ownerEmail}`,
+      name: proj.ownerName || proj.ownerEmail.split('@')[0],
+      email: proj.ownerEmail,
+      role: 'editar'
+    });
+  }
+  if (rawMembers.length === 0 && currentUser && currentUser.email) {
+    pushRawMember({
+      id: currentUser.id || `mem-${currentUser.email}`,
+      name: currentUser.name || currentUser.email.split('@')[0],
+      email: currentUser.email,
+      avatar: currentUser.avatar || '',
+      role: 'editar'
+    });
   }
 
   return rawMembers.map(m => {
@@ -1156,9 +1237,9 @@ function extractMentionsFromMessage(m) {
   const list = [];
 
   const pushTag = (raw) => {
-    const clean = String(raw || '').trim();
+    const clean = String(raw || '').trim().replace(/[.,;:!?)\]]+$/, '');
     if (!clean.startsWith('@') || clean.length < 2) return;
-    const lower = clean.toLowerCase();
+    const lower = normalizeMentionToken(clean);
     if (!seen.has(lower)) {
       seen.add(lower);
       list.push(clean);
@@ -1243,7 +1324,8 @@ let notifCloudSyncTimer = null;
 export function getDismissedNotificationIds() {
   try {
     if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+      const scopedKey = getScopedNotifStorageKey(DISMISSED_NOTIFICATIONS_KEY);
+      const raw = localStorage.getItem(scopedKey) || (scopedKey === DISMISSED_NOTIFICATIONS_KEY ? null : localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY));
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed;
@@ -1256,7 +1338,8 @@ export function getDismissedNotificationIds() {
 export function getReadMentionIds() {
   try {
     if (typeof localStorage !== 'undefined') {
-      const raw = localStorage.getItem(READ_MENTIONS_KEY);
+      const scopedKey = getScopedNotifStorageKey(READ_MENTIONS_KEY);
+      const raw = localStorage.getItem(scopedKey) || (scopedKey === READ_MENTIONS_KEY ? null : localStorage.getItem(READ_MENTIONS_KEY));
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) return parsed;
@@ -1352,7 +1435,7 @@ export async function hydrateNotificationStateFromCloud(authUser = null) {
       const curDismissed = getDismissedNotificationIds();
       const mergedDismissed = Array.from(new Set([...curDismissed, ...userMeta.cubikar_dismissed_notifications])).slice(-500);
       if (mergedDismissed.length !== curDismissed.length && typeof localStorage !== 'undefined') {
-        localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(mergedDismissed));
+        localStorage.setItem(getScopedNotifStorageKey(DISMISSED_NOTIFICATIONS_KEY), JSON.stringify(mergedDismissed));
         changed = true;
       }
     }
@@ -1360,7 +1443,7 @@ export async function hydrateNotificationStateFromCloud(authUser = null) {
       const curRead = getReadMentionIds();
       const mergedRead = Array.from(new Set([...curRead, ...userMeta.cubikar_read_mentions])).slice(-500);
       if (mergedRead.length !== curRead.length && typeof localStorage !== 'undefined') {
-        localStorage.setItem(READ_MENTIONS_KEY, JSON.stringify(mergedRead));
+        localStorage.setItem(getScopedNotifStorageKey(READ_MENTIONS_KEY), JSON.stringify(mergedRead));
         changed = true;
       }
     }
@@ -1380,7 +1463,7 @@ export function markNotificationDismissed(notifKey) {
     if (!list.includes(notifKey)) {
       list.push(notifKey);
       if (list.length > 500) list.splice(0, list.length - 500);
-      localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(list));
+      localStorage.setItem(getScopedNotifStorageKey(DISMISSED_NOTIFICATIONS_KEY), JSON.stringify(list));
     }
     syncNotificationStateToCloud();
   } catch (_) {}
@@ -1393,7 +1476,7 @@ export function markMentionReadKey(readKey) {
     if (!list.includes(readKey)) {
       list.push(readKey);
       if (list.length > 500) list.splice(0, list.length - 500);
-      localStorage.setItem(READ_MENTIONS_KEY, JSON.stringify(list));
+      localStorage.setItem(getScopedNotifStorageKey(READ_MENTIONS_KEY), JSON.stringify(list));
     }
     syncNotificationStateToCloud();
   } catch (_) {}
@@ -1403,20 +1486,27 @@ function getSelfMentionTokens(users = []) {
   const curUser = getCurrentUser() || getLastKnownUser();
   if (!curUser) return [];
   const tokens = new Set();
+  const addTok = (val) => {
+    const raw = String(val || '').toLowerCase().trim();
+    const norm = normalizeMentionToken(val);
+    if (raw) tokens.add(raw);
+    if (norm) tokens.add(norm);
+  };
   const myEmail = String(curUser.email || '').toLowerCase().trim();
   const myName = String(curUser.name || '').trim();
+  const myNameNorm = normalizeMentionToken(myName);
   if (myEmail) {
     (users || []).filter(u => String(u?.email || '').toLowerCase().trim() === myEmail)
-      .forEach(u => { if (u.handle) tokens.add(String(u.handle).toLowerCase()); });
+      .forEach(u => { if (u.handle) addTok(u.handle); });
     const prefix = myEmail.split('@')[0];
-    if (prefix) tokens.add('@' + prefix.toLowerCase());
-    tokens.add(myEmail);
+    if (prefix) addTok('@' + prefix);
+    addTok(myEmail);
   }
   if (myName) {
-    (users || []).filter(u => String(u?.name || '').toLowerCase().trim() === myName.toLowerCase())
-      .forEach(u => { if (u.handle) tokens.add(String(u.handle).toLowerCase()); });
-    tokens.add('@' + myName.replace(/\s+/g, '.').toLowerCase());
-    tokens.add('@' + myName.replace(/\s+/g, '').toLowerCase());
+    (users || []).filter(u => normalizeMentionToken(u?.name) === myNameNorm)
+      .forEach(u => { if (u.handle) addTok(u.handle); });
+    addTok('@' + myName.replace(/\s+/g, '.'));
+    addTok('@' + myName.replace(/\s+/g, ''));
   }
   tokens.add('@todos');
   return Array.from(tokens);
@@ -1428,14 +1518,15 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
   const filterHandle = targetHandle || selectedNotificationsHandle || '__self__';
   const isAllHandles = String(filterHandle).toLowerCase() === 'all';
   const isSelfHandle = filterHandle === '__self__';
-  const handleLower = String(filterHandle || '').toLowerCase();
+  const handleLower = normalizeMentionToken(filterHandle);
   const dismissedSet = new Set(getDismissedNotificationIds());
   const readMentionsSet = new Set(getReadMentionIds());
 
-  const activePid = getActiveProjectId() || 'proj-default-01';
+  const activePid = resolveCanonicalChatPid(getActiveProjectId() || 'proj-default-01');
   const activeProjObj = getProjectById(activePid);
   const currentUser = getCurrentUser() || getLastKnownUser();
   const myEmail = String(currentUser?.email || '').toLowerCase().trim();
+  const userKey = myEmail || '__local__';
   const projects = scope === 'current'
     ? [{
         id: activePid,
@@ -1448,7 +1539,15 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
     const msgs = loadProjectChatMessages(proj.id);
     const selfTokens = isSelfHandle ? getSelfMentionTokens(getAssignedProjectUsers(proj.id)) : [];
     msgs.forEach(m => {
-      if (m.dismissed || dismissedSet.has(`${proj.id}:${m.id}`) || dismissedSet.has(String(m.id))) return;
+      const cleanId = normalizeChatMsgId(m.id);
+      if (
+        (m.localDismissedBy && m.localDismissedBy[userKey]) ||
+        (!m.perUserRead && m.dismissed) ||
+        dismissedSet.has(`${proj.id}:${cleanId}`) ||
+        dismissedSet.has(`${proj.id}:${m.id}`) ||
+        dismissedSet.has(cleanId) ||
+        dismissedSet.has(String(m.id))
+      ) return;
       const authorEmail = String(m.authorEmail || '').toLowerCase().trim();
       if (isSelfHandle && myEmail && authorEmail && authorEmail === myEmail) return;
       const mentionsList = extractMentionsFromMessage(m);
@@ -1458,22 +1557,20 @@ export function getUserMentionsNotifications(targetHandle = null, scope = 'all')
         ? mentionsList.length > 0
         : (isSelfHandle
             ? (selfTokens.length > 0 && (
-                mentionsList.some(tag => selfTokens.includes(String(tag).toLowerCase())) ||
+                mentionsList.some(tag => selfTokens.includes(normalizeMentionToken(tag))) ||
                 (myEmail && m.text && String(m.text).toLowerCase().split(/\s+/).includes(myEmail))
               ))
-            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)));
+            : (mentionsList.some(tag => normalizeMentionToken(tag) === handleLower)));
 
       if (isMentioned) {
         const readBy = Array.isArray(m.readBy) ? m.readBy : [];
-        const isRead = Boolean(m.isRead)
-          || readBy.includes('__all__')
-          || readMentionsSet.has(`${proj.id}:${m.id}`)
-          || readMentionsSet.has(String(m.id))
-          || (isAllHandles
-            ? mentionsList.every(tag => readBy.some(h => String(h).toLowerCase() === String(tag).toLowerCase()))
-            : (isSelfHandle
-                ? selfTokens.some(tok => readBy.some(h => String(h).toLowerCase() === tok))
-                : readBy.some(h => String(h).toLowerCase() === handleLower)));
+        const isReadForMe = isChatMessageReadForCurrentUser(m, proj.id, myEmail, readMentionsSet);
+        const isRead = isSelfHandle
+          ? (isReadForMe || selfTokens.some(tok => readBy.some(h => normalizeMentionToken(h) === tok)))
+          : (isReadForMe
+              || (isAllHandles
+                ? mentionsList.every(tag => readBy.some(h => normalizeMentionToken(h) === normalizeMentionToken(tag)))
+                : readBy.some(h => normalizeMentionToken(h) === handleLower)));
 
         results.push({
           projectId: proj.id,
@@ -1514,9 +1611,12 @@ export function markAllMentionsAsRead(scope = 'all') {
   const filterHandle = selectedNotificationsHandle || '__self__';
   const isAllHandles = String(filterHandle).toLowerCase() === 'all';
   const isSelfHandle = filterHandle === '__self__';
-  const handleLower = String(filterHandle || '').toLowerCase();
+  const handleLower = normalizeMentionToken(filterHandle);
+  const currentUser = getCurrentUser() || getLastKnownUser();
+  const myEmail = String(currentUser?.email || '').toLowerCase().trim();
+  const userKey = myEmail || '__local__';
 
-  const activePid = getActiveProjectId() || 'proj-default-01';
+  const activePid = resolveCanonicalChatPid(getActiveProjectId() || 'proj-default-01');
   const projects = scope === 'current'
     ? [{ id: activePid }]
     : getAllProjectsForNotifications();
@@ -1533,32 +1633,32 @@ export function markAllMentionsAsRead(scope = 'all') {
         ? true
         : (isSelfHandle
             ? (selfTokens.length > 0 && (
-                mentionsList.some(tag => selfTokens.includes(String(tag).toLowerCase())) ||
-                (m.text && selfTokens.some(tok => String(m.text).toLowerCase().includes(tok)))
+                mentionsList.some(tag => selfTokens.includes(normalizeMentionToken(tag))) ||
+                (myEmail && m.text && String(m.text).toLowerCase().split(/\s+/).includes(myEmail))
               ))
-            : (mentionsList.some(tag => String(tag).toLowerCase() === handleLower)
-                || (m.text && String(m.text).toLowerCase().includes(handleLower))));
+            : (mentionsList.some(tag => normalizeMentionToken(tag) === handleLower)));
 
       if (isMentioned) {
+        const cleanId = normalizeChatMsgId(m.id);
         if (!Array.isArray(m.readBy)) m.readBy = [];
-        markMentionReadKey(`${proj.id}:${m.id}`);
-        markMentionReadKey(String(m.id));
+        m.readBy = m.readBy.filter(r => r !== '__all__');
+        markMentionReadKey(`${proj.id}:${cleanId}`);
+        markMentionReadKey(cleanId);
+        m.perUserRead = true;
+        if (!m.localReadBy || typeof m.localReadBy !== 'object') m.localReadBy = {};
+        m.localReadBy[userKey] = true;
         if (isAllHandles || isSelfHandle) {
-          m.isRead = true;
-          if (!m.readBy.includes('__all__')) m.readBy.push('__all__');
-          mentionsList.forEach(tag => {
-            if (!m.readBy.some(h => String(h).toLowerCase() === String(tag).toLowerCase())) {
-              m.readBy.push(tag);
-            }
-          });
+          if (myEmail && !m.readBy.some(r => String(r || '').toLowerCase().trim() === myEmail)) {
+            m.readBy.push(myEmail);
+          }
           changed = true;
-        } else if (!m.readBy.some(h => String(h).toLowerCase() === handleLower)) {
+        } else if (!m.readBy.some(h => normalizeMentionToken(h) === handleLower)) {
           m.readBy.push(filterHandle);
           changed = true;
         }
       }
     });
-    if (changed) saveProjectChatMessages(msgs, proj.id);
+    if (changed) saveProjectChatMessages(msgs, proj.id, { skipCloudSync: true });
   });
 
   syncNotificationStateToCloud();
@@ -1572,19 +1672,28 @@ export function dismissMentionNotification(projectId, msgId, event = null) {
   if (event && typeof event.stopPropagation === 'function') {
     event.stopPropagation();
   }
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
-  markNotificationDismissed(`${pid}:${msgId}`);
-  markNotificationDismissed(String(msgId));
-  markMentionReadKey(`${pid}:${msgId}`);
-  markMentionReadKey(String(msgId));
+  const pid = resolveCanonicalChatPid(projectId);
+  const cleanId = normalizeChatMsgId(msgId);
+  const currentUser = getCurrentUser() || getLastKnownUser();
+  const myEmail = String(currentUser?.email || '').toLowerCase().trim();
+  const userKey = myEmail || '__local__';
+
+  markNotificationDismissed(`${pid}:${cleanId}`);
+  markNotificationDismissed(cleanId);
+  markMentionReadKey(`${pid}:${cleanId}`);
+  markMentionReadKey(cleanId);
   const msgs = loadProjectChatMessages(pid);
-  const target = msgs.find(m => String(m.id) === String(msgId));
+  const target = msgs.find(m => normalizeChatMsgId(m.id) === cleanId || String(m.id) === String(msgId));
   if (target) {
-    target.isRead = true;
-    target.dismissed = true;
+    target.perUserRead = true;
+    if (!target.localReadBy || typeof target.localReadBy !== 'object') target.localReadBy = {};
+    if (!target.localDismissedBy || typeof target.localDismissedBy !== 'object') target.localDismissedBy = {};
+    target.localReadBy[userKey] = true;
+    target.localDismissedBy[userKey] = true;
     if (!Array.isArray(target.readBy)) target.readBy = [];
-    if (!target.readBy.includes('__all__')) target.readBy.push('__all__');
-    saveProjectChatMessages(msgs, pid);
+    target.readBy = target.readBy.filter(r => r !== '__all__');
+    if (myEmail && !target.readBy.includes(myEmail)) target.readBy.push(myEmail);
+    saveProjectChatMessages(msgs, pid, { skipCloudSync: true });
   }
   syncNotificationStateToCloud();
   renderSidebarNotificationsUI();
@@ -1598,8 +1707,9 @@ export function dismissMentionNotification(projectId, msgId, event = null) {
 export function purgeAllNotifications(scope = 'all') {
   const user = getCurrentUser();
   const uEmail = (user?.email || '').toLowerCase().trim();
+  const userKey = uEmail || '__local__';
   const isCurrentOnly = scope === 'current';
-  const activePid = getActiveProjectId() || 'proj-default-01';
+  const activePid = resolveCanonicalChatPid(getActiveProjectId() || 'proj-default-01');
 
   // 1. Ocultar avisos de invitaciones únicamente en scope='all' (sin borrar ni rechazar invitaciones reales)
   if (!isCurrentOnly) {
@@ -1612,7 +1722,7 @@ export function purgeAllNotifications(scope = 'all') {
     } catch (_) {}
   }
 
-  // 2. Marcar como leídos y descartados los mensajes de menciones del alcance seleccionado
+  // 2. Marcar como leídos y descartados SOLO localmente para este usuario en el alcance seleccionado
   const targetProjects = isCurrentOnly
     ? [{ id: activePid }]
     : getAllProjectsForNotifications();
@@ -1622,17 +1732,22 @@ export function purgeAllNotifications(scope = 'all') {
       const msgs = loadProjectChatMessages(proj.id);
       let changed = false;
       msgs.forEach(m => {
-        markNotificationDismissed(`${proj.id}:${m.id}`);
-        markNotificationDismissed(String(m.id));
-        markMentionReadKey(`${proj.id}:${m.id}`);
-        markMentionReadKey(String(m.id));
-        m.isRead = true;
-        m.dismissed = true;
+        const cleanId = normalizeChatMsgId(m.id);
+        markNotificationDismissed(`${proj.id}:${cleanId}`);
+        markNotificationDismissed(cleanId);
+        markMentionReadKey(`${proj.id}:${cleanId}`);
+        markMentionReadKey(cleanId);
+        m.perUserRead = true;
+        if (!m.localReadBy || typeof m.localReadBy !== 'object') m.localReadBy = {};
+        if (!m.localDismissedBy || typeof m.localDismissedBy !== 'object') m.localDismissedBy = {};
+        m.localReadBy[userKey] = true;
+        m.localDismissedBy[userKey] = true;
         if (!Array.isArray(m.readBy)) m.readBy = [];
-        if (!m.readBy.includes('__all__')) m.readBy.push('__all__');
+        m.readBy = m.readBy.filter(r => r !== '__all__');
+        if (uEmail && !m.readBy.includes(uEmail)) m.readBy.push(uEmail);
         changed = true;
       });
-      if (changed) saveProjectChatMessages(msgs, proj.id);
+      if (changed) saveProjectChatMessages(msgs, proj.id, { skipCloudSync: true });
     } catch (_) {}
   });
 
@@ -1681,24 +1796,28 @@ export function openMentionNotification(projectId, msgId, partidaId = '', event 
     event.stopPropagation();
   }
 
-  const activePid = getActiveProjectId() || 'proj-default-01';
-  const targetPid = projectId || activePid;
+  const activePid = resolveCanonicalChatPid(getActiveProjectId() || 'proj-default-01');
+  const targetPid = resolveCanonicalChatPid(projectId || activePid);
+  const cleanId = normalizeChatMsgId(msgId);
+  const currentUser = getCurrentUser() || getLastKnownUser();
+  const myEmail = String(currentUser?.email || '').toLowerCase().trim();
+  const userKey = myEmail || '__local__';
 
-  // Marcar este mensaje como leído para que la campana actualice su contador inmediatamente y persista en la nube
-  markMentionReadKey(`${targetPid}:${msgId}`);
-  markMentionReadKey(String(msgId));
+  // Marcar este mensaje como leído SOLO para este usuario y persistir en su user_metadata
+  markMentionReadKey(`${targetPid}:${cleanId}`);
+  markMentionReadKey(cleanId);
   const msgs = loadProjectChatMessages(targetPid);
-  const targetMsg = msgs.find(m => String(m.id) === String(msgId));
+  const targetMsg = msgs.find(m => normalizeChatMsgId(m.id) === cleanId || String(m.id) === String(msgId));
   if (targetMsg) {
-    targetMsg.isRead = true;
+    targetMsg.perUserRead = true;
+    if (!targetMsg.localReadBy || typeof targetMsg.localReadBy !== 'object') targetMsg.localReadBy = {};
+    targetMsg.localReadBy[userKey] = true;
     if (!Array.isArray(targetMsg.readBy)) targetMsg.readBy = [];
-    if (!targetMsg.readBy.includes('__all__')) targetMsg.readBy.push('__all__');
-    extractMentionsFromMessage(targetMsg).forEach(tag => {
-      if (!targetMsg.readBy.some(h => String(h).toLowerCase() === String(tag).toLowerCase())) {
-        targetMsg.readBy.push(tag);
-      }
-    });
-    saveProjectChatMessages(msgs, targetPid);
+    targetMsg.readBy = targetMsg.readBy.filter(r => r !== '__all__');
+    if (myEmail && !targetMsg.readBy.includes(myEmail)) {
+      targetMsg.readBy.push(myEmail);
+    }
+    saveProjectChatMessages(msgs, targetPid, { skipCloudSync: true });
   }
   syncNotificationStateToCloud();
 
@@ -3091,7 +3210,8 @@ export function sendProjectChatMessage() {
     division: activeChatDivision,
     entryType: pendingComposerEntryType || 'nota',
     createdAt: now.toISOString(),
-    isRead: true,
+    perUserRead: true,
+    isRead: false,
     authorName: authorObj.name,
     authorHandle: authorObj.handle,
     authorRole: authorObj.roleLabel,
@@ -3108,7 +3228,7 @@ export function sendProjectChatMessage() {
   };
   messages.push(newMsg);
 
-  saveProjectChatMessages(messages);
+  saveProjectChatMessages(messages, null, { skipCloudSync: true });
   broadcastChatMessage(getActiveProjectId(), newMsg);
   pendingComposerEntryType = 'nota';
   pendingComposerTags = {
@@ -3866,5 +3986,7 @@ if (typeof window !== 'undefined') {
   setTimeout(() => { try { hydrateNotificationStateFromCloud(); } catch (_) {} }, 800);
   window.addEventListener('cubikar:cloud-modules-hydrated', () => {
     try { hydrateNotificationStateFromCloud(); } catch (_) {}
+    try { renderProjectChatDock(); } catch (_) {}
+    try { renderSidebarNotificationsUI(); } catch (_) {}
   });
 }

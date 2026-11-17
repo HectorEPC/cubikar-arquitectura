@@ -3,10 +3,10 @@
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 // Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf13';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf13';
-import { isValidUUID } from './cloudProjectService.js?v=20261116_cf13';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261116_cf13';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf14';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf14';
+import { isValidUUID } from './cloudProjectService.js?v=20261116_cf14';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261116_cf14';
 
 const syncTimers = {
   bitacora: null,
@@ -528,28 +528,28 @@ export async function syncChatNow(projectId = null) {
   }
   if (!Array.isArray(list)) return false;
 
-  const { empresaId, ownerEmail } = getContextMetadata(pid);
-  const localRowIds = new Set();
-  const localRawIds = new Set();
-
-  if (list.length > 0) {
-    const rows = list.map(m => {
+  const filteredList = list.filter(m => m && m.id && !String(m.id).startsWith('seed_msg_') && !String(m.id).startsWith('__'));
+  if (filteredList.length > 0) {
+    const rows = filteredList.map(m => {
       const cleanMsg = stripInlineBinaryPayloads(m);
       const cleanId = normalizeChatId(m.id);
       cleanMsg.id = cleanId;
+      delete cleanMsg.localReadBy;
+      delete cleanMsg.localDismissedBy;
+      cleanMsg.perUserRead = true;
+      cleanMsg.isRead = false;
+      cleanMsg.dismissed = false;
+      cleanMsg.readBy = [];
       const rowId = `${cloudId}__${cleanId}`;
-      localRowIds.add(rowId);
-      localRawIds.add(cleanId);
       return {
         id: rowId,
         proyecto_id: cloudId,
-        empresa_id: empresaId,
-        owner_email: ownerEmail,
         autor_nombre: String(m.authorName || '').slice(0, 255),
         autor_email: String(m.authorEmail || '').slice(0, 255),
         autor_avatar: (m.authorAvatar && !String(m.authorAvatar).startsWith('data:')) ? m.authorAvatar : '',
+        autor_avatar_url: (m.authorAvatar && !String(m.authorAvatar).startsWith('data:')) ? m.authorAvatar : '',
         mensaje: m.text || '',
-        partida_id: m.partidaId ? String(m.partidaId).slice(0, 100) : '__GENERAL__',
+        partida_id: m.partidaId ? String(m.partidaId).slice(0, 100) : null,
         etiquetas: Array.isArray(m.mentions) ? m.mentions : [],
         adjuntos: Array.isArray(cleanMsg.attachments) ? cleanMsg.attachments : [],
         payload_json: cleanMsg,
@@ -559,21 +559,6 @@ export async function syncChatNow(projectId = null) {
     });
     await supabase.from('chat_mensajes').upsert(rows, { onConflict: 'id' });
   }
-
-  try {
-    const { data: existingChat } = await supabase
-      .from('chat_mensajes')
-      .select('id')
-      .eq('proyecto_id', cloudId);
-    if (Array.isArray(existingChat)) {
-      const toDelete = existingChat
-        .map(r => r.id)
-        .filter(id => !localRowIds.has(id) && !localRawIds.has(normalizeChatId(id)));
-      if (toDelete.length > 0) {
-        await supabase.from('chat_mensajes').delete().eq('proyecto_id', cloudId).in('id', toDelete);
-      }
-    }
-  } catch (_) {}
 
   return true;
 }
@@ -840,30 +825,63 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
         localChat = [];
       }
 
-      const localMap = new Map(localChat.map(m => [normalizeChatId(m.id), m]));
-      const merged = chatRes.data.map(row => {
+      const localMap = new Map();
+      localChat.forEach(m => {
+        if (!m || !m.id) return;
+        const cid = normalizeChatId(m.id);
+        if (!cid || cid.startsWith('seed_msg_')) return;
+        localMap.set(cid, { ...m, id: cid });
+      });
+
+      const mergedMap = new Map();
+      chatRes.data.forEach(row => {
+        if (!row || (row.id && String(row.id).startsWith('__'))) return;
         const base = (row.payload_json && typeof row.payload_json === 'object') ? row.payload_json : {};
         const rawId = normalizeChatId(base.id || row.id);
-        const prev = localMap.get(rawId) || {};
-        return {
-          ...prev,
-          ...base,
+        if (!rawId || rawId.startsWith('seed_msg_')) return;
+        const prev = localMap.get(rawId) || null;
+        const cleanBase = { ...base };
+        if (cleanBase.perUserRead) {
+          delete cleanBase.isRead;
+          delete cleanBase.dismissed;
+          delete cleanBase.readBy;
+        }
+        const remoteMentions = (Array.isArray(base.mentions) && base.mentions.length > 0)
+          ? base.mentions
+          : (Array.isArray(row.etiquetas) ? row.etiquetas : []);
+
+        const combined = {
+          ...cleanBase,
           id: rawId,
-          partidaId: row.partida_id || base.partidaId || '__GENERAL__',
+          partidaId: row.partida_id ?? base.partidaId ?? null,
           partidaClave: base.partidaClave || 'GENERAL',
           partidaNombre: base.partidaNombre || 'General de Obra',
           authorEmail: row.autor_email || base.authorEmail || '',
           authorName: row.autor_nombre || base.authorName || '',
-          authorAvatar: prev.authorAvatar || row.autor_avatar || base.authorAvatar || '',
+          authorAvatar: (prev && prev.authorAvatar) || row.autor_avatar_url || row.autor_avatar || base.authorAvatar || '',
           text: row.mensaje ?? base.text ?? '',
-          mentions: Array.isArray(row.etiquetas) ? row.etiquetas : (base.mentions || []),
-          attachments: (Array.isArray(prev.attachments) && prev.attachments.length > 0)
+          mentions: remoteMentions,
+          attachments: (prev && Array.isArray(prev.attachments) && prev.attachments.length > 0)
             ? prev.attachments
             : (Array.isArray(row.adjuntos) ? row.adjuntos : (base.attachments || [])),
-          createdAt: row.created_at || base.createdAt || new Date().toISOString()
+          createdAt: row.created_at || base.createdAt || new Date().toISOString(),
+          perUserRead: Boolean((prev && prev.perUserRead) || base.perUserRead),
+          isRead: prev ? Boolean(prev.isRead) : (base.perUserRead ? false : Boolean(base.isRead)),
+          dismissed: prev ? Boolean(prev.dismissed) : (base.perUserRead ? false : Boolean(base.dismissed)),
+          readBy: prev
+            ? (Array.isArray(prev.readBy) ? prev.readBy.filter(r => r !== '__all__') : [])
+            : (!base.perUserRead && Array.isArray(base.readBy) ? base.readBy : []),
+          ...(prev && prev.localReadBy ? { localReadBy: prev.localReadBy } : {}),
+          ...(prev && prev.localDismissedBy ? { localDismissedBy: prev.localDismissedBy } : {})
         };
+        mergedMap.set(rawId, combined);
       });
 
+      for (const [mId, m] of localMap.entries()) {
+        if (!mergedMap.has(mId)) mergedMap.set(mId, m);
+      }
+
+      const merged = Array.from(mergedMap.values()).sort((a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
       localStorage.setItem(`adm_arq_project_chat_${pid}`, JSON.stringify(merged));
       changed = true;
     } else if (localStorage.getItem(`adm_arq_project_chat_${pid}`)) {

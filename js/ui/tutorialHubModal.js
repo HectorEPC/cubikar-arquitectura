@@ -2,8 +2,8 @@
 // Modal centralizado "Centro de Tutoriales y Aprendizaje" para cubikar Arquitectura
 // Permite al usuario elegir entre el Tour Guiado en Vivo interactivo o el Reproductor Web de Video-Simulación Animada.
 
-import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261116_cf13';
-import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261116_cf13';
+import { startInteractiveTour, isTourDismissed, resetTourDismissedStatus } from './interactiveTour.js?v=20261116_cf14';
+import { openVideoSimulatorModal, VIDEO_MODULES } from './videoSimulatorModal.js?v=20261116_cf14';
 
 let isTutorialHubOpen = false;
 
