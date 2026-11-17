@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261116_cf18';
+} from '../../config/constants.js?v=20261116_cf19';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -64,15 +64,15 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261116_cf18';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf18';
-import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf18';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf18';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf18';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf18';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf18';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf18';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf18';
+} from './projectService.js?v=20261116_cf19';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf19';
+import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf19';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf19';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf19';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf19';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf19';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf19';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf19';
 import {
   signUp,
   signInWithPassword,
@@ -83,16 +83,16 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261116_cf18';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf18';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf18';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf18';
+} from '../../core/authService.js?v=20261116_cf19';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf19';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf19';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf19';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261116_cf18';
-import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf18';
+} from '../admin/cubikarAdmin.js?v=20261116_cf19';
+import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf19';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -2078,19 +2078,17 @@ export function getFilteredProjectsList(allProjects) {
         // Si fue marcado como eliminado, excluir
         if (isProjectMarkedDeleted(p.id) || isProjectMarkedDeleted(p.cloudId)) return false;
 
-        // CONFIRMACIÓN 2: El usuario invitado DEBE tener una invitación activa aceptada en este proyecto
+        // CONFIRMACIÓN 2: El usuario invitado DEBE tener una invitación activa en este proyecto
         const members = Array.isArray(p.members) ? p.members : [];
         const myMem = members.find(m => (m.email || '').toLowerCase().trim() === uEmail);
         if (!myMem) return false;
         const status = (myMem.status || '').toLowerCase().trim();
-        if (status !== 'active' && status !== 'accepted') return false;
+        if (status === 'rejected') return false;
 
-        // Verificación con el manifiesto autoritativo de Supabase
-        if (Array.isArray(hostManifest)) {
+        // Verificación con el manifiesto autoritativo de Supabase (solo si el manifiesto contiene elementos válidos y nunca marcando lápidas locales desde un filtro UI)
+        if (Array.isArray(hostManifest) && hostManifest.length > 0 && !p.isCloudSynced) {
           const existsInHost = hostManifest.some(activeId => activeId === p.id || (p.cloudId && activeId === p.cloudId));
           if (!existsInHost) {
-            markProjectDeleted(p.id);
-            if (p.cloudId) markProjectDeleted(p.cloudId);
             return false;
           }
         }
