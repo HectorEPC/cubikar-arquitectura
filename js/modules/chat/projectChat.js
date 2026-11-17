@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261116_cf14';
-import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf14';
+import { state } from '../../state/store.js?v=20261116_cf15';
+import { getActiveProjectId } from '../../config/constants.js?v=20261116_cf15';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261116_cf14';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf14';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf14';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf14';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf14';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf14';
-import { openPrintWindow } from '../io/printService.js?v=20261116_cf14';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf14';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf14';
+} from '../portal/projectService.js?v=20261116_cf15';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf15';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261116_cf15';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf15';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261116_cf15';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261116_cf15';
+import { openPrintWindow } from '../io/printService.js?v=20261116_cf15';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261116_cf15';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf15';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -813,8 +813,14 @@ export function markActiveProjectChatMessagesAsRead(projectId = null) {
     const readList = getReadMentionIds();
     const readSet = new Set(readList);
     let readKeysAdded = false;
+    let readFlagsChanged = false;
     let changed = false;
     const deduped = dedupeChatMessages(parsed).map(m => {
+      if (!m) return m;
+      const authorEmail = String(m.authorEmail || m.autorEmail || m.autor_email || '').toLowerCase().trim();
+      if (myEmail && authorEmail && authorEmail === myEmail) {
+        return m;
+      }
       const cleanId = normalizeChatMsgId(m.id);
       const k1 = `${pid}:${cleanId}`;
       if (!readSet.has(k1)) {
@@ -831,10 +837,12 @@ export function markActiveProjectChatMessagesAsRead(projectId = null) {
       if (myEmail && !nextReadBy.some(r => String(r || '').toLowerCase().trim() === myEmail)) {
         nextReadBy.push(myEmail);
         changed = true;
+        readFlagsChanged = true;
       }
       const prevLocalReadBy = (m.localReadBy && typeof m.localReadBy === 'object') ? m.localReadBy : {};
       if (!prevLocalReadBy[userKey]) {
         changed = true;
+        readFlagsChanged = true;
       }
       return {
         ...m,
@@ -853,10 +861,10 @@ export function markActiveProjectChatMessagesAsRead(projectId = null) {
       localStorage.setItem(arqKey, data);
       localStorage.setItem(constKey, data);
     }
-    if (changed || readKeysAdded) {
+    if (readFlagsChanged || readKeysAdded) {
       syncNotificationStateToCloud();
     }
-    return changed || readKeysAdded;
+    return readFlagsChanged || readKeysAdded || changed;
   } catch (_) {
     return false;
   }
@@ -1400,6 +1408,9 @@ export function syncNotificationStateToCloud() {
           cubikar_read_mentions: readIds
         }
       });
+      if (typeof window.markInternalCloudAuthUpdate === 'function') {
+        window.markInternalCloudAuthUpdate();
+      }
 
       if (error) {
         consecutiveNotifSyncFailures++;

@@ -1,9 +1,9 @@
 // js/modules/reference/presetCatalogs.js
 // Gestor de Catálogos Pre-cargados del Sistema (Oficiales y Gobierno)
 
-import { showToast } from '../../ui/notifications.js?v=20261116_cf14';
-import { saveReferenceCatalog, listReferenceCatalogs } from './referenceDb.js?v=20261116_cf14';
-import { flattenPresetData } from '../ai/localMatrixEngine.js?v=20261116_cf14';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf15';
+import { saveReferenceCatalog, listReferenceCatalogs } from './referenceDb.js?v=20261116_cf15';
+import { flattenPresetData } from '../ai/localMatrixEngine.js?v=20261116_cf15';
 
 let manifestCache = null;
 

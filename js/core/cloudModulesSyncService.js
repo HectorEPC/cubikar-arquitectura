@@ -3,10 +3,10 @@
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 // Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf14';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf14';
-import { isValidUUID } from './cloudProjectService.js?v=20261116_cf14';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261116_cf14';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf15';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf15';
+import { isValidUUID } from './cloudProjectService.js?v=20261116_cf15';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261116_cf15';
 
 const syncTimers = {
   bitacora: null,
@@ -15,6 +15,43 @@ const syncTimers = {
   cronograma: null,
   chat: null
 };
+const inFlightModuleHydrateByProject = new Map();
+const lastModuleHydrateAtByProject = new Map();
+const MODULE_HYDRATE_COOLDOWN_MS = 6000;
+const CHAT_MENSAJES_BASE_COLS = ['id', 'proyecto_id', 'autor_nombre', 'autor_email', 'mensaje', 'created_at'];
+const missingChatMensajeColumns = new Set();
+
+async function upsertChatRowsResilient(sb, rows) {
+  if (!sb || !Array.isArray(rows) || rows.length === 0) return { error: null };
+  const stripMissing = (list) => list.map((r) => {
+    const clean = { ...r };
+    missingChatMensajeColumns.forEach((col) => { delete clean[col]; });
+    return clean;
+  });
+  let payload = stripMissing(rows);
+  for (let attempt = 0; attempt < 9; attempt++) {
+    const res = await sb.from('chat_mensajes').upsert(payload, { onConflict: 'id' });
+    if (!res?.error) return res;
+    const msg = String(res.error.message || '');
+    const m = msg.match(/Could not find the ['"]([^'"]+)['"] column/i)
+      || msg.match(/column\s+["']?([a-z0-9_]+)["']?(?:\s+of\s+relation)?\s+does not exist/i);
+    if (m && m[1] && !CHAT_MENSAJES_BASE_COLS.includes(m[1])) {
+      missingChatMensajeColumns.add(m[1]);
+      payload = stripMissing(payload);
+      continue;
+    }
+    if ((res.error.code === 'PGRST204' || res.error.code === '42703') && attempt < 8) {
+      payload = rows.map((r) => {
+        const minRow = {};
+        CHAT_MENSAJES_BASE_COLS.forEach((c) => { if (r[c] !== undefined) minRow[c] = r[c]; });
+        return minRow;
+      });
+      continue;
+    }
+    return res;
+  }
+  return { error: new Error('No se pudo persistir chat_mensajes') };
+}
 
 function resolveCloudProjectUuid(projectId = null) {
   const pid = projectId || getActiveProjectId();
@@ -557,7 +594,7 @@ export async function syncChatNow(projectId = null) {
         updated_at: new Date().toISOString()
       };
     });
-    await supabase.from('chat_mensajes').upsert(rows, { onConflict: 'id' });
+    await upsertChatRowsResilient(supabase, rows);
   }
 
   return true;
@@ -566,13 +603,24 @@ export async function syncChatNow(projectId = null) {
 // ==========================================
 // 6. HIDRATACIÓN INTEGRAL DESDE SUPABASE AL ABRIR PROYECTO
 // ==========================================
-export async function hydrateProjectModulesFromCloud(projectId = null) {
+export async function hydrateProjectModulesFromCloud(projectId = null, opts = {}) {
   if (!isSupabaseConfigured()) return false;
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
 
-  try {
+  const cacheKey = `${pid}:${cloudId}`;
+  const inFlight = inFlightModuleHydrateByProject.get(cacheKey);
+  if (inFlight) return inFlight;
+  const now = Date.now();
+  const lastAt = lastModuleHydrateAtByProject.get(cacheKey) || 0;
+  if (!opts?.force && (now - lastAt) < MODULE_HYDRATE_COOLDOWN_MS) {
+    return false;
+  }
+  lastModuleHydrateAtByProject.set(cacheKey, now);
+
+  const runPromise = (async () => {
+    try {
     const [
       bitCfgRes,
       bitNotasRes,
@@ -896,5 +944,12 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
   } catch (err) {
     console.warn('[CloudModulesSync] Error hidratando módulos desde Supabase:', err);
     return false;
+  }
+  })();
+  inFlightModuleHydrateByProject.set(cacheKey, runPromise);
+  try {
+    return await runPromise;
+  } finally {
+    inFlightModuleHydrateByProject.delete(cacheKey);
   }
 }

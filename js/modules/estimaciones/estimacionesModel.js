@@ -2,13 +2,13 @@
 // Modelo de datos y lógica de cálculo para ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con state.treeData (Catálogo Base)
 
-import { state } from '../../state/store.js?v=20261116_cf14';
-import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261116_cf14';
-import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261116_cf14';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf14';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf14';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf14';
-import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf14';
+import { state } from '../../state/store.js?v=20261116_cf15';
+import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261116_cf15';
+import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261116_cf15';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf15';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf15';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf15';
+import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf15';
 
 const STORAGE_KEY_ARQ_PREFIX = 'estimaciones_arq_data_';
 const STORAGE_KEY_PREFIX = 'estimaciones_data_';
