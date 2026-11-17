@@ -2,11 +2,11 @@
 // Servicio de persistencia y sincronización de Proyectos Arquitectónicos y Presupuestos con Supabase PostgreSQL
 // Diseñado para operar en segundo plano con alta resiliencia y sincronización multiusuario en la nube.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf17';
-import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf17';
-import { getSettingsKey } from '../config/constants.js?v=20261116_cf17';
-import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf17';
-import { showToast } from '../ui/notifications.js?v=20261116_cf17';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf18';
+import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf18';
+import { getSettingsKey } from '../config/constants.js?v=20261116_cf18';
+import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf18';
+import { showToast } from '../ui/notifications.js?v=20261116_cf18';
 
 function extractArqNodeMeta(node, conceptUuid) {
   if (!node || typeof node !== 'object') return null;
@@ -425,8 +425,19 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
           clearedMatrixIds,
           arqNodeMeta: arqNodesMeta,
           arqNodesMeta,
+          ownerName: project.ownerName || prevCloudCfg.ownerName || (ownerEmail === (user.email || '').toLowerCase().trim() ? (user.name || '') : ''),
           companyName: project.companyName || prevCloudCfg.companyName || '',
           budgetSignatures: project.budgetSignatures || settings?.budgetSignatures || prevCloudCfg.budgetSignatures || [],
+          collaborators: Array.isArray(project.members)
+            ? project.members
+                .filter(m => m && m.email && (m.status || '').toLowerCase().trim() !== 'rejected')
+                .map(m => ({
+                  email: (m.email || '').toLowerCase().trim(),
+                  name: m.name || (m.email || '').split('@')[0],
+                  role: m.role || 'editar',
+                  status: (m.status || '').toLowerCase().trim() === 'pending' ? 'pending' : 'accepted'
+                }))
+            : (Array.isArray(prevCloudCfg?.collaborators) ? prevCloudCfg.collaborators : []),
           memberTabs: Array.isArray(project.members)
             ? project.members.reduce((acc, m) => {
                 const em = (m?.email || '').toLowerCase().trim();
@@ -836,15 +847,45 @@ export async function fetchCloudProjects(opts = {}) {
             allowedTabs: Array.isArray(memberTabsMap[cEmail]) ? memberTabsMap[cEmail] : defaultTabs
           };
         });
+        if (Array.isArray(cfg.collaborators)) {
+          cfg.collaborators.forEach(cm => {
+            const cEmail = (cm?.email || '').toLowerCase().trim();
+            if (!cEmail || (cm?.status || '').toLowerCase().trim() === 'rejected') return;
+            if (!reconstructedMembers.some(m => m.email === cEmail)) {
+              reconstructedMembers.push({
+                id: `cfg-${cEmail}`,
+                name: cm.name || cEmail.split('@')[0],
+                email: cEmail,
+                role: cm.role || 'editar',
+                status: cm.status || 'accepted',
+                allowedTabs: Array.isArray(memberTabsMap[cEmail]) ? memberTabsMap[cEmail] : defaultTabs
+              });
+            }
+          });
+        }
+        Object.keys(memberTabsMap).forEach(kEmail => {
+          const cEmail = (kEmail || '').toLowerCase().trim();
+          if (!cEmail || !cEmail.includes('@')) return;
+          if (!reconstructedMembers.some(m => m.email === cEmail)) {
+            reconstructedMembers.push({
+              id: `tab-${cEmail}`,
+              name: cEmail.split('@')[0],
+              email: cEmail,
+              role: 'editar',
+              status: 'accepted',
+              allowedTabs: Array.isArray(memberTabsMap[kEmail]) ? memberTabsMap[kEmail] : defaultTabs
+            });
+          }
+        });
 
         const ownerColab = rawColabs.find(c => c.rol === 'owner');
         const ownerEmail = (cp.owner_email || ownerColab?.email_colaborador || (cp.creado_por && cp.creado_por === user.id ? myEmail : '') || '').toLowerCase().trim();
         const isMyOwn = ownerEmail === myEmail || (cp.creado_por && cp.creado_por === user.id);
-        const isMyCollab = rawColabs.some(c => (c.email_colaborador || '').toLowerCase().trim() === myEmail && c.estado_invitacion !== 'rejected');
+        const isMyCollab = reconstructedMembers.some(c => (c.email || '').toLowerCase().trim() === myEmail && c.status !== 'rejected');
         if (!isMyOwn && !isMyCollab) {
           return null;
         }
-        const ownerName = ownerColab?.nombre_colaborador || (ownerEmail === myEmail ? (user.name || 'Propietario') : (ownerEmail ? ownerEmail.split('@')[0] : 'Propietario'));
+        const ownerName = cfg.ownerName || ownerColab?.nombre_colaborador || (ownerEmail === myEmail ? (user.name || 'Propietario') : (ownerEmail ? ownerEmail.split('@')[0] : 'Propietario'));
         const resolvedOwnerPlanId = cfg.ownerPlanId || (isMyOwn ? getUserPlanId(user) : 'pro');
 
         if (cfg.presupuestoArq && typeof localStorage !== 'undefined') {
@@ -1202,11 +1243,42 @@ export async function removeCollaboratorFromCloud(projectId, email) {
   if (!isSupabaseConfigured() || !sb || !isValidUUID(targetUuid) || !email) return;
 
   try {
+    const cleanEmail = email.toLowerCase().trim();
     await sb
       .from('proyecto_colaboradores')
       .delete()
       .eq('proyecto_id', targetUuid)
-      .eq('email_colaborador', email.toLowerCase().trim());
+      .eq('email_colaborador', cleanEmail);
+    try {
+      const { data: row } = await sb
+        .from('proyectos')
+        .select('configuracion')
+        .eq('id', targetUuid)
+        .maybeSingle();
+      if (row?.configuracion && typeof row.configuracion === 'object') {
+        const nextCfg = { ...row.configuracion };
+        let cfgChanged = false;
+        if (nextCfg.memberTabs && typeof nextCfg.memberTabs === 'object' && Object.prototype.hasOwnProperty.call(nextCfg.memberTabs, cleanEmail)) {
+          const nextTabs = { ...nextCfg.memberTabs };
+          delete nextTabs[cleanEmail];
+          nextCfg.memberTabs = nextTabs;
+          cfgChanged = true;
+        }
+        if (Array.isArray(nextCfg.collaborators)) {
+          const filteredCols = nextCfg.collaborators.filter(c => (c?.email || '').toLowerCase().trim() !== cleanEmail);
+          if (filteredCols.length !== nextCfg.collaborators.length) {
+            nextCfg.collaborators = filteredCols;
+            cfgChanged = true;
+          }
+        }
+        if (cfgChanged) {
+          await sb
+            .from('proyectos')
+            .update({ configuracion: nextCfg, updated_at: new Date().toISOString() })
+            .eq('id', targetUuid);
+        }
+      }
+    } catch (_) {}
   } catch (err) {
     console.warn('[CloudProjectService] Error removiendo colaborador en la nube:', err);
   }
