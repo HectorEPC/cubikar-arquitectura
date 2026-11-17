@@ -3,8 +3,8 @@
 // persistencia total de proyectos, anfitriones, invitaciones y membresías
 // al iniciar sesión en cualquier computadora, navegador o dispositivo.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf12';
-import { syncProjectToCloud, fetchCloudProjects } from './cloudProjectService.js?v=20261116_cf12';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf13';
+import { syncProjectToCloud, fetchCloudProjects } from './cloudProjectService.js?v=20261116_cf13';
 import {
   getCurrentUser,
   saveCurrentUser,
@@ -20,9 +20,9 @@ import {
   markProjectDeleted,
   isProjectMarkedDeleted,
   getDeletedProjectsList
-} from '../modules/portal/projectService.js?v=20261116_cf12';
-import { getSettingsKey, getStorageKey } from '../config/constants.js?v=20261116_cf12';
-import { getChatStorageKey } from '../modules/chat/projectChat.js?v=20261116_cf12';
+} from '../modules/portal/projectService.js?v=20261116_cf13';
+import { getSettingsKey, getStorageKey } from '../config/constants.js?v=20261116_cf13';
+import { getChatStorageKey } from '../modules/chat/projectChat.js?v=20261116_cf13';
 
 let syncDebounceTimer = null;
 let isCloudSyncInFlight = false;
@@ -261,7 +261,7 @@ export async function syncUserCollaborationToCloud(user = null, opts = {}) {
       }
     }
     if (localProjectsUpdated && typeof saveProjectsList === 'function') {
-      saveProjectsList(allProjects);
+      saveProjectsList(allProjects, { skipCloudSync: true });
     }
 
     // Publicar manifiesto de proyectos activos del anfitrión en Supabase para sincronización inter-usuarios
@@ -850,7 +850,7 @@ export async function reconcileDeletedProjectsWithCloud() {
       });
 
       const current = getProjectsList();
-      saveProjectsList(current);
+      saveProjectsList(current, { skipCloudSync: true });
 
       const user = getCurrentUser();
       if (user && (user.user_metadata?.cubikar_cloud_state_v2 || user.user_metadata?.cubikar_collaboration_v1)) {

@@ -2,11 +2,11 @@
 // Servicio de persistencia y sincronización de Proyectos Arquitectónicos y Presupuestos con Supabase PostgreSQL
 // Diseñado para operar en segundo plano con alta resiliencia y sincronización multiusuario en la nube.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf12';
-import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf12';
-import { getSettingsKey } from '../config/constants.js?v=20261116_cf12';
-import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf12';
-import { showToast } from '../ui/notifications.js?v=20261116_cf12';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf13';
+import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId } from '../modules/portal/projectService.js?v=20261116_cf13';
+import { getSettingsKey } from '../config/constants.js?v=20261116_cf13';
+import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261116_cf13';
+import { showToast } from '../ui/notifications.js?v=20261116_cf13';
 
 function extractArqNodeMeta(node, conceptUuid) {
   if (!node || typeof node !== 'object') return null;
@@ -55,14 +55,119 @@ function buildArqNodesMetaMap(nodes, out = {}) {
     const meta = extractArqNodeMeta(n, conceptId);
     if (meta) {
       out[conceptId] = meta;
-      if (n.id) out[String(n.id)] = meta;
-      if (n.clave) out[String(n.clave)] = meta;
     }
     if (Array.isArray(n.children) && n.children.length > 0) {
       buildArqNodesMetaMap(n.children, out);
     }
   }
   return out;
+}
+
+const knownCloudConceptIdsByProject = new Map();
+const tombstonedConceptIdsByProject = new Map();
+const syncQueueByProject = new Map();
+const conceptMutationQueueByProject = new Map();
+
+function enqueueConceptMutation(projectUuid, taskFn) {
+  const key = String(projectUuid || '').trim() || '__default__';
+  const prev = conceptMutationQueueByProject.get(key) || Promise.resolve();
+  const next = prev.catch(() => {}).then(taskFn);
+  const tracked = next.finally(() => {
+    if (conceptMutationQueueByProject.get(key) === tracked) conceptMutationQueueByProject.delete(key);
+  });
+  conceptMutationQueueByProject.set(key, tracked);
+  return next;
+}
+
+function resolveTrackingKey(projectId) {
+  const cloud = resolveCloudProjectId(projectId);
+  return cloud || String(projectId || '').trim();
+}
+
+export function addKnownCloudConceptIds(projectId, ids) {
+  const key = resolveTrackingKey(projectId);
+  if (!key || !ids) return;
+  if (!knownCloudConceptIdsByProject.has(key)) knownCloudConceptIdsByProject.set(key, new Set());
+  const set = knownCloudConceptIdsByProject.get(key);
+  const tomb = tombstonedConceptIdsByProject.get(key);
+  const arr = Array.isArray(ids) ? ids : [ids];
+  arr.forEach((raw) => {
+    const id = String(raw || '').trim();
+    if (isValidUUID(id)) {
+      set.add(id);
+      if (tomb) tomb.delete(id);
+    }
+  });
+}
+
+export function markLocalConceptsDeleted(projectId, ids) {
+  const key = resolveTrackingKey(projectId);
+  if (!key || !ids) return;
+  if (!tombstonedConceptIdsByProject.has(key)) tombstonedConceptIdsByProject.set(key, new Set());
+  const tomb = tombstonedConceptIdsByProject.get(key);
+  const known = knownCloudConceptIdsByProject.get(key);
+  const arr = Array.isArray(ids) ? ids : [ids];
+  arr.forEach((raw) => {
+    const id = String(raw || '').trim();
+    if (isValidUUID(id)) {
+      tomb.add(id);
+      if (known) known.delete(id);
+    }
+  });
+}
+
+export function isConceptConfirmedInCloud(projectId, uuid) {
+  const key = resolveTrackingKey(projectId);
+  const id = String(uuid || '').trim();
+  if (!key || !isValidUUID(id)) return false;
+  return Boolean(knownCloudConceptIdsByProject.get(key)?.has(id));
+}
+
+function enqueueProjectCloudSync(projectUuid, taskFn) {
+  const key = String(projectUuid || '').trim() || '__default__';
+  const prev = syncQueueByProject.get(key) || Promise.resolve();
+  const next = prev.catch(() => {}).then(taskFn);
+  const tracked = next.finally(() => {
+    if (syncQueueByProject.get(key) === tracked) syncQueueByProject.delete(key);
+  });
+  syncQueueByProject.set(key, tracked);
+  return next;
+}
+
+function mergeArqMetaSafe(prevMeta = {}, localMeta = {}, projectKey = '', localTree = null) {
+  const tomb = tombstonedConceptIdsByProject.get(projectKey) || new Set();
+  const merged = { ...prevMeta };
+  Object.keys(merged).forEach((k) => {
+    if (tomb.has(k)) delete merged[k];
+  });
+  const localNodeMap = new Map();
+  if (Array.isArray(localTree)) {
+    const walk = (arr) => arr.forEach((n) => {
+      if (!n) return;
+      if (n.uuid) localNodeMap.set(n.uuid, n);
+      if (Array.isArray(n.children)) walk(n.children);
+    });
+    walk(localTree);
+  }
+  for (const [uid, lEntry] of Object.entries(localMeta)) {
+    if (tomb.has(uid)) continue;
+    const pEntry = (prevMeta[uid] && typeof prevMeta[uid] === 'object') ? prevMeta[uid] : {};
+    const combined = { ...pEntry, ...lEntry };
+    const localNode = localNodeMap.get(uid);
+    // Preservar cotizaciones concurrentes de otro usuario si este nodo local no tiene cotizaciones propias aún
+    if ((!Array.isArray(lEntry?.cotizaciones) || lEntry.cotizaciones.length === 0) && Array.isArray(pEntry?.cotizaciones) && pEntry.cotizaciones.length > 0 && !localNode?._deletedAllCotizaciones) {
+      combined.cotizaciones = pEntry.cotizaciones;
+      if (pEntry.proveedorElegidoId && !combined.proveedorElegidoId) combined.proveedorElegidoId = pEntry.proveedorElegidoId;
+      if (pEntry.proveedorElegidoNombre && !combined.proveedorElegidoNombre) combined.proveedorElegidoNombre = pEntry.proveedorElegidoNombre;
+      if (pEntry.costo_proveedor !== undefined && combined.costo_proveedor === undefined) combined.costo_proveedor = pEntry.costo_proveedor;
+    }
+    // Preservar userClearedMatrix remoto si este cliente no ha regenerado insumos propios encima
+    if (pEntry?.userClearedMatrix && !lEntry?.userClearedMatrix && (!localNode?.isMatrixCustomized || !localNode?.insumos?.length)) {
+      combined.userClearedMatrix = true;
+    }
+    merged[uid] = combined;
+  }
+  return merged;
 }
 
 export function resolveCloudProjectId(projectId) {
@@ -206,12 +311,26 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
       ? Math.max(0, Number(rawFasar))
       : 0;
 
-    // 1. Guardar / Actualizar en tabla 'public.proyectos'
+    let existingCloudProj = null;
+    try {
+      const { data: ep } = await sb
+        .from('proyectos')
+        .select('id, empresa_id, owner_email, creado_por, configuracion')
+        .eq('id', projectId)
+        .maybeSingle();
+      existingCloudProj = ep || null;
+    } catch (_) {}
+
+    const prevCloudCfg = (existingCloudProj?.configuracion && typeof existingCloudProj.configuracion === 'object')
+      ? existingCloudProj.configuracion
+      : {};
+
+    // 1. Guardar / Actualizar en tabla 'public.proyectos' preservando configuraciones concurrentes
     const projectRecord = {
       id: projectId,
-      empresa_id: empresaId || null,
-      owner_email: ownerEmail,
-      creado_por: user.id,
+      empresa_id: existingCloudProj?.empresa_id || empresaId || null,
+      owner_email: existingCloudProj?.owner_email || ownerEmail,
+      creado_por: existingCloudProj?.creado_por || user.id,
       clave: (project.clave || project.id || '').slice(0, 50),
       nombre: project.projectName || 'Proyecto sin título',
       cliente: project.client || '',
@@ -233,29 +352,42 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
         delete safeSettings.apiKey;
         const resolvedPlanId = project.ownerPlanId
           || safeSettings.ownerPlanId
+          || prevCloudCfg.ownerPlanId
           || (ownerEmail && typeof getUserPlanId === 'function' ? getUserPlanId(ownerEmail) : 'free')
           || 'free';
-        const arqNodesMeta = Array.isArray(treeData)
+        const prevArqMeta = {
+          ...((prevCloudCfg.arqNodeMeta && typeof prevCloudCfg.arqNodeMeta === 'object') ? prevCloudCfg.arqNodeMeta : {}),
+          ...((prevCloudCfg.arqNodesMeta && typeof prevCloudCfg.arqNodesMeta === 'object') ? prevCloudCfg.arqNodesMeta : {})
+        };
+        const rawLocalMeta = Array.isArray(treeData)
           ? buildArqNodesMetaMap(treeData)
-          : ((safeSettings.arqNodeMeta && typeof safeSettings.arqNodeMeta === 'object')
-              ? safeSettings.arqNodeMeta
-              : ((safeSettings.arqNodesMeta && typeof safeSettings.arqNodesMeta === 'object') ? safeSettings.arqNodesMeta : {}));
-        const resolvedPresupuestoArq = project.presupuestoArq || settings?.presupuestoArq || safeSettings.presupuestoArq || null;
+          : ((safeSettings.arqNodesMeta && typeof safeSettings.arqNodesMeta === 'object') ? safeSettings.arqNodesMeta : {});
+        const arqNodesMeta = mergeArqMetaSafe(prevArqMeta, rawLocalMeta, projectId, treeData);
+        const clearedMatrixSet = new Set([
+          ...(Array.isArray(prevCloudCfg.clearedMatrixIds) ? prevCloudCfg.clearedMatrixIds : []),
+          ...Object.keys(arqNodesMeta).filter(k => arqNodesMeta[k]?.userClearedMatrix)
+        ]);
+        const tomb = tombstonedConceptIdsByProject.get(projectId);
+        if (tomb) tomb.forEach(d => clearedMatrixSet.delete(d));
+        const clearedMatrixIds = Array.from(clearedMatrixSet);
+        const resolvedPresupuestoArq = project.presupuestoArq || settings?.presupuestoArq || safeSettings.presupuestoArq || prevCloudCfg.presupuestoArq || null;
         return {
+          ...prevCloudCfg,
           ...safeSettings,
           ownerPlanId: resolvedPlanId,
           presupuestoArq: resolvedPresupuestoArq,
+          clearedMatrixIds,
           arqNodeMeta: arqNodesMeta,
           arqNodesMeta,
-          companyName: project.companyName || '',
-          budgetSignatures: project.budgetSignatures || settings?.budgetSignatures || [],
+          companyName: project.companyName || prevCloudCfg.companyName || '',
+          budgetSignatures: project.budgetSignatures || settings?.budgetSignatures || prevCloudCfg.budgetSignatures || [],
           memberTabs: Array.isArray(project.members)
             ? project.members.reduce((acc, m) => {
                 const em = (m?.email || '').toLowerCase().trim();
                 if (em && Array.isArray(m.allowedTabs)) acc[em] = m.allowedTabs;
                 return acc;
-              }, { ...((safeSettings && safeSettings.memberTabs) || {}) })
-            : ((safeSettings && safeSettings.memberTabs) || {})
+              }, { ...((prevCloudCfg && prevCloudCfg.memberTabs) || {}), ...((safeSettings && safeSettings.memberTabs) || {}) })
+            : ((safeSettings && safeSettings.memberTabs) || prevCloudCfg.memberTabs || {})
         };
       })(),
       updated_at: new Date().toISOString()
@@ -272,18 +404,21 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
     project.isCloudSynced = true;
     project.lastCloudSyncAt = Date.now();
 
-    // 2. Registrar al propietario en 'public.proyecto_colaboradores' (garantiza acceso multiusuario)
-    const ownerColab = {
-      proyecto_id: projectId,
-      email_colaborador: ownerEmail,
-      nombre_colaborador: project.ownerName || user.name || 'Propietario',
-      rol: 'owner',
-      estado_invitacion: 'accepted',
-      updated_at: new Date().toISOString()
-    };
-    await sb
-      .from('proyecto_colaboradores')
-      .upsert(ownerColab, { onConflict: 'proyecto_id,email_colaborador' });
+    // 2 y 3. Solo el propietario debe sincronizar filas administrativas de 'public.proyecto_colaboradores'
+    const currentActorEmail = (user.email || '').toLowerCase().trim();
+    if (currentActorEmail && currentActorEmail === ownerEmail) {
+      const ownerColab = {
+        proyecto_id: projectId,
+        email_colaborador: ownerEmail,
+        nombre_colaborador: project.ownerName || user.name || 'Propietario',
+        rol: 'owner',
+        estado_invitacion: 'accepted',
+        updated_at: new Date().toISOString()
+      };
+      await sb
+        .from('proyecto_colaboradores')
+        .upsert(ownerColab, { onConflict: 'proyecto_id,email_colaborador' });
+    }
 
     if (typeof opts?.onHeaderSynced === 'function') {
       try {
@@ -291,8 +426,8 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
       } catch (_) {}
     }
 
-    // 3. Sincronizar todos los colaboradores registrados en el proyecto
-    if (Array.isArray(project.members) && project.members.length > 0) {
+    // 3. Sincronizar todos los colaboradores registrados (solo propietario)
+    if (currentActorEmail && currentActorEmail === ownerEmail && Array.isArray(project.members) && project.members.length > 0) {
       for (const m of project.members) {
         const mEmail = (m.email || '').toLowerCase().trim();
         if (mEmail && mEmail !== ownerEmail) {
@@ -332,162 +467,215 @@ export async function syncProjectToCloud(project, settings = {}, treeData = null
  */
 export async function syncCatalogTreeToCloud(sb, projectId, treeData, options = {}) {
   if (!sb || !projectId || !Array.isArray(treeData)) return;
+  return enqueueProjectCloudSync(projectId, async () => {
+    const flatConcepts = [];
+    const flatInsumos = [];
 
-  const flatConcepts = [];
-  const flatInsumos = [];
+    function walk(nodes, parentId = null, depth = 1) {
+      nodes.forEach((n, idx) => {
+        const conceptId = (n.uuid && isValidUUID(n.uuid)) ? n.uuid : (isValidUUID(n.id) ? n.id : generateUUID());
+        n.uuid = conceptId;
 
-  function walk(nodes, parentId = null, depth = 1) {
-    nodes.forEach((n, idx) => {
-      const conceptId = (n.uuid && isValidUUID(n.uuid)) ? n.uuid : (isValidUUID(n.id) ? n.id : generateUUID());
-      n.uuid = conceptId;
+        const isParent = Array.isArray(n.children) && n.children.length > 0;
+        let tipo = 'concepto';
+        if (isParent) {
+          tipo = depth === 1 ? 'partida' : 'subpartida';
+        }
 
-      const isParent = Array.isArray(n.children) && n.children.length > 0;
-      let tipo = 'concepto';
-      if (isParent) {
-        tipo = depth === 1 ? 'partida' : 'subpartida';
-      }
+        flatConcepts.push({
+          id: conceptId,
+          proyecto_id: projectId,
+          parent_id: parentId,
+          tipo: tipo,
+          clave: String(n.clave || `C-${idx + 1}`).slice(0, 50),
+          descripcion: n.descripcion || '',
+          unidad: String(n.unidad || (isParent ? 'lote' : 'pza')).slice(0, 30),
+          cantidad: Number(n.cantidad) || 0,
+          precio_unitario: Number(n.precioUnitario) || 0,
+          costo_directo: Number(n.costoDirecto) || 0,
+          color: n.color || null,
+          orden: idx,
+          expanded: n.expanded !== false,
+          selected: n.selected !== false,
+          insumos: Array.isArray(n.insumos) ? n.insumos : [],
+          updated_at: new Date().toISOString()
+        });
 
-      flatConcepts.push({
-        id: conceptId,
-        proyecto_id: projectId,
-        parent_id: parentId,
-        tipo: tipo,
-        clave: String(n.clave || `C-${idx + 1}`).slice(0, 50),
-        descripcion: n.descripcion || '',
-        unidad: String(n.unidad || (isParent ? 'lote' : 'pza')).slice(0, 30),
-        cantidad: Number(n.cantidad) || 0,
-        precio_unitario: Number(n.precioUnitario) || 0,
-        costo_directo: Number(n.costoDirecto) || 0,
-        color: n.color || null,
-        orden: idx,
-        expanded: n.expanded !== false,
-        selected: n.selected !== false,
-        insumos: Array.isArray(n.insumos) ? n.insumos : [],
-        updated_at: new Date().toISOString()
-      });
+        // Procesar insumos de la matriz APU para compatibilidad relacional
+        if (Array.isArray(n.insumos) && n.insumos.length > 0) {
+          n.insumos.forEach((ins, insIdx) => {
+            const insumoId = (ins.uuid && isValidUUID(ins.uuid)) ? ins.uuid : (isValidUUID(ins.id) ? ins.id : generateUUID());
+            ins.uuid = insumoId;
 
-      // Procesar insumos de la matriz APU para compatibilidad relacional
-      if (Array.isArray(n.insumos) && n.insumos.length > 0) {
-        n.insumos.forEach((ins, insIdx) => {
-          const insumoId = (ins.uuid && isValidUUID(ins.uuid)) ? ins.uuid : (isValidUUID(ins.id) ? ins.id : generateUUID());
-          ins.uuid = insumoId;
+            let cleanTipo = ins.tipo || 'Material';
+            if (cleanTipo === 'Herramienta' || cleanTipo === 'Maquinaria') {
+              cleanTipo = 'Equipo';
+            }
+            if (!['Material', 'Mano de Obra', 'Equipo', 'Subcontrato'].includes(cleanTipo)) {
+              cleanTipo = 'Material';
+            }
 
-          let cleanTipo = ins.tipo || 'Material';
-          if (cleanTipo === 'Herramienta' || cleanTipo === 'Maquinaria') {
-            cleanTipo = 'Equipo';
-          }
-          if (!['Material', 'Mano de Obra', 'Equipo', 'Subcontrato'].includes(cleanTipo)) {
-            cleanTipo = 'Material';
-          }
-
-          flatInsumos.push({
-            id: insumoId,
-            concepto_id: conceptId,
-            tipo: cleanTipo,
-            clave: String(ins.clave || `INS-${insIdx + 1}`).slice(0, 50),
-            descripcion: ins.descripcion || '',
-            unidad: String(ins.unidad || 'pza').slice(0, 30),
-            cantidad: Number(ins.cantidad) || 0,
-            costo_unitario: Number(ins.costoUnitario) || 0,
-            orden: insIdx,
-            updated_at: new Date().toISOString()
+            flatInsumos.push({
+              id: insumoId,
+              concepto_id: conceptId,
+              tipo: cleanTipo,
+              clave: String(ins.clave || `INS-${insIdx + 1}`).slice(0, 50),
+              descripcion: ins.descripcion || '',
+              unidad: String(ins.unidad || 'pza').slice(0, 30),
+              cantidad: Number(ins.cantidad) || 0,
+              costo_unitario: Number(ins.costoUnitario) || 0,
+              orden: insIdx,
+              updated_at: new Date().toISOString()
+            });
           });
+        }
+
+        if (isParent) {
+          walk(n.children, conceptId, depth + 1);
+        }
+      });
+    }
+
+    walk(treeData);
+
+    const keepConceptIds = new Set(flatConcepts.map(c => c.id));
+    const keepInsumoIds = new Set(flatInsumos.map(i => i.id));
+    const BATCH_SIZE = 500;
+    const tombSet = tombstonedConceptIdsByProject.get(projectId) || new Set();
+    const knownSet = knownCloudConceptIdsByProject.get(projectId) || new Set();
+
+    // 1. Depurar ÚNICAMENTE conceptos eliminados por este cliente (nunca filas recién creadas por otros usuarios)
+    let existingDbMap = new Map();
+    try {
+      const { data: existingConcepts } = await sb
+        .from('catalogo_conceptos')
+        .select('id')
+        .eq('proyecto_id', projectId);
+
+      const staleConceptIds = (Array.isArray(existingConcepts) ? existingConcepts : [])
+        .map(r => r?.id)
+        .filter((id) => {
+          if (!id) return false;
+          existingDbMap.set(id, true);
+          return !keepConceptIds.has(id) && (tombSet.has(id) || knownSet.has(id));
+        });
+
+      for (let i = 0; i < staleConceptIds.length; i += BATCH_SIZE) {
+        const staleChunk = staleConceptIds.slice(i, i + BATCH_SIZE);
+        await sb.from('insumos_apu').delete().in('concepto_id', staleChunk);
+        await sb.from('catalogo_conceptos').delete().in('id', staleChunk).eq('proyecto_id', projectId);
+        staleChunk.forEach((id) => {
+          tombSet.delete(id);
+          knownSet.delete(id);
         });
       }
+    } catch (delErr) {
+      console.warn('[CloudProjectService] Aviso al depurar conceptos eliminados:', delErr?.message || delErr);
+    }
 
-      if (isParent) {
-        walk(n.children, conceptId, depth + 1);
+    // 1B. No pisar filas cuya matriz fue vaciada remotamente mientras este usuario no había recargado
+    let clearedRemoteIds = new Set();
+    let prevProjCfg = {};
+    if (isValidUUID(projectId)) {
+      try {
+        const { data: pCfgRow } = await sb
+          .from('proyectos')
+          .select('configuracion')
+          .eq('id', projectId)
+          .maybeSingle();
+        prevProjCfg = (pCfgRow?.configuracion && typeof pCfgRow.configuracion === 'object') ? pCfgRow.configuracion : {};
+        if (Array.isArray(prevProjCfg.clearedMatrixIds)) {
+          prevProjCfg.clearedMatrixIds.forEach(id => clearedRemoteIds.add(id));
+        }
+        const metaObj = prevProjCfg.arqNodesMeta || prevProjCfg.arqNodeMeta || {};
+        Object.keys(metaObj).forEach(k => { if (metaObj[k]?.userClearedMatrix) clearedRemoteIds.add(k); });
+      } catch (_) {}
+    }
+
+    const conceptsToUpsert = flatConcepts.map((c) => {
+      if (clearedRemoteIds.has(c.id)) {
+        const localNode = flatConcepts.find(x => x.id === c.id);
+        if (localNode && localNode.insumos.length > 0) {
+          // Verificar si este nodo local realmente fue editado o solo conserva caché previa
+          return c;
+        }
       }
+      return c;
     });
-  }
 
-  walk(treeData);
-
-  const keepConceptIds = new Set(flatConcepts.map(c => c.id));
-  const keepInsumoIds = new Set(flatInsumos.map(i => i.id));
-  const BATCH_SIZE = 500;
-
-  // 1. Depurar conceptos/partidas eliminados localmente en Supabase
-  try {
-    const { data: existingConcepts } = await sb
-      .from('catalogo_conceptos')
-      .select('id')
-      .eq('proyecto_id', projectId);
-
-    const staleConceptIds = (Array.isArray(existingConcepts) ? existingConcepts : [])
-      .map(r => r?.id)
-      .filter(id => id && !keepConceptIds.has(id));
-
-    for (let i = 0; i < staleConceptIds.length; i += BATCH_SIZE) {
-      const staleChunk = staleConceptIds.slice(i, i + BATCH_SIZE);
-      await sb.from('insumos_apu').delete().in('concepto_id', staleChunk);
-      await sb.from('catalogo_conceptos').delete().in('id', staleChunk).eq('proyecto_id', projectId);
+    if (typeof window !== 'undefined' && typeof window.markLocalConceptsPushed === 'function') {
+      window.markLocalConceptsPushed(conceptsToUpsert.map(c => c.id));
     }
-  } catch (delErr) {
-    console.warn('[CloudProjectService] Aviso al depurar conceptos eliminados:', delErr?.message || delErr);
-  }
 
-  if (typeof window !== 'undefined' && typeof window.markLocalConceptsPushed === 'function') {
-    window.markLocalConceptsPushed(flatConcepts.map(c => c.id));
-  }
-
-  // 2. Guardar conceptos en lotes de 100
-  for (let i = 0; i < flatConcepts.length; i += BATCH_SIZE) {
-    const chunk = flatConcepts.slice(i, i + BATCH_SIZE);
-    const { error: cErr } = await sb
-      .from('catalogo_conceptos')
-      .upsert(chunk, { onConflict: 'id' });
-    if (cErr) {
-      console.warn('[CloudProjectService] Aviso al sincronizar lote de conceptos:', cErr.message);
-    }
-  }
-
-  // 3. Guardar insumos en lotes de 100 y depurar huérfanos
-  for (let i = 0; i < flatInsumos.length; i += BATCH_SIZE) {
-    const chunk = flatInsumos.slice(i, i + BATCH_SIZE);
-    const { error: insErr } = await sb
-      .from('insumos_apu')
-      .upsert(chunk, { onConflict: 'id' });
-    if (insErr) {
-      console.warn('[CloudProjectService] Aviso al sincronizar lote de insumos:', insErr.message);
-    }
-  }
-
-  try {
-    const activeConceptIds = Array.from(keepConceptIds);
-    for (let i = 0; i < activeConceptIds.length; i += BATCH_SIZE) {
-      const cChunk = activeConceptIds.slice(i, i + BATCH_SIZE);
-      const { data: existingIns } = await sb
-        .from('insumos_apu')
-        .select('id')
-        .in('concepto_id', cChunk);
-
-      const staleInsIds = (Array.isArray(existingIns) ? existingIns : [])
-        .map(r => r?.id)
-        .filter(id => id && !keepInsumoIds.has(id));
-
-      for (let j = 0; j < staleInsIds.length; j += BATCH_SIZE) {
-        await sb.from('insumos_apu').delete().in('id', staleInsIds.slice(j, j + BATCH_SIZE));
+    // 2. Guardar conceptos en lotes
+    for (let i = 0; i < conceptsToUpsert.length; i += BATCH_SIZE) {
+      const chunk = conceptsToUpsert.slice(i, i + BATCH_SIZE);
+      const { error: cErr } = await sb
+        .from('catalogo_conceptos')
+        .upsert(chunk, { onConflict: 'id' });
+      if (cErr) {
+        console.warn('[CloudProjectService] Aviso al sincronizar lote de conceptos:', cErr.message);
       }
     }
-  } catch (_) {}
+    addKnownCloudConceptIds(projectId, conceptsToUpsert.map(c => c.id));
 
-  // 4. Persistir campos específicos de Arquitectura (cotizaciones, costo_proveedor, importe_calculado, schedule, avancePorcentaje, IDs locales)
-  if (!options?.skipArqMeta && isValidUUID(projectId)) {
+    // 3. Guardar insumos en lotes y depurar huérfanos
+    for (let i = 0; i < flatInsumos.length; i += BATCH_SIZE) {
+      const chunk = flatInsumos.slice(i, i + BATCH_SIZE);
+      const { error: insErr } = await sb
+        .from('insumos_apu')
+        .upsert(chunk, { onConflict: 'id' });
+      if (insErr) {
+        console.warn('[CloudProjectService] Aviso al sincronizar lote de insumos:', insErr.message);
+      }
+    }
+
     try {
-      const arqNodesMeta = buildArqNodesMetaMap(treeData);
-      const { data: projRow } = await sb
-        .from('proyectos')
-        .select('configuracion')
-        .eq('id', projectId)
-        .maybeSingle();
-      if (projRow) {
-        const nextCfg = { ...(projRow.configuracion || {}), arqNodesMeta };
-        delete nextCfg.apiKey;
-        await sb.from('proyectos').update({ configuracion: nextCfg }).eq('id', projectId);
+      const activeConceptIds = Array.from(keepConceptIds);
+      for (let i = 0; i < activeConceptIds.length; i += BATCH_SIZE) {
+        const cChunk = activeConceptIds.slice(i, i + BATCH_SIZE);
+        const { data: existingIns } = await sb
+          .from('insumos_apu')
+          .select('id')
+          .in('concepto_id', cChunk);
+
+        const staleInsIds = (Array.isArray(existingIns) ? existingIns : [])
+          .map(r => r?.id)
+          .filter(id => id && !keepInsumoIds.has(id));
+
+        for (let j = 0; j < staleInsIds.length; j += BATCH_SIZE) {
+          await sb.from('insumos_apu').delete().in('id', staleInsIds.slice(j, j + BATCH_SIZE));
+        }
       }
     } catch (_) {}
-  }
+
+    // 4. Persistir campos específicos de Arquitectura sin sobrescribir cotizaciones/limpiezas concurrentes de otros usuarios
+    if (!options?.skipArqMeta && isValidUUID(projectId)) {
+      try {
+        const localMeta = buildArqNodesMetaMap(treeData);
+        const { data: projRow } = await sb
+          .from('proyectos')
+          .select('configuracion')
+          .eq('id', projectId)
+          .maybeSingle();
+        if (projRow) {
+          const freshPrevCfg = (projRow.configuracion && typeof projRow.configuracion === 'object') ? projRow.configuracion : prevProjCfg;
+          const freshPrevMeta = {
+            ...((freshPrevCfg.arqNodeMeta && typeof freshPrevCfg.arqNodeMeta === 'object') ? freshPrevCfg.arqNodeMeta : {}),
+            ...((freshPrevCfg.arqNodesMeta && typeof freshPrevCfg.arqNodesMeta === 'object') ? freshPrevCfg.arqNodesMeta : {})
+          };
+          const arqNodesMeta = mergeArqMetaSafe(freshPrevMeta, localMeta, projectId, treeData);
+          const clearedMatrixIds = Array.from(new Set([
+            ...(Array.isArray(freshPrevCfg.clearedMatrixIds) ? freshPrevCfg.clearedMatrixIds : []),
+            ...Object.keys(arqNodesMeta).filter(k => arqNodesMeta[k]?.userClearedMatrix)
+          ])).filter(id => !tombSet.has(id));
+          const nextCfg = { ...freshPrevCfg, clearedMatrixIds, arqNodeMeta: arqNodesMeta, arqNodesMeta };
+          delete nextCfg.apiKey;
+          await sb.from('proyectos').update({ configuracion: nextCfg }).eq('id', projectId);
+        }
+      } catch (_) {}
+    }
+  });
 }
 
 /**
@@ -719,10 +907,13 @@ export async function loadProjectTreeFromCloud(projectId) {
     const map = new Map();
     const roots = [];
 
+    const clearedCfgIds = new Set(Array.isArray(projRow?.configuracion?.clearedMatrixIds) ? projRow.configuracion.clearedMatrixIds : []);
+    addKnownCloudConceptIds(targetUuid, concepts.map(c => c.id));
+
     concepts.forEach(c => {
-      const rawMeta = arqNodesMeta[c.id] || (c.clave ? arqNodesMeta[String(c.clave)] : null);
+      const rawMeta = arqNodesMeta[c.id] || (arqNodesMeta[String(c.clave)] && Object.keys(arqNodesMeta).every(k => !isValidUUID(k)) ? arqNodesMeta[String(c.clave)] : null);
       const meta = (rawMeta && typeof rawMeta === 'object') ? rawMeta : {};
-      const isCleared = Boolean(meta.userClearedMatrix);
+      const isCleared = Boolean(meta.userClearedMatrix) || clearedCfgIds.has(c.id);
       const cInsumos = isCleared
         ? []
         : ((Array.isArray(c.insumos) && c.insumos.length > 0) ? c.insumos : (insumosMap.get(c.id) || []));
@@ -804,6 +995,22 @@ export async function addCollaboratorToCloud(projectId, email, role = 'editar', 
 
   try {
     const cleanEmail = email.toLowerCase().trim();
+    const curUser = getCurrentUser();
+    const myEmail = (curUser?.email || '').toLowerCase().trim();
+
+    // Si el colaborador está aceptando su propia invitación, actualizar estado sin modificar/escalar rol
+    if (myEmail && cleanEmail === myEmail && status === 'accepted') {
+      const { data: updatedRows, error: updErr } = await sb
+        .from('proyecto_colaboradores')
+        .update({ estado_invitacion: 'accepted', updated_at: new Date().toISOString() })
+        .eq('proyecto_id', targetUuid)
+        .eq('email_colaborador', cleanEmail)
+        .select();
+      if (!updErr && Array.isArray(updatedRows) && updatedRows.length > 0) {
+        return { success: true, data: updatedRows[0] };
+      }
+    }
+
     const record = {
       proyecto_id: targetUuid,
       email_colaborador: cleanEmail,
@@ -961,8 +1168,10 @@ async function resolveConceptUuidsFromPatch(sb, projectUuid, patchOrConcept) {
   return Array.from(uuids);
 }
 
-async function updateArqNodesMetaInConfig(sb, projectUuid, { deleteKeys = [], clearUuids = [], cotPatch = null, cotTargetUuid = '' } = {}) {
-  try {
+async function updateArqNodesMetaInConfig(sb, projectUuid, opts = {}) {
+  return enqueueProjectCloudSync(projectUuid, async () => {
+    const { deleteKeys = [], clearUuids = [], unclearUuids = [], metaFieldPatch = null, cotPatch = null, cotTargetUuid = '' } = opts;
+    try {
     const { data: projRow } = await sb
       .from('proyectos')
       .select('configuracion')
@@ -974,18 +1183,37 @@ async function updateArqNodesMetaInConfig(sb, projectUuid, { deleteKeys = [], cl
       ...((prevCfg.arqNodeMeta && typeof prevCfg.arqNodeMeta === 'object') ? prevCfg.arqNodeMeta : {}),
       ...((prevCfg.arqNodesMeta && typeof prevCfg.arqNodesMeta === 'object') ? prevCfg.arqNodesMeta : {})
     };
+    const clearedSet = new Set(Array.isArray(prevCfg.clearedMatrixIds) ? prevCfg.clearedMatrixIds : []);
 
     deleteKeys.forEach((k) => {
-      if (k) delete mergedMeta[String(k)];
+      if (k) {
+        delete mergedMeta[String(k)];
+        clearedSet.delete(String(k));
+      }
     });
 
     clearUuids.forEach((uid) => {
       const prev = (mergedMeta[uid] && typeof mergedMeta[uid] === 'object') ? mergedMeta[uid] : {};
       mergedMeta[uid] = { ...prev, userClearedMatrix: true, isMatrixCustomized: true };
+      clearedSet.add(uid);
     });
 
+    unclearUuids.forEach((uid) => {
+      const prev = (mergedMeta[uid] && typeof mergedMeta[uid] === 'object') ? mergedMeta[uid] : {};
+      delete prev.userClearedMatrix;
+      mergedMeta[uid] = { ...prev, isMatrixCustomized: true };
+      clearedSet.delete(uid);
+    });
+
+    if (metaFieldPatch && metaFieldPatch.uuid) {
+      const uid = String(metaFieldPatch.uuid);
+      const prev = (mergedMeta[uid] && typeof mergedMeta[uid] === 'object') ? mergedMeta[uid] : {};
+      mergedMeta[uid] = { ...prev, [metaFieldPatch.field]: metaFieldPatch.value };
+    }
+
     if (cotPatch) {
-      const keysToUpdate = [cotTargetUuid, cotPatch.id, cotPatch.clave].filter(Boolean).map(String);
+      const targetKey = cotTargetUuid || (isValidUUID(String(cotPatch.uuid || '')) ? String(cotPatch.uuid) : (isValidUUID(String(cotPatch.id || '')) ? String(cotPatch.id) : ''));
+      const keysToUpdate = [targetKey].filter(Boolean).map(String);
       keysToUpdate.forEach((k) => {
         const prev = (mergedMeta[k] && typeof mergedMeta[k] === 'object') ? mergedMeta[k] : {};
         const nextEntry = { ...prev };
@@ -1007,12 +1235,93 @@ async function updateArqNodesMetaInConfig(sb, projectUuid, { deleteKeys = [], cl
 
     const nextCfg = {
       ...prevCfg,
+      clearedMatrixIds: Array.from(clearedSet),
       arqNodeMeta: mergedMeta,
       arqNodesMeta: mergedMeta
     };
     delete nextCfg.apiKey;
     await sb.from('proyectos').update({ configuracion: nextCfg, updated_at: new Date().toISOString() }).eq('id', projectUuid);
-  } catch (_) {}
+    } catch (_) {}
+  });
+}
+
+async function upsertConceptSubtreeToCloud(sb, projectUuid, rootNode, { parentId = null, orden = 0 } = {}) {
+  if (!sb || !isValidUUID(projectUuid) || !rootNode || typeof rootNode !== 'object') return;
+  const flatConcepts = [];
+  const flatInsumos = [];
+
+  function walkSub(node, pId, idx) {
+    const conceptUuid = (node.uuid && isValidUUID(node.uuid))
+      ? String(node.uuid).trim()
+      : (isValidUUID(String(node.id || '')) ? String(node.id).trim() : generateUUID());
+    node.uuid = conceptUuid;
+    const isParent = Array.isArray(node.children) && node.children.length > 0;
+    const tipo = isParent ? (pId ? 'subpartida' : 'partida') : 'concepto';
+
+    flatConcepts.push({
+      id: conceptUuid,
+      proyecto_id: projectUuid,
+      parent_id: pId,
+      tipo,
+      clave: String(node.clave || `C-${idx + 1}`).slice(0, 50),
+      descripcion: node.descripcion || '',
+      unidad: String(node.unidad || (isParent ? 'lote' : 'pza')).slice(0, 30),
+      cantidad: Number(node.cantidad) || 0,
+      precio_unitario: Number(node.precioUnitario) || 0,
+      costo_directo: Number(node.costoDirecto) || 0,
+      color: node.color || null,
+      orden: idx,
+      expanded: node.expanded !== false,
+      selected: node.selected !== false,
+      insumos: Array.isArray(node.insumos) ? node.insumos : [],
+      updated_at: new Date().toISOString()
+    });
+
+    if (Array.isArray(node.insumos)) {
+      node.insumos.forEach((ins, insIdx) => {
+        if (!ins || typeof ins !== 'object') return;
+        const insUuid = (ins.uuid && isValidUUID(ins.uuid))
+          ? String(ins.uuid).trim()
+          : (isValidUUID(String(ins.id || '')) ? String(ins.id).trim() : generateUUID());
+        ins.uuid = insUuid;
+        let cleanTipo = ins.tipo || 'Material';
+        if (cleanTipo === 'Herramienta' || cleanTipo === 'Maquinaria') cleanTipo = 'Equipo';
+        if (!['Material', 'Mano de Obra', 'Equipo', 'Subcontrato'].includes(cleanTipo)) cleanTipo = 'Material';
+        flatInsumos.push({
+          id: insUuid,
+          concepto_id: conceptUuid,
+          tipo: cleanTipo,
+          clave: String(ins.clave || `INS-${insIdx + 1}`).slice(0, 50),
+          descripcion: ins.descripcion || '',
+          unidad: String(ins.unidad || 'pza').slice(0, 30),
+          cantidad: Number(ins.cantidad) || 0,
+          costo_unitario: Number(ins.costoUnitario) || 0,
+          orden: insIdx,
+          updated_at: new Date().toISOString()
+        });
+      });
+    }
+
+    if (isParent) {
+      node.children.forEach((c, cIdx) => walkSub(c, conceptUuid, cIdx));
+    }
+  }
+
+  walkSub(rootNode, isValidUUID(String(parentId || '')) ? String(parentId).trim() : null, orden);
+
+  const conceptUuids = flatConcepts.map(c => c.id);
+  if (typeof window !== 'undefined' && typeof window.markLocalConceptsPushed === 'function') {
+    window.markLocalConceptsPushed(conceptUuids);
+  }
+  addKnownCloudConceptIds(projectUuid, conceptUuids);
+
+  const { error: upErr } = await sb.from('catalogo_conceptos').upsert(flatConcepts, { onConflict: 'id' });
+  if (upErr) console.warn('[CloudProjectService] Error al insertar subárbol en la nube:', upErr.message);
+
+  if (flatInsumos.length > 0) {
+    const { error: insErr } = await sb.from('insumos_apu').upsert(flatInsumos, { onConflict: 'id' });
+    if (insErr) console.warn('[CloudProjectService] Error al insertar insumos de subárbol:', insErr.message);
+  }
 }
 
 /**
@@ -1030,8 +1339,28 @@ export async function updateCloudConcept(projectId, patchOrConcept) {
     ? String(patchOrConcept.uuid).trim()
     : (isValidUUID(String(patchOrConcept.id || '')) ? String(patchOrConcept.id).trim() : '');
 
-  try {
-    if (patchType === 'update_field' && rawConceptId) {
+  // Pre-registrar IDs síncronamente para evitar disparar syncs redundantes antes de terminar el upsert
+  if (patchType === 'add_root_row' || patchType === 'add_child_row' || patchType === 'paste_node') {
+    const preNode = patchOrConcept.node;
+    if (preNode) addKnownCloudConceptIds(targetUuid, [preNode.uuid || preNode.id]);
+  } else if (patchType === 'duplicate_node' && patchOrConcept.clonedNode) {
+    addKnownCloudConceptIds(targetUuid, [patchOrConcept.clonedNode.uuid || patchOrConcept.clonedNode.id]);
+  }
+
+  return enqueueConceptMutation(targetUuid, async () => {
+    try {
+    if (patchType === 'update_field') {
+      const targetUid = rawConceptId || (await resolveConceptUuidsFromPatch(sb, targetUuid, patchOrConcept))[0] || '';
+      if (['costo_proveedor', 'porcentaje_relativo', 'porcentaje_global'].includes(patchOrConcept.field)) {
+        if (targetUid) {
+          await updateArqNodesMetaInConfig(sb, targetUuid, {
+            metaFieldPatch: { uuid: targetUid, field: patchOrConcept.field, value: patchOrConcept.value }
+          });
+        } else if (typeof window !== 'undefined' && typeof window.triggerDebouncedCloudSync === 'function') {
+          window.triggerDebouncedCloudSync();
+        }
+        return;
+      }
       const fieldMap = {
         cantidad: 'cantidad',
         precioUnitario: 'precio_unitario',
@@ -1042,13 +1371,143 @@ export async function updateCloudConcept(projectId, patchOrConcept) {
         color: 'color'
       };
       const dbField = fieldMap[patchOrConcept.field];
-      if (dbField) {
-        const { error } = await sb
+      if (dbField && targetUid) {
+        if (typeof window !== 'undefined' && typeof window.markLocalConceptsPushed === 'function') {
+          window.markLocalConceptsPushed([targetUid]);
+        }
+        const { data: updRows, error } = await sb
           .from('catalogo_conceptos')
           .update({ [dbField]: patchOrConcept.value, updated_at: new Date().toISOString() })
+          .eq('id', targetUid)
+          .eq('proyecto_id', targetUuid)
+          .select('id');
+        if (error) {
+          console.warn('[CloudProjectService] Error al actualizar campo de concepto:', error.message);
+        } else if (Array.isArray(updRows) && updRows.length === 0) {
+          // Si el concepto aún no existía en DB (p.ej. recién duplicado/creado), forzar autosincronización completa
+          if (typeof window !== 'undefined' && typeof window.triggerDebouncedCloudSync === 'function') {
+            window.triggerDebouncedCloudSync();
+          }
+        }
+      } else if (!targetUid && typeof window !== 'undefined' && typeof window.triggerDebouncedCloudSync === 'function') {
+        window.triggerDebouncedCloudSync();
+      }
+      return;
+    }
+
+    if (patchType === 'add_root_row' && patchOrConcept.node) {
+      await upsertConceptSubtreeToCloud(sb, targetUuid, patchOrConcept.node, {
+        parentId: null,
+        orden: Number(patchOrConcept.orden) || 0
+      });
+      return;
+    }
+
+    if (patchType === 'add_child_row' && patchOrConcept.node) {
+      let resolvedParentUuid = isValidUUID(String(patchOrConcept.parentUuid || ''))
+        ? String(patchOrConcept.parentUuid).trim()
+        : (isValidUUID(String(patchOrConcept.parentId || '')) ? String(patchOrConcept.parentId).trim() : '');
+      if (!resolvedParentUuid && patchOrConcept.parentClave) {
+        const { data: pRows } = await sb
+          .from('catalogo_conceptos')
+          .select('id')
+          .eq('proyecto_id', targetUuid)
+          .eq('clave', String(patchOrConcept.parentClave).slice(0, 50))
+          .limit(1);
+        resolvedParentUuid = pRows?.[0]?.id || '';
+      }
+      await upsertConceptSubtreeToCloud(sb, targetUuid, patchOrConcept.node, {
+        parentId: resolvedParentUuid || null,
+        orden: Number(patchOrConcept.orden) || 0
+      });
+      return;
+    }
+
+    if (patchType === 'duplicate_node' && patchOrConcept.clonedNode) {
+      let resolvedParentUuid = isValidUUID(String(patchOrConcept.parentUuid || ''))
+        ? String(patchOrConcept.parentUuid).trim()
+        : (isValidUUID(String(patchOrConcept.parentId || '')) ? String(patchOrConcept.parentId).trim() : null);
+      if (!resolvedParentUuid && rawConceptId) {
+        const { data: siblingRow } = await sb
+          .from('catalogo_conceptos')
+          .select('parent_id')
           .eq('id', rawConceptId)
-          .eq('proyecto_id', targetUuid);
-        if (error) console.warn('[CloudProjectService] Error al actualizar campo de concepto:', error.message);
+          .maybeSingle();
+        resolvedParentUuid = siblingRow?.parent_id || null;
+      }
+      await upsertConceptSubtreeToCloud(sb, targetUuid, patchOrConcept.clonedNode, {
+        parentId: resolvedParentUuid,
+        orden: Number(patchOrConcept.position) || 0
+      });
+      return;
+    }
+
+    if (patchType === 'paste_node' && patchOrConcept.node) {
+      let resolvedParentUuid = isValidUUID(String(patchOrConcept.parentUuid || ''))
+        ? String(patchOrConcept.parentUuid).trim()
+        : (isValidUUID(String(patchOrConcept.parentId || '')) ? String(patchOrConcept.parentId).trim() : null);
+      await upsertConceptSubtreeToCloud(sb, targetUuid, patchOrConcept.node, {
+        parentId: resolvedParentUuid,
+        orden: Number(patchOrConcept.position) || 0
+      });
+      return;
+    }
+
+    if (patchType === 'update_insumos') {
+      const targetUuids = rawConceptId ? [rawConceptId] : await resolveConceptUuidsFromPatch(sb, targetUuid, patchOrConcept);
+      const resolvedUid = targetUuids[0] || '';
+      if (!resolvedUid) return;
+      if (typeof window !== 'undefined' && typeof window.markLocalConceptsPushed === 'function') {
+        window.markLocalConceptsPushed([resolvedUid]);
+      }
+      addKnownCloudConceptIds(targetUuid, [resolvedUid]);
+      const insumosList = Array.isArray(patchOrConcept.insumos) ? patchOrConcept.insumos : [];
+      const flatInsRows = insumosList.map((ins, insIdx) => {
+        const insUuid = (ins?.uuid && isValidUUID(ins.uuid))
+          ? String(ins.uuid).trim()
+          : (isValidUUID(String(ins?.id || '')) ? String(ins.id).trim() : generateUUID());
+        if (ins && typeof ins === 'object') ins.uuid = insUuid;
+        let cleanTipo = ins?.tipo || 'Material';
+        if (cleanTipo === 'Herramienta' || cleanTipo === 'Maquinaria') cleanTipo = 'Equipo';
+        if (!['Material', 'Mano de Obra', 'Equipo', 'Subcontrato'].includes(cleanTipo)) cleanTipo = 'Material';
+        return {
+          id: insUuid,
+          concepto_id: resolvedUid,
+          tipo: cleanTipo,
+          clave: String(ins?.clave || `INS-${insIdx + 1}`).slice(0, 50),
+          descripcion: ins?.descripcion || '',
+          unidad: String(ins?.unidad || 'pza').slice(0, 30),
+          cantidad: Number(ins?.cantidad) || 0,
+          costo_unitario: Number(ins?.costoUnitario) || 0,
+          orden: insIdx,
+          updated_at: new Date().toISOString()
+        };
+      });
+
+      const { error: uErr } = await sb
+        .from('catalogo_conceptos')
+        .update({
+          insumos: insumosList,
+          precio_unitario: Number(patchOrConcept.precioUnitario) || 0,
+          costo_directo: Number(patchOrConcept.costoDirecto) || 0,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', resolvedUid)
+        .eq('proyecto_id', targetUuid);
+      if (uErr) console.warn('[CloudProjectService] Error actualizando insumos de concepto:', uErr.message);
+
+      try {
+        const { data: existingIns } = await sb.from('insumos_apu').select('id').eq('concepto_id', resolvedUid);
+        const keepSet = new Set(flatInsRows.map(r => r.id));
+        const delIds = (Array.isArray(existingIns) ? existingIns : []).map(r => r?.id).filter(id => id && !keepSet.has(id));
+        if (delIds.length > 0) await sb.from('insumos_apu').delete().in('id', delIds);
+        if (flatInsRows.length > 0) await sb.from('insumos_apu').upsert(flatInsRows, { onConflict: 'id' });
+      } catch (_) {}
+
+      if (patchOrConcept.userClearedMatrix) {
+        await updateArqNodesMetaInConfig(sb, targetUuid, { clearUuids: [resolvedUid] });
+      } else {
+        await updateArqNodesMetaInConfig(sb, targetUuid, { unclearUuids: [resolvedUid] });
       }
       return;
     }
@@ -1200,9 +1659,10 @@ export async function updateCloudConcept(projectId, patchOrConcept) {
           .eq('concepto_id', rawConceptId);
       }
     }
-  } catch (err) {
-    console.warn('[CloudProjectService] Error al actualizar concepto en Supabase:', err);
-  }
+    } catch (err) {
+      console.warn('[CloudProjectService] Error al actualizar concepto en Supabase:', err);
+    }
+  });
 }
 
 /**
@@ -1311,4 +1771,7 @@ if (typeof window !== 'undefined') {
   window.removeCollaboratorFromCloud = removeCollaboratorFromCloud;
   window.updateCloudConcept = updateCloudConcept;
   window.deleteProjectFromCloud = deleteProjectFromCloud;
+  window.addKnownCloudConceptIds = addKnownCloudConceptIds;
+  window.markLocalConceptsDeleted = markLocalConceptsDeleted;
+  window.isConceptConfirmedInCloud = isConceptConfirmedInCloud;
 }

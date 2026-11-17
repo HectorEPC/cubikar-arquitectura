@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf12';
-import { findNodeById } from '../catalog/treeService.js?v=20261116_cf12';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf12';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
-import { formatMoney } from '../../core/formatters.js?v=20261116_cf12';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf12';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf12';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf12';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf12';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf13';
+import { findNodeById } from '../catalog/treeService.js?v=20261116_cf13';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf13';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf13';
+import { formatMoney } from '../../core/formatters.js?v=20261116_cf13';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf13';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261116_cf13';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf13';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf13';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -228,7 +228,8 @@ function finalizeCotizacionMutation(node, changeDescription) {
     changeType: 'cotizacion_updated',
     highlightId: node?.id || null,
     changeDescription: changeDescription || `cotización de ${node?.clave || 'concepto'}`,
-    patch: buildCotizacionPatch(node)
+    patch: buildCotizacionPatch(node),
+    skipFullCloudSync: true
   });
   renderTAB1();
   renderCotizacionesSidePanel(node);

@@ -1,11 +1,12 @@
 // js/core/cloudModulesSyncService.js
 // Sincronización integral de módulos operativos con Supabase (ADM_ARQ):
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
+// Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261116_cf12';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf12';
-import { isValidUUID } from './cloudProjectService.js?v=20261116_cf12';
-import { getProjectById } from '../modules/portal/projectService.js?v=20261116_cf12';
+import { getActiveProjectId } from '../config/constants.js?v=20261116_cf13';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf13';
+import { isValidUUID } from './cloudProjectService.js?v=20261116_cf13';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261116_cf13';
 
 const syncTimers = {
   bitacora: null,
@@ -23,6 +24,48 @@ function resolveCloudProjectUuid(projectId = null) {
   if (proj && isValidUUID(proj.cloudId)) return proj.cloudId;
   if (proj && isValidUUID(proj.id)) return proj.id;
   return null;
+}
+
+function getContextMetadata(pid) {
+  const proj = getProjectById(pid);
+  const user = typeof getCurrentUser === 'function' ? getCurrentUser() : null;
+  return {
+    empresaId: user?.empresaId && isValidUUID(user.empresaId) ? user.empresaId : null,
+    ownerEmail: String(proj?.ownerEmail || user?.email || '').toLowerCase().trim()
+  };
+}
+
+/**
+ * Generar un UUID determinístico estable para claves compuestas (ej. estimaciones.id UUID NOT NULL).
+ */
+function deterministicUuid(seedStr) {
+  const str = String(seedStr || '');
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  let h3 = 0x85ebca6b;
+  let h4 = 0xc2b2ae35;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ (ch + i), 0x85ebca6b) >>> 0;
+    h3 = Math.imul(h3 ^ (ch * 31), 0xc2b2ae35) >>> 0;
+    h4 = Math.imul(h4 ^ (ch + 7), 0x27d4eb2f) >>> 0;
+  }
+  const hex = (n) => n.toString(16).padStart(8, '0');
+  const raw = hex(h1) + hex(h2) + hex(h3) + hex(h4);
+  const p3 = '4' + raw.slice(13, 16);
+  const p4 = ((parseInt(raw[16], 16) & 0x3) | 0x8).toString(16) + raw.slice(17, 20);
+  return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${p3}-${p4}-${raw.slice(20, 32)}`;
+}
+
+function toIsoDateOrNull(val) {
+  if (!val) return null;
+  const s = String(val).trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+function toRequiredIsoDate(val, fallback = null) {
+  return toIsoDateOrNull(val) || fallback || new Date().toISOString().slice(0, 10);
 }
 
 /**
@@ -80,69 +123,69 @@ export async function syncBitacoraNow(projectId = null) {
   }
   if (!data || typeof data !== 'object') return false;
 
-  const g = data.general || {};
+  const { empresaId, ownerEmail } = getContextMetadata(pid);
+  const general = (data.general && typeof data.general === 'object') ? data.general : {};
   const extraDatos = stripInlineBinaryPayloads({
     ...data,
-    general: g
+    notas: undefined
   });
-  delete extraDatos.notas;
 
   const configPayload = {
     proyecto_id: cloudId,
-    director_responsable: g.directorResponsable || '',
-    residente_obra: g.residenteObra || '',
-    supervisor_cliente: g.supervisorCliente || '',
-    numero_licencia: g.numeroLicencia || '',
-    numero_contrato: g.numeroContrato || '',
-    ubicacion_exacta: g.ubicacionExacta || '',
-    datos_json: extraDatos,
+    empresa_id: empresaId,
+    owner_email: ownerEmail,
+    titulo_obra: general.nombreObra || general.tituloObra || '',
+    contrato_num: String(general.numeroContrato || '').slice(0, 100),
+    contratista: general.directorResponsable || general.contratista || '',
+    supervision: general.ubicacionExacta || general.supervision || '',
+    residente_nombre: String(general.residenteObra || '').slice(0, 255),
+    supervisor_nombre: String(general.supervisorCliente || '').slice(0, 255),
+    folio_actual: Math.max(1, parseInt(data.folioActual || general.folioActual || 1, 10) || 1),
+    config_json: extraDatos,
     updated_at: new Date().toISOString()
   };
 
   await supabase.from('bitacora_config').upsert(configPayload, { onConflict: 'proyecto_id' });
 
   const notas = Array.isArray(data.notas) ? data.notas : [];
-  const localIds = new Set();
-
+  const localRowIds = new Set();
   if (notas.length > 0) {
-    const rows = notas.map(n => {
+    const rows = notas.map((n, idx) => {
       const cleanNota = stripInlineBinaryPayloads(n);
-      const rowId = `${cloudId}__${n.id}`;
-      localIds.add(rowId);
+      const rawId = cleanNota.id || `nota_${idx}_${cleanNota.folio || idx + 1}`;
+      cleanNota.id = rawId;
+      const rowId = `${cloudId}__${rawId}`.slice(0, 120);
+      localRowIds.add(rowId);
       return {
         id: rowId,
         proyecto_id: cloudId,
-        folio: Number(n.folio) || 1,
-        fecha: n.fecha || '',
-        hora: n.hora || '',
-        autor: n.autor || '',
-        cargo: n.cargo || '',
-        clasificacion: n.clasificacion || 'apertura',
-        titulo: n.titulo || '',
-        clima: n.clima || 'soleado',
-        temperatura: n.temperatura || '',
-        fuerza_trabajo: n.fuerzaTrabajo || '',
-        equipo_maquinaria: n.equipoMaquinaria || '',
-        partidas_relacionadas: Array.isArray(n.partidasRelacionadas) ? n.partidasRelacionadas : [],
-        descripcion: n.descripcion || '',
-        acuerdos: n.acuerdos || '',
-        estatus_firma: n.estatusFirma || 'firmada',
-        creado_en: n.creadoEn || new Date().toISOString(),
-        datos_json: cleanNota,
+        empresa_id: empresaId,
+        owner_email: ownerEmail,
+        folio: parseInt(cleanNota.folio, 10) || (idx + 1),
+        fecha: toIsoDateOrNull(cleanNota.fecha),
+        tipo: String(cleanNota.tipo || 'seguimiento').slice(0, 60),
+        clasificacion: String(cleanNota.clasificacion || 'apertura').slice(0, 60),
+        titulo: cleanNota.titulo || '',
+        contenido: cleanNota.descripcion || cleanNota.contenido || '',
+        autor_nombre: String(cleanNota.autor || cleanNota.autorNombre || '').slice(0, 255),
+        autor_email: String(cleanNota.autorEmail || '').slice(0, 255),
+        estado: String(cleanNota.estatusFirma || cleanNota.estado || 'firmada').slice(0, 40),
+        fotos: Array.isArray(cleanNota.evidencias) ? cleanNota.evidencias : (Array.isArray(cleanNota.fotos) ? cleanNota.fotos : []),
+        sello_json: cleanNota.sello && typeof cleanNota.sello === 'object' ? cleanNota.sello : {},
+        payload_json: cleanNota,
         updated_at: new Date().toISOString()
       };
     });
     await supabase.from('bitacora_notas').upsert(rows, { onConflict: 'id' });
   }
 
-  // Eliminar notas borradas localmente
   try {
-    const { data: existingRows } = await supabase
+    const { data: existingNotes } = await supabase
       .from('bitacora_notas')
       .select('id')
       .eq('proyecto_id', cloudId);
-    if (Array.isArray(existingRows)) {
-      const toDelete = existingRows.map(r => r.id).filter(id => !localIds.has(id));
+    if (Array.isArray(existingNotes)) {
+      const toDelete = existingNotes.map(r => r.id).filter(id => !localRowIds.has(id));
       if (toDelete.length > 0) {
         await supabase.from('bitacora_notas').delete().eq('proyecto_id', cloudId).in('id', toDelete);
       }
@@ -153,7 +196,7 @@ export async function syncBitacoraNow(projectId = null) {
 }
 
 // ==========================================
-// 2. COMPRAS, GASTOS Y PROVEEDORES
+// 2. COMPRAS / GASTOS Y PROVEEDORES
 // ==========================================
 export function scheduleExpensesCloudSync(projectId = null) {
   if (!isSupabaseConfigured()) return;
@@ -175,126 +218,116 @@ export async function syncExpensesNow(projectId = null) {
   const rawProveedores = localStorage.getItem(`adm_arq_proveedores_${pid}`);
   const rawCombined = localStorage.getItem(`expenses_control_${pid}`);
 
-  if (!rawCompras && !rawProveedores && !rawCombined) return false;
-
-  let expenses = [];
-  let proveedores = [];
+  let comprasList = null;
+  let proveedoresList = null;
 
   try {
     if (rawCompras) {
-      const parsedC = JSON.parse(rawCompras);
-      expenses = Array.isArray(parsedC) ? parsedC : (Array.isArray(parsedC?.expenses) ? parsedC.expenses : []);
-    } else if (rawCombined) {
-      const parsedComb = JSON.parse(rawCombined);
-      expenses = Array.isArray(parsedComb?.expenses) ? parsedComb.expenses : [];
+      const parsed = JSON.parse(rawCompras);
+      comprasList = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.expenses) ? parsed.expenses : []);
     }
   } catch (_) {}
 
   try {
     if (rawProveedores) {
-      const parsedP = JSON.parse(rawProveedores);
-      proveedores = Array.isArray(parsedP) ? parsedP : (Array.isArray(parsedP?.proveedores) ? parsedP.proveedores : []);
-    } else if (rawCombined) {
-      const parsedComb = JSON.parse(rawCombined);
-      proveedores = Array.isArray(parsedComb?.proveedores) ? parsedComb.proveedores : [];
+      const parsed = JSON.parse(rawProveedores);
+      proveedoresList = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.proveedores) ? parsed.proveedores : []);
     }
   } catch (_) {}
 
+  if ((!comprasList || !proveedoresList) && rawCombined) {
+    try {
+      const parsed = JSON.parse(rawCombined);
+      if (!comprasList && Array.isArray(parsed?.expenses)) comprasList = parsed.expenses;
+      if (!proveedoresList && Array.isArray(parsed?.proveedores)) proveedoresList = parsed.proveedores;
+    } catch (_) {}
+  }
+
+  const { empresaId, ownerEmail } = getContextMetadata(pid);
   const localExpIds = new Set();
-  if (expenses.length > 0) {
-    const expRows = expenses.map(e => {
+  if (Array.isArray(comprasList) && comprasList.length > 0) {
+    const expRows = comprasList.map((e, idx) => {
       const cleanExp = stripInlineBinaryPayloads(e);
-      const rowId = `${cloudId}__${e.id}`;
+      const rawId = cleanExp.id || `exp_${idx}_${Date.now()}`;
+      cleanExp.id = rawId;
+      const rowId = `${cloudId}__${rawId}`.slice(0, 120);
       localExpIds.add(rowId);
       return {
         id: rowId,
         proyecto_id: cloudId,
-        fecha: e.fecha || '',
-        folio: e.folio || '',
-        proveedor: e.proveedor || '',
-        rfc: e.rfc || '',
-        concepto: e.concepto || '',
-        categoria: e.categoria || 'Materiales',
-        partida_id: e.partidaId || 'general',
-        partida_nombre: e.partidaNombre || 'Gasto General de Obra',
-        metodo_pago: e.metodoPago || 'Transferencia',
-        estatus: e.estatus || 'Pagado',
-        subtotal: Number(e.subtotal) || 0,
-        iva: Number(e.iva) || 0,
-        total: Number(e.total) || 0,
-        notas: e.notas || '',
-        creado_en: e.creadoEn || new Date().toISOString(),
-        datos_json: cleanExp,
+        empresa_id: empresaId,
+        owner_email: ownerEmail,
+        proveedor_id: String(cleanExp.proveedorId || cleanExp.proveedor || '').slice(0, 120),
+        concepto_id: String(cleanExp.partidaId || cleanExp.conceptoId || 'general'),
+        fecha: toIsoDateOrNull(cleanExp.fecha),
+        tipo: String(cleanExp.tipo || 'compra').slice(0, 60),
+        categoria: String(cleanExp.categoria || 'Materiales').slice(0, 100),
+        descripcion: cleanExp.concepto || cleanExp.descripcion || '',
+        folio_factura: String(cleanExp.folio || cleanExp.folioFactura || '').slice(0, 120),
+        subtotal: Number(cleanExp.subtotal) || 0,
+        iva: Number(cleanExp.iva) || 0,
+        total: Number(cleanExp.total ?? cleanExp.montoTotal ?? 0) || 0,
+        metodo_pago: String(cleanExp.metodoPago || 'Transferencia').slice(0, 60),
+        estado: String(cleanExp.estatus || cleanExp.estado || 'pagado').slice(0, 40),
+        evidencia_json: cleanExp.comprobante && typeof cleanExp.comprobante === 'object' ? cleanExp.comprobante : {},
+        payload_json: cleanExp,
         updated_at: new Date().toISOString()
       };
     });
     await supabase.from('compras_gastos').upsert(expRows, { onConflict: 'id' });
   }
 
-  try {
-    const { data: existingExp } = await supabase
-      .from('compras_gastos')
-      .select('id')
-      .eq('proyecto_id', cloudId);
-    if (Array.isArray(existingExp)) {
-      const toDelete = existingExp.map(r => r.id).filter(id => !localExpIds.has(id));
-      if (toDelete.length > 0) {
-        await supabase.from('compras_gastos').delete().eq('proyecto_id', cloudId).in('id', toDelete);
+  if (Array.isArray(comprasList)) {
+    try {
+      const { data: existingExp } = await supabase.from('compras_gastos').select('id').eq('proyecto_id', cloudId);
+      if (Array.isArray(existingExp)) {
+        const toDelete = existingExp.map(r => r.id).filter(id => !localExpIds.has(id));
+        if (toDelete.length > 0) await supabase.from('compras_gastos').delete().eq('proyecto_id', cloudId).in('id', toDelete);
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
   const localProvIds = new Set();
-  if (proveedores.length > 0) {
-    const provRows = proveedores.map(p => {
+  if (Array.isArray(proveedoresList) && proveedoresList.length > 0) {
+    const provRows = proveedoresList.map((p, idx) => {
       const cleanProv = stripInlineBinaryPayloads(p);
-      const rowId = `${cloudId}__${p.id}`;
+      const rawId = cleanProv.id || `prov_${idx}_${Date.now()}`;
+      cleanProv.id = rawId;
+      const rowId = `${cloudId}__${rawId}`.slice(0, 120);
       localProvIds.add(rowId);
       return {
         id: rowId,
         proyecto_id: cloudId,
-        nombre: p.nombre || p.proveedor || '',
-        razon_social: p.razonSocial || '',
-        rfc: p.rfc || '',
-        especialidad: p.especialidad || 'Materiales',
-        contacto: p.contacto || '',
-        telefono: p.telefono || '',
-        email: p.email || '',
-        direccion: p.direccion || '',
-        banco: p.banco || '',
-        clabe: p.clabe || '',
-        cuenta: p.cuenta || '',
-        dias_credito: Number(p.diasCredito) || 0,
-        limite_credito: Number(p.limiteCredito) || 0,
-        calificacion: Number(p.calificacion) || 5,
-        estatus: p.estatus || 'Activo',
-        notas: p.notas || '',
-        creado_en: p.creadoEn || new Date().toISOString(),
-        datos_json: cleanProv,
+        empresa_id: empresaId,
+        owner_email: ownerEmail,
+        nombre: String(cleanProv.nombre || cleanProv.razonSocial || 'Proveedor').slice(0, 255),
+        rfc: String(cleanProv.rfc || '').slice(0, 30),
+        categoria: String(cleanProv.especialidad || cleanProv.categoria || 'Materiales').slice(0, 100),
+        telefono: String(cleanProv.telefono || '').slice(0, 50),
+        email: String(cleanProv.email || '').slice(0, 255),
+        notas: cleanProv.notas || '',
+        payload_json: cleanProv,
         updated_at: new Date().toISOString()
       };
     });
     await supabase.from('proveedores').upsert(provRows, { onConflict: 'id' });
   }
 
-  try {
-    const { data: existingProv } = await supabase
-      .from('proveedores')
-      .select('id')
-      .eq('proyecto_id', cloudId);
-    if (Array.isArray(existingProv)) {
-      const toDelete = existingProv.map(r => r.id).filter(id => !localProvIds.has(id));
-      if (toDelete.length > 0) {
-        await supabase.from('proveedores').delete().eq('proyecto_id', cloudId).in('id', toDelete);
+  if (Array.isArray(proveedoresList)) {
+    try {
+      const { data: existingProv } = await supabase.from('proveedores').select('id').eq('proyecto_id', cloudId);
+      if (Array.isArray(existingProv)) {
+        const toDelete = existingProv.map(r => r.id).filter(id => !localProvIds.has(id));
+        if (toDelete.length > 0) await supabase.from('proveedores').delete().eq('proyecto_id', cloudId).in('id', toDelete);
       }
-    }
-  } catch (_) {}
+    } catch (_) {}
+  }
 
   return true;
 }
 
 // ==========================================
-// 3. ESTIMACIONES Y AVANCE FINANCIERO
+// 3. ESTIMACIONES DE OBRA
 // ==========================================
 export function scheduleEstimacionesCloudSync(projectId = null) {
   if (!isSupabaseConfigured()) return;
@@ -324,63 +357,80 @@ export async function syncEstimacionesNow(projectId = null) {
   }
   if (!data || typeof data !== 'object') return false;
 
-  const anticipoPct = data.anticipoPct !== undefined && data.anticipoPct !== null ? Number(data.anticipoPct) : 30;
-  const retencionPct = data.retencionPct !== undefined && data.retencionPct !== null ? Number(data.retencionPct) : 0;
+  const validStates = new Set(['borrador', 'presentada', 'aprobada', 'pagada']);
+  const normalizeEstState = (s) => {
+    const clean = String(s || 'borrador').toLowerCase().trim();
+    return validStates.has(clean) ? clean : 'borrador';
+  };
 
+  const today = new Date().toISOString().slice(0, 10);
   const rows = [];
   const localRowIds = new Set();
 
-  // Fila maestra de configuración de estimaciones
-  const cfgId = `__CONFIG__${cloudId}`;
-  localRowIds.add(cfgId);
+  const cfgUuid = deterministicUuid(`${cloudId}__EST_CONFIG__0`);
+  localRowIds.add(cfgUuid);
   rows.push({
-    id: cfgId,
+    id: cfgUuid,
     proyecto_id: cloudId,
     numero: 0,
-    titulo: '__CONFIG__',
-    estatus: 'config',
-    anticipo_pct: anticipoPct,
-    retencion_pct: retencionPct,
-    datos_json: {
-      isConfig: true,
-      anticipoPct,
-      retencionPct,
-      anticipoPagado: Number(data.anticipoPagado) || 0,
+    nombre: '__CONFIG__',
+    fecha_inicio: today,
+    fecha_fin: today,
+    fecha_corte: today,
+    notas: data.notasGenerales || '',
+    estado: 'borrador',
+    fotos: [],
+    locked: false,
+    resumen: {
+      isConfigRow: true,
+      anticipoPct: Number(data.anticipoPct ?? 30),
+      retencionPct: Number(data.retencionPct ?? 0),
+      anticipoPagado: Number(data.anticipoPagado ?? 0),
       notasGenerales: data.notasGenerales || ''
     },
+    detalles_json: {},
     updated_at: new Date().toISOString()
   });
 
-  const list = Array.isArray(data.estimaciones) ? data.estimaciones : [];
-  list.forEach(est => {
+  const estList = Array.isArray(data.estimaciones) ? data.estimaciones : [];
+  estList.forEach((est, idx) => {
     const cleanEst = stripInlineBinaryPayloads(est);
-    const rowId = `${cloudId}__${est.id}`;
-    localRowIds.add(rowId);
+    const estNum = Math.max(1, parseInt(cleanEst.numero || (idx + 1), 10) || (idx + 1));
+    const rowUuid = isValidUUID(String(cleanEst.cloudUuid || cleanEst.id || ''))
+      ? String(cleanEst.cloudUuid || cleanEst.id)
+      : deterministicUuid(`${cloudId}__EST__${estNum}`);
+    cleanEst.cloudUuid = rowUuid;
+    localRowIds.add(rowUuid);
+    const fechaIni = toRequiredIsoDate(cleanEst.periodoInicio || cleanEst.fechaInicio, today);
+    const fechaFin = toRequiredIsoDate(cleanEst.periodoFin || cleanEst.fechaCorte, fechaIni);
     rows.push({
-      id: rowId,
+      id: rowUuid,
       proyecto_id: cloudId,
-      numero: Number(est.numero) || 1,
-      titulo: est.titulo || `Estimación #${est.numero || 1}`,
-      fecha_inicio: est.periodoInicio || est.fechaInicio || '',
-      fecha_corte: est.periodoFin || est.fechaCorte || '',
-      estatus: est.estatus || est.estado || 'borrador',
-      notas: est.observaciones || est.notas || '',
-      anticipo_pct: anticipoPct,
-      retencion_pct: retencionPct,
-      conceptos_avance: est.avances || est.items || {},
-      datos_json: cleanEst,
-      creado_en: est.fechaCreacion || est.creadoEn || new Date().toISOString(),
+      numero: estNum,
+      nombre: String(cleanEst.titulo || cleanEst.nombre || `Estimación #${estNum}`).slice(0, 100),
+      fecha_inicio: fechaIni,
+      fecha_fin: fechaFin,
+      fecha_corte: fechaFin,
+      notas: cleanEst.observaciones || cleanEst.notas || '',
+      estado: normalizeEstState(cleanEst.estado || cleanEst.estatus),
+      fotos: Array.isArray(cleanEst.fotos) ? cleanEst.fotos : [],
+      locked: Boolean(cleanEst.locked),
+      resumen: {
+        montoTotal: Number(cleanEst.montoTotal ?? cleanEst.total ?? 0) || 0,
+        anticipoPct: Number(cleanEst.anticipoPct ?? data.anticipoPct ?? 30),
+        retencionPct: Number(cleanEst.retencionPct ?? data.retencionPct ?? 0)
+      },
+      detalles_json: cleanEst,
       updated_at: new Date().toISOString()
     });
   });
 
-  await supabase.from('estimaciones').upsert(rows, { onConflict: 'id' });
+  if (rows.length > 0) {
+    await supabase.from('estimaciones').upsert(rows, { onConflict: 'proyecto_id,numero' });
+  }
 
   try {
-    const { data: existingEst } = await supabase
-      .from('estimaciones')
-      .select('id')
-      .eq('proyecto_id', cloudId);
+    const { data: existingEst } = await supabase.from('estimaciones').select('id').eq('proyecto_id', cloudId);
     if (Array.isArray(existingEst)) {
       const toDelete = existingEst.map(r => r.id).filter(id => !localRowIds.has(id));
       if (toDelete.length > 0) {
@@ -432,11 +482,16 @@ export async function syncCronogramaNow(projectId = null) {
     if (lRaw) tabLocks = JSON.parse(lRaw);
   } catch (_) {}
 
+  const { empresaId, ownerEmail } = getContextMetadata(pid);
   await supabase.from('cronograma_config').upsert({
     proyecto_id: cloudId,
-    schedule_cfg: scheduleCfg || {},
-    workdays_cfg: workdaysCfg || {},
-    tab_locks: tabLocks || {},
+    empresa_id: empresaId,
+    owner_email: ownerEmail,
+    config_json: {
+      schedule_cfg: scheduleCfg || {},
+      workdays_cfg: workdaysCfg || {},
+      tab_locks: tabLocks || {}
+    },
     updated_at: new Date().toISOString()
   }, { onConflict: 'proyecto_id' });
 
@@ -473,6 +528,7 @@ export async function syncChatNow(projectId = null) {
   }
   if (!Array.isArray(list)) return false;
 
+  const { empresaId, ownerEmail } = getContextMetadata(pid);
   const localRowIds = new Set();
   const localRawIds = new Set();
 
@@ -487,17 +543,18 @@ export async function syncChatNow(projectId = null) {
       return {
         id: rowId,
         proyecto_id: cloudId,
-        partida_id: m.partidaId || '__GENERAL__',
-        partida_clave: m.partidaClave || 'GENERAL',
-        partida_nombre: m.partidaNombre || 'General de Obra',
-        autor_email: m.authorEmail || '',
-        autor_nombre: m.authorName || '',
+        empresa_id: empresaId,
+        owner_email: ownerEmail,
+        autor_nombre: String(m.authorName || '').slice(0, 255),
+        autor_email: String(m.authorEmail || '').slice(0, 255),
         autor_avatar: (m.authorAvatar && !String(m.authorAvatar).startsWith('data:')) ? m.authorAvatar : '',
-        texto: m.text || '',
-        menciones: Array.isArray(m.mentions) ? m.mentions : [],
+        mensaje: m.text || '',
+        partida_id: m.partidaId ? String(m.partidaId).slice(0, 100) : '__GENERAL__',
+        etiquetas: Array.isArray(m.mentions) ? m.mentions : [],
         adjuntos: Array.isArray(cleanMsg.attachments) ? cleanMsg.attachments : [],
-        datos_json: cleanMsg,
-        creado_en: m.createdAt || new Date(m.time || Date.now()).toISOString()
+        payload_json: cleanMsg,
+        created_at: m.createdAt || new Date(m.time || Date.now()).toISOString(),
+        updated_at: new Date().toISOString()
       };
     });
     await supabase.from('chat_mensajes').upsert(rows, { onConflict: 'id' });
@@ -546,7 +603,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
       supabase.from('proveedores').select('*').eq('proyecto_id', cloudId),
       supabase.from('estimaciones').select('*').eq('proyecto_id', cloudId).order('numero', { ascending: true }),
       supabase.from('cronograma_config').select('*').eq('proyecto_id', cloudId).maybeSingle(),
-      supabase.from('chat_mensajes').select('*').eq('proyecto_id', cloudId).order('creado_en', { ascending: true })
+      supabase.from('chat_mensajes').select('*').eq('proyecto_id', cloudId).order('created_at', { ascending: true })
     ]);
 
     let changed = false;
@@ -562,8 +619,8 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
         if (rawB) localBit = JSON.parse(rawB);
       } catch (_) {}
 
-      const cfgJson = (hasBitCfg && bitCfgRes.data.datos_json && typeof bitCfgRes.data.datos_json === 'object')
-        ? bitCfgRes.data.datos_json
+      const cfgJson = (hasBitCfg && bitCfgRes.data.config_json && typeof bitCfgRes.data.config_json === 'object')
+        ? bitCfgRes.data.config_json
         : {};
 
       if (hasBitCfg) {
@@ -574,12 +631,12 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
           general: {
             ...(localBit.general || {}),
             ...(cfgJson.general || {}),
-            directorResponsable: c.director_responsable || cfgJson.general?.directorResponsable || localBit.general?.directorResponsable || '',
-            residenteObra: c.residente_obra || cfgJson.general?.residenteObra || localBit.general?.residenteObra || '',
-            supervisorCliente: c.supervisor_cliente || cfgJson.general?.supervisorCliente || localBit.general?.supervisorCliente || '',
-            numeroLicencia: c.numero_licencia || cfgJson.general?.numeroLicencia || localBit.general?.numeroLicencia || '',
-            numeroContrato: c.numero_contrato || cfgJson.general?.numeroContrato || localBit.general?.numeroContrato || '',
-            ubicacionExacta: c.ubicacion_exacta || cfgJson.general?.ubicacionExacta || localBit.general?.ubicacionExacta || ''
+            nombreObra: c.titulo_obra || cfgJson.general?.nombreObra || localBit.general?.nombreObra || '',
+            directorResponsable: c.contratista || cfgJson.general?.directorResponsable || localBit.general?.directorResponsable || '',
+            residenteObra: c.residente_nombre || cfgJson.general?.residenteObra || localBit.general?.residenteObra || '',
+            supervisorCliente: c.supervisor_nombre || cfgJson.general?.supervisorCliente || localBit.general?.supervisorCliente || '',
+            numeroContrato: c.contrato_num || cfgJson.general?.numeroContrato || localBit.general?.numeroContrato || '',
+            ubicacionExacta: c.supervision || cfgJson.general?.ubicacionExacta || localBit.general?.ubicacionExacta || ''
           }
         };
       }
@@ -587,7 +644,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
       if (hasBitNotas) {
         const localMap = new Map((localBit.notas || []).map(n => [String(n.id), n]));
         localBit.notas = bitNotasRes.data.map(row => {
-          const base = (row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : {};
+          const base = (row.payload_json && typeof row.payload_json === 'object') ? row.payload_json : {};
           const rawId = base.id || String(row.id).replace(`${cloudId}__`, '');
           const prev = localMap.get(String(rawId)) || {};
           return {
@@ -596,20 +653,14 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
             id: rawId,
             folio: row.folio ?? base.folio ?? 1,
             fecha: row.fecha || base.fecha || '',
-            hora: row.hora || base.hora || '',
-            autor: row.autor || base.autor || '',
-            cargo: row.cargo || base.cargo || '',
+            autor: row.autor_nombre || base.autor || '',
             clasificacion: row.clasificacion || base.clasificacion || 'apertura',
             titulo: row.titulo || base.titulo || '',
-            clima: row.clima || base.clima || 'soleado',
-            temperatura: row.temperatura || base.temperatura || '',
-            fuerzaTrabajo: row.fuerza_trabajo || base.fuerzaTrabajo || '',
-            equipoMaquinaria: row.equipo_maquinaria || base.equipoMaquinaria || '',
-            partidasRelacionadas: Array.isArray(row.partidas_relacionadas) ? row.partidas_relacionadas : (base.partidasRelacionadas || []),
-            descripcion: row.descripcion || base.descripcion || '',
-            acuerdos: row.acuerdos || base.acuerdos || '',
-            estatusFirma: row.estatus_firma || base.estatusFirma || 'firmada',
-            evidencias: (Array.isArray(prev.evidencias) && prev.evidencias.length > 0) ? prev.evidencias : (base.evidencias || [])
+            descripcion: row.contenido || base.descripcion || '',
+            estatusFirma: row.estado || base.estatusFirma || 'firmada',
+            evidencias: (Array.isArray(prev.evidencias) && prev.evidencias.length > 0)
+              ? prev.evidencias
+              : (Array.isArray(row.fotos) ? row.fotos : (base.evidencias || []))
           };
         });
       }
@@ -646,7 +697,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
       if (hasExp) {
         const localExpMap = new Map(localCompras.map(e => [String(e.id), e]));
         localCompras = expRes.data.map(row => {
-          const base = (row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : {};
+          const base = (row.payload_json && typeof row.payload_json === 'object') ? row.payload_json : {};
           const rawId = base.id || String(row.id).replace(`${cloudId}__`, '');
           const prev = localExpMap.get(String(rawId)) || {};
           return {
@@ -654,20 +705,17 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
             ...base,
             id: rawId,
             fecha: row.fecha || base.fecha || '',
-            folio: row.folio || base.folio || '',
-            proveedor: row.proveedor || base.proveedor || '',
-            rfc: row.rfc || base.rfc || '',
-            concepto: row.concepto || base.concepto || '',
+            folio: row.folio_factura || base.folio || '',
+            proveedor: base.proveedor || row.proveedor_id || '',
+            concepto: row.descripcion || base.concepto || '',
             categoria: row.categoria || base.categoria || 'Materiales',
-            partidaId: row.partida_id || base.partidaId || 'general',
-            partidaNombre: row.partida_nombre || base.partidaNombre || 'Gasto General de Obra',
+            partidaId: row.concepto_id || base.partidaId || 'general',
             metodoPago: row.metodo_pago || base.metodoPago || 'Transferencia',
-            estatus: row.estatus || base.estatus || 'Pagado',
+            estatus: row.estado || base.estatus || 'Pagado',
             subtotal: Number(row.subtotal ?? base.subtotal ?? 0),
             iva: Number(row.iva ?? base.iva ?? 0),
             total: Number(row.total ?? base.total ?? 0),
-            notas: row.notas || base.notas || '',
-            comprobante: prev.comprobante || base.comprobante || null
+            comprobante: prev.comprobante || base.comprobante || row.evidencia_json || null
           };
         });
         localStorage.setItem(`adm_arq_compras_${pid}`, JSON.stringify(localCompras));
@@ -676,7 +724,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
       if (hasProv) {
         const localProvMap = new Map(localProveedores.map(p => [String(p.id), p]));
         localProveedores = provRes.data.map(row => {
-          const base = (row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : {};
+          const base = (row.payload_json && typeof row.payload_json === 'object') ? row.payload_json : {};
           const rawId = base.id || String(row.id).replace(`${cloudId}__`, '');
           const prev = localProvMap.get(String(rawId)) || {};
           return {
@@ -684,20 +732,10 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
             ...base,
             id: rawId,
             nombre: row.nombre || base.nombre || '',
-            razonSocial: row.razon_social || base.razonSocial || '',
             rfc: row.rfc || base.rfc || '',
-            especialidad: row.especialidad || base.especialidad || 'Materiales',
-            contacto: row.contacto || base.contacto || '',
+            especialidad: row.categoria || base.especialidad || 'Materiales',
             telefono: row.telefono || base.telefono || '',
             email: row.email || base.email || '',
-            direccion: row.direccion || base.direccion || '',
-            banco: row.banco || base.banco || '',
-            clabe: row.clabe || base.clabe || '',
-            cuenta: row.cuenta || base.cuenta || '',
-            diasCredito: Number(row.dias_credito ?? base.diasCredito ?? 0),
-            limiteCredito: Number(row.limite_credito ?? base.limiteCredito ?? 0),
-            calificacion: Number(row.calificacion ?? base.calificacion ?? 5),
-            estatus: row.estatus || base.estatus || 'Activo',
             notas: row.notas || base.notas || ''
           };
         });
@@ -722,45 +760,36 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
         if (rawEst) localEst = JSON.parse(rawEst);
       } catch (_) {}
 
-      const cfgRow = estRes.data.find(r => r.id === `__CONFIG__${cloudId}` || r.titulo === '__CONFIG__');
+      const cfgRow = estRes.data.find(r => r.numero === 0 || r.nombre === '__CONFIG__' || r.resumen?.isConfigRow);
       if (cfgRow) {
-        localEst.anticipoPct = cfgRow.anticipo_pct !== undefined && cfgRow.anticipo_pct !== null
-          ? Number(cfgRow.anticipo_pct)
-          : (cfgRow.datos_json?.anticipoPct ?? 30);
-        localEst.retencionPct = cfgRow.retencion_pct !== undefined && cfgRow.retencion_pct !== null
-          ? Number(cfgRow.retencion_pct)
-          : (cfgRow.datos_json?.retencionPct ?? 0);
-        if (cfgRow.datos_json?.anticipoPagado !== undefined) {
-          localEst.anticipoPagado = Number(cfgRow.datos_json.anticipoPagado) || 0;
-        }
-        if (cfgRow.datos_json?.notasGenerales !== undefined) {
-          localEst.notasGenerales = cfgRow.datos_json.notasGenerales || '';
-        }
+        const resCfg = (cfgRow.resumen && typeof cfgRow.resumen === 'object') ? cfgRow.resumen : {};
+        localEst.anticipoPct = resCfg.anticipoPct !== undefined ? Number(resCfg.anticipoPct) : 30;
+        localEst.retencionPct = resCfg.retencionPct !== undefined ? Number(resCfg.retencionPct) : 0;
+        if (resCfg.anticipoPagado !== undefined) localEst.anticipoPagado = Number(resCfg.anticipoPagado) || 0;
+        if (cfgRow.notas || resCfg.notasGenerales) localEst.notasGenerales = cfgRow.notas || resCfg.notasGenerales || '';
       }
 
-      const estRows = estRes.data.filter(r => r.id !== `__CONFIG__${cloudId}` && r.titulo !== '__CONFIG__');
+      const estRows = estRes.data.filter(r => r.numero !== 0 && r.nombre !== '__CONFIG__' && !r.resumen?.isConfigRow);
       localEst.estimaciones = estRows.map(row => {
-        const base = (row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : {};
-        const rawId = base.id || String(row.id).replace(`${cloudId}__`, '');
+        const base = (row.detalles_json && typeof row.detalles_json === 'object') ? row.detalles_json : {};
+        const rawId = base.id || row.id;
         return {
           ...base,
           id: rawId,
+          cloudUuid: row.id,
           numero: Number(row.numero ?? base.numero ?? 1),
-          titulo: row.titulo || base.titulo || `Estimación #${row.numero || 1}`,
+          titulo: row.nombre || base.titulo || `Estimación #${row.numero || 1}`,
           periodoInicio: row.fecha_inicio || base.periodoInicio || base.fechaInicio || '',
-          periodoFin: row.fecha_corte || base.periodoFin || base.fechaCorte || '',
+          periodoFin: row.fecha_corte || row.fecha_fin || base.periodoFin || base.fechaCorte || '',
           fechaInicio: row.fecha_inicio || base.fechaInicio || base.periodoInicio || '',
-          fechaCorte: row.fecha_corte || base.fechaCorte || base.periodoFin || '',
-          estado: row.estatus || base.estado || base.estatus || 'borrador',
-          estatus: row.estatus || base.estatus || base.estado || 'borrador',
+          fechaCorte: row.fecha_corte || row.fecha_fin || base.fechaCorte || base.periodoFin || '',
+          estado: row.estado || base.estado || base.estatus || 'borrador',
+          estatus: row.estado || base.estatus || base.estado || 'borrador',
           observaciones: row.notas || base.observaciones || base.notas || '',
           notas: row.notas || base.notas || base.observaciones || '',
-          avances: (row.conceptos_avance && typeof row.conceptos_avance === 'object' && !Array.isArray(row.conceptos_avance))
-            ? row.conceptos_avance
-            : (base.avances || {}),
-          items: Array.isArray(base.items)
-            ? base.items
-            : (Array.isArray(row.conceptos_avance) ? row.conceptos_avance : [])
+          locked: Boolean(row.locked ?? base.locked),
+          avances: base.avances || {},
+          items: Array.isArray(base.items) ? base.items : []
         };
       });
 
@@ -774,21 +803,21 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
 
     // 4. Cronograma y Candados de Pestañas
     if (cronoRes.data && !cronoRes.error) {
-      const c = cronoRes.data;
-      if (c.schedule_cfg && Object.keys(c.schedule_cfg).length > 0) {
-        const sJson = JSON.stringify(c.schedule_cfg);
+      const cfg = (cronoRes.data.config_json && typeof cronoRes.data.config_json === 'object') ? cronoRes.data.config_json : {};
+      if (cfg.schedule_cfg && Object.keys(cfg.schedule_cfg).length > 0) {
+        const sJson = JSON.stringify(cfg.schedule_cfg);
         localStorage.setItem(`calendario_arq_cfg_${pid}`, sJson);
         localStorage.setItem(`calendario_cfg_${pid}`, sJson);
         changed = true;
       }
-      if (c.workdays_cfg && Object.keys(c.workdays_cfg).length > 0) {
-        const wJson = JSON.stringify(c.workdays_cfg);
+      if (cfg.workdays_cfg && Object.keys(cfg.workdays_cfg).length > 0) {
+        const wJson = JSON.stringify(cfg.workdays_cfg);
         localStorage.setItem(`calendario_arq_workdays_${pid}`, wJson);
         localStorage.setItem(`calendario_workdays_${pid}`, wJson);
         changed = true;
       }
-      if (c.tab_locks && Object.keys(c.tab_locks).length > 0) {
-        localStorage.setItem(`adm_arq_tab_locks_${pid}`, JSON.stringify(c.tab_locks));
+      if (cfg.tab_locks && Object.keys(cfg.tab_locks).length > 0) {
+        localStorage.setItem(`adm_arq_tab_locks_${pid}`, JSON.stringify(cfg.tab_locks));
         changed = true;
       }
     } else if (
@@ -813,7 +842,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
 
       const localMap = new Map(localChat.map(m => [normalizeChatId(m.id), m]));
       const merged = chatRes.data.map(row => {
-        const base = (row.datos_json && typeof row.datos_json === 'object') ? row.datos_json : {};
+        const base = (row.payload_json && typeof row.payload_json === 'object') ? row.payload_json : {};
         const rawId = normalizeChatId(base.id || row.id);
         const prev = localMap.get(rawId) || {};
         return {
@@ -821,17 +850,17 @@ export async function hydrateProjectModulesFromCloud(projectId = null) {
           ...base,
           id: rawId,
           partidaId: row.partida_id || base.partidaId || '__GENERAL__',
-          partidaClave: row.partida_clave || base.partidaClave || 'GENERAL',
-          partidaNombre: row.partida_nombre || base.partidaNombre || 'General de Obra',
+          partidaClave: base.partidaClave || 'GENERAL',
+          partidaNombre: base.partidaNombre || 'General de Obra',
           authorEmail: row.autor_email || base.authorEmail || '',
           authorName: row.autor_nombre || base.authorName || '',
           authorAvatar: prev.authorAvatar || row.autor_avatar || base.authorAvatar || '',
-          text: row.texto ?? base.text ?? '',
-          mentions: Array.isArray(row.menciones) ? row.menciones : (base.mentions || []),
+          text: row.mensaje ?? base.text ?? '',
+          mentions: Array.isArray(row.etiquetas) ? row.etiquetas : (base.mentions || []),
           attachments: (Array.isArray(prev.attachments) && prev.attachments.length > 0)
             ? prev.attachments
             : (Array.isArray(row.adjuntos) ? row.adjuntos : (base.attachments || [])),
-          createdAt: row.creado_en || base.createdAt || new Date().toISOString()
+          createdAt: row.created_at || base.createdAt || new Date().toISOString()
         };
       });
 

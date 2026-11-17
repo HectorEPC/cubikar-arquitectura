@@ -1,9 +1,9 @@
 // js/modules/presupuesto/presupuestoModel.js
 // Modelo de datos, cálculos arancelarios FCARM/Cost-Plus y operaciones del árbol para la pestaña 1. Presupuesto
 
-import { state, persistLocalData, persistSettings } from '../../state/store.js?v=20261116_cf12';
-import { saveState } from '../../state/history.js?v=20261116_cf12';
-import { round2, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf12';
+import { state, persistLocalData, persistSettings } from '../../state/store.js?v=20261116_cf13';
+import { saveState } from '../../state/history.js?v=20261116_cf13';
+import { round2, getCurrencyCode } from '../../core/formatters.js?v=20261116_cf13';
 import {
   hasOwnCotizaciones,
   getOwnWinnerCotizacion,
@@ -13,10 +13,10 @@ import {
   getNominaOficinaBreakdown,
   getUtilidadDespachoPct,
   getEjecutivoCostPlusFactor
-} from '../../core/calculations.js?v=20261116_cf12';
-import { findNodeById, findNodeContext } from '../catalog/treeService.js?v=20261116_cf12';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf12';
+} from '../../core/calculations.js?v=20261116_cf13';
+import { findNodeById, findNodeContext } from '../catalog/treeService.js?v=20261116_cf13';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf13';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf13';
 
 // Factores y Tabuladores Oficiales FCARM (Federación de Colegios de Arquitectos de la República Mexicana)
 export const FCARM_TIPOLOGIAS = [
@@ -134,7 +134,9 @@ export function getProjectPresupuestoConfig() {
     cfg.retencionIvaPct = 0;
     state.settings._advOptsDefaultOffV1 = true;
     cfg._advOptsDefaultOffV1 = true;
-    persistSettings();
+    try {
+      localStorage.setItem(getSettingsKey(), JSON.stringify(state.settings));
+    } catch (_) {}
   } else {
     state.settings._advOptsDefaultOffV1 = true;
     cfg._advOptsDefaultOffV1 = true;

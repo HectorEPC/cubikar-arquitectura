@@ -13,13 +13,13 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf12';
+} from '../../config/constants.js?v=20261116_cf13';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf12';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf12';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf12';
-import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf12';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf13';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf13';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf13';
+import { deleteProjectFromCloud } from '../../core/cloudProjectService.js?v=20261116_cf13';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -1160,7 +1160,27 @@ export function createNewProject(params) {
     })
   });
 
+  const assignNodeAndInsumoUuids = (nodes) => {
+    if (!Array.isArray(nodes)) return;
+    nodes.forEach((n) => {
+      if (!n || typeof n !== 'object') return;
+      const uid = (n.uuid && /^[0-9a-f]{8}-/i.test(String(n.uuid)))
+        ? n.uuid
+        : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
+      n.uuid = uid;
+      if (Array.isArray(n.insumos)) {
+        n.insumos.forEach((ins) => {
+          if (!ins || typeof ins !== 'object') return;
+          if (!ins.uuid || !/^[0-9a-f]{8}-/i.test(String(ins.uuid))) {
+            ins.uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+          }
+        });
+      }
+      if (Array.isArray(n.children)) assignNodeAndInsumoUuids(n.children);
+    });
+  };
   const projTree = params.template === 'demo' ? JSON.parse(JSON.stringify(defaultTreeData)) : [];
+  assignNodeAndInsumoUuids(projTree);
 
   // Almacenar settings y catálogo del nuevo proyecto
   try {

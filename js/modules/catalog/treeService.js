@@ -1,14 +1,14 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261116_cf12';
-import { saveState } from '../../state/history.js?v=20261116_cf12';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf12';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf12';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf12';
-import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf12';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf12';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf12';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf12';
-import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf12';
+import { state, persistLocalData } from '../../state/store.js?v=20261116_cf13';
+import { saveState } from '../../state/history.js?v=20261116_cf13';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf13';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261116_cf13';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261116_cf13';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261116_cf13';
+import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf13';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261116_cf13';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261116_cf13';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261116_cf13';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261116_cf13';
 
 function createNodeUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -18,6 +18,19 @@ function createNodeUuid() {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
+  });
+}
+
+function isValidNodeUuid(val) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val || '').trim());
+}
+
+function renewInsumosUuids(insumos) {
+  if (!Array.isArray(insumos)) return [];
+  return JSON.parse(JSON.stringify(insumos)).map((ins) => {
+    if (!ins || typeof ins !== 'object') return ins;
+    const nextUuid = createNodeUuid();
+    return { ...ins, id: nextUuid, uuid: nextUuid };
   });
 }
 
@@ -118,7 +131,8 @@ export function addRootRow() {
     changeType: 'row_added',
     highlightId: newId,
     changeDescription: 'una partida principal',
-    patch: { type: 'add_root_row', node: newPartida }
+    skipFullCloudSync: true,
+    patch: { type: 'add_root_row', node: newPartida, orden: state.treeData.length - 1 }
   });
   renderTAB1();
   showToast('Partida agregada', 'success');
@@ -160,7 +174,15 @@ export function addChildRow(parentId, e) {
     changeType: 'row_added',
     highlightId: newId,
     changeDescription: 'un nuevo concepto',
-    patch: { type: 'add_child_row', parentId, node: newNode }
+    skipFullCloudSync: true,
+    patch: {
+      type: 'add_child_row',
+      parentId: parent.id,
+      parentUuid: parent.uuid || parent.id,
+      parentClave: parent.clave || '',
+      node: newNode,
+      orden: parent.children.length - 1
+    }
   });
   renderTAB1();
   showToast('Sub-renglón agregado', 'success');
@@ -179,8 +201,10 @@ export function duplicarNode(id, e) {
   if (!nodeToDuplicate) return;
 
   function cloneNode(node) {
+    const clonedUuid = createNodeUuid();
     return {
-      id: '_' + Math.random().toString(36).substr(2, 9),
+      id: clonedUuid,
+      uuid: clonedUuid,
       clave: '',
       descripcion: node.descripcion + ' (Copia)',
       unidad: node.unidad,
@@ -193,22 +217,34 @@ export function duplicarNode(id, e) {
       googleSearchQueries: node.googleSearchQueries ? [...node.googleSearchQueries] : [],
       googleSources: node.googleSources ? [...node.googleSources] : [],
       aiTips: node.aiTips || '',
-      insumos: JSON.parse(JSON.stringify(node.insumos || [])),
+      insumos: renewInsumosUuids(node.insumos || []),
       children: (node.children || []).map(child => cloneNode(child))
     };
   }
 
   const cloned = cloneNode(nodeToDuplicate);
-  const parentList = findParentArrayOfNode(state.treeData, id);
+  const ctx = findNodeContext(state.treeData, nodeToDuplicate.id);
+  const parentList = ctx ? ctx.parentArray : findParentArrayOfNode(state.treeData, id);
   if (parentList) {
-    const index = parentList.findIndex(n => n.id === id);
-    parentList.splice(index + 1, 0, cloned);
+    const index = parentList.findIndex(n => n.id === nodeToDuplicate.id);
+    const insertAt = index >= 0 ? index + 1 : parentList.length;
+    parentList.splice(insertAt, 0, cloned);
     recalculateClaves(state.treeData);
     persistLocalData(true, {
       changeType: 'row_added',
       highlightId: cloned.id,
       changeDescription: 'renglón duplicado',
-      patch: { type: 'duplicate_node', id, clonedNode: cloned }
+      skipFullCloudSync: true,
+      patch: {
+        type: 'duplicate_node',
+        id: nodeToDuplicate.id,
+        uuid: nodeToDuplicate.uuid || nodeToDuplicate.id,
+        clave: nodeToDuplicate.clave || '',
+        parentId: ctx?.parent?.id || null,
+        parentUuid: ctx?.parent?.uuid || ctx?.parent?.id || null,
+        position: insertAt,
+        clonedNode: cloned
+      }
     });
     renderTAB1();
     showToast('Renglón duplicado', 'success');
@@ -347,15 +383,13 @@ export function pegarNode(targetId, e) {
 
   // Renovación recursiva de IDs únicos y preservación íntegra de la Matriz APU
   function renewNodeDeep(n) {
-    n.id = '_' + Math.random().toString(36).substr(2, 9);
+    const nextUuid = createNodeUuid();
+    n.id = nextUuid;
+    n.uuid = nextUuid;
     n.selected = true;
 
-    // Clonar matriz de insumos sin mutar referencias
-    if (Array.isArray(n.insumos)) {
-      n.insumos = JSON.parse(JSON.stringify(n.insumos));
-    } else {
-      n.insumos = [];
-    }
+    // Clonar matriz de insumos con UUIDs únicos sin mutar referencias
+    n.insumos = renewInsumosUuids(n.insumos || []);
 
     // Sin cotizaciones agregadas, el precio unitario y costo directo parten en 0.00
     if (hasOwnCotizaciones(n)) {
@@ -384,7 +418,24 @@ export function pegarNode(targetId, e) {
   parentList.splice(position, 0, pastedNode);
 
   recalculateClaves(state.treeData);
-  persistLocalData();
+  const pasteCtx = findNodeContext(state.treeData, pastedNode.id);
+  const targetNodeRef = targetId ? findNodeById(state.treeData, targetId) : null;
+  persistLocalData(true, {
+    changeType: 'row_added',
+    highlightId: pastedNode.id,
+    changeDescription: 'concepto pegado',
+    skipFullCloudSync: true,
+    patch: {
+      type: 'paste_node',
+      targetId: targetId || null,
+      targetUuid: targetNodeRef?.uuid || targetId || null,
+      targetClave: targetNodeRef?.clave || '',
+      parentId: pasteCtx?.parent?.id || null,
+      parentUuid: pasteCtx?.parent?.uuid || pasteCtx?.parent?.id || null,
+      position,
+      node: pastedNode
+    }
+  });
   renderTAB1();
 
   // Resaltar la fila pegada en la tabla (el panel lateral solo se abre con el botón de fila)
@@ -574,9 +625,13 @@ export function deleteNode(id, e) {
   state.treeData = removeRecursive(state.treeData);
   if (state.activeSelectedId === id) closeApuPanel();
   recalculateClaves(state.treeData);
+  if (typeof window !== 'undefined' && typeof window.markLocalConceptsDeleted === 'function') {
+    window.markLocalConceptsDeleted(getActiveProjectId(), [targetUuid, id, ...descendantUuids]);
+  }
   persistLocalData(true, {
     changeType: 'row_deleted',
     changeDescription: 'una fila del catálogo',
+    skipFullCloudSync: true,
     patch: { type: 'delete_node', id, uuid: targetUuid, clave: targetClave, descendantUuids }
   });
   renderTAB1();
@@ -638,9 +693,13 @@ export function deleteSelectedRow() {
     }
 
     recalculateClaves(state.treeData);
+    if (typeof window !== 'undefined' && typeof window.markLocalConceptsDeleted === 'function') {
+      window.markLocalConceptsDeleted(getActiveProjectId(), [...deletedUuids, ...deletedIds]);
+    }
     persistLocalData(true, {
       changeType: 'row_deleted',
       changeDescription: `${checkedTotal} fila(s) del catálogo`,
+      skipFullCloudSync: true,
       patch: {
         type: 'delete_nodes',
         ids: deletedIds,
@@ -672,6 +731,9 @@ export function updateNode(id, field, value) {
   }
   const node = findNodeById(state.treeData, id);
   if (node) {
+    if (!isValidNodeUuid(node.uuid)) {
+      node.uuid = isValidNodeUuid(node.id) ? String(node.id) : createNodeUuid();
+    }
     if (field === 'cantidad' || field === 'precioUnitario' || field === 'costoDirecto' || field === 'costo_proveedor') {
       node[field] = Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
     } else if (field === 'porcentaje_relativo') {
@@ -683,8 +745,10 @@ export function updateNode(id, field, value) {
     calculateProrrateoCascade(state.treeData);
     try {
       broadcastConceptChange(node);
-      pushConceptUpdateToSupabase(node);
     } catch (_) {}
+    const isConfirmedInCloud = typeof window !== 'undefined' && typeof window.isConceptConfirmedInCloud === 'function'
+      ? window.isConceptConfirmedInCloud(getActiveProjectId(), node.uuid)
+      : true;
     persistLocalData(true, {
       changeType: 'text_edit',
       highlightId: node.id,
@@ -692,12 +756,12 @@ export function updateNode(id, field, value) {
       patch: {
         type: 'update_field',
         id: node.id,
-        uuid: node.uuid || node.id,
+        uuid: node.uuid,
         clave: node.clave || '',
         field,
         value: node[field]
       },
-      skipFullCloudSync: field !== 'porcentaje_relativo'
+      skipFullCloudSync: field !== 'porcentaje_relativo' && isConfirmedInCloud
     });
     renderTAB1();
   }
@@ -990,4 +1054,8 @@ export function getSelectedLeafConcepts() {
   }
   walk(state.treeData);
   return selected;
+}
+
+if (typeof window !== 'undefined') {
+  window.recalculateClaves = recalculateClaves;
 }

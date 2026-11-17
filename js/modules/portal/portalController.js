@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261116_cf12';
+} from '../../config/constants.js?v=20261116_cf13';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -64,15 +64,15 @@ import {
   SAMPLE_LOGOS,
   setActiveWorkspaceData,
   getActiveWorkspaceData
-} from './projectService.js?v=20261116_cf12';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf12';
-import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf12';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf12';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf12';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf12';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf12';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf12';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf12';
+} from './projectService.js?v=20261116_cf13';
+import { showToast } from '../../ui/notifications.js?v=20261116_cf13';
+import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf13';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf13';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf13';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf13';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf13';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf13';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf13';
 import {
   signUp,
   signInWithPassword,
@@ -83,16 +83,16 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261116_cf12';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf12';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf12';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf12';
+} from '../../core/authService.js?v=20261116_cf13';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf13';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf13';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf13';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261116_cf12';
-import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf12';
+} from '../admin/cubikarAdmin.js?v=20261116_cf13';
+import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf13';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -3069,10 +3069,17 @@ export async function finalizeCreateProject() {
 
     const pTree = rawTree ? JSON.parse(rawTree) : [];
     const pSettings = rawSettings ? JSON.parse(rawSettings) : projPayload;
-    const syncTask = syncProjectToCloud(newProj, pSettings, pTree, {
-      onHeaderSynced: (syncedId) => markProjectSyncedInStorage(syncedId)
-    }).then((res) => {
+    let initialSyncFinished = false;
+    try { sessionStorage.setItem(`cubikar_pending_initial_upload_${newProj.id}`, '1'); } catch (_) {}
+    const syncTask = syncProjectToCloud(newProj, pSettings, pTree).then((res) => {
+      initialSyncFinished = true;
       if (res && res.success) {
+        try {
+          if (Array.isArray(pTree) && pTree.length > 0) {
+            localStorage.setItem(getStorageKey(newProj.id), JSON.stringify(pTree));
+          }
+          sessionStorage.removeItem(`cubikar_pending_initial_upload_${newProj.id}`);
+        } catch (_) {}
         markProjectSyncedInStorage(res.projectId || assignedUuid);
       }
       return res;
@@ -3083,8 +3090,15 @@ export async function finalizeCreateProject() {
 
     await Promise.race([
       syncTask,
-      new Promise(resolve => setTimeout(resolve, 6000))
+      new Promise(resolve => setTimeout(resolve, 6500))
     ]);
+    if (!initialSyncFinished) {
+      try {
+        if (Array.isArray(pTree) && pTree.length > 0) {
+          localStorage.setItem(getStorageKey(newProj.id), JSON.stringify(pTree));
+        }
+      } catch (_) {}
+    }
   } catch (err) {
     console.warn('[CloudSync] Aviso al respaldar nuevo proyecto:', err);
   } finally {
