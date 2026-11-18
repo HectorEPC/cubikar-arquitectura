@@ -3,10 +3,10 @@
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 // Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261117_cf27';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf27';
-import { isValidUUID } from './cloudProjectService.js?v=20261117_cf27';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261117_cf27';
+import { getActiveProjectId } from '../config/constants.js?v=20261117_cf30';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf30';
+import { isValidUUID } from './cloudProjectService.js?v=20261117_cf30';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261117_cf30';
 
 const syncTimers = {
   bitacora: null,

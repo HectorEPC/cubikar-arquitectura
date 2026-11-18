@@ -1,8 +1,8 @@
 // js/core/realtimeSync.js
 // Sincronización en tiempo real vía WebSockets (Supabase Realtime) y Colaboración en vivo
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf27';
-import { state } from '../state/store.js?v=20261117_cf27';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf30';
+import { state } from '../state/store.js?v=20261117_cf30';
 import {
   getCurrentUser,
   getStoredInvitations,
@@ -21,10 +21,10 @@ import {
   unmarkProjectTrashedLocal,
   isProjectTrashedLocal,
   saveCurrentUser
-} from '../modules/portal/projectService.js?v=20261117_cf27';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261117_cf27';
-import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261117_cf27';
-import { showToast } from '../ui/notifications.js?v=20261117_cf27';
+} from '../modules/portal/projectService.js?v=20261117_cf30';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261117_cf30';
+import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261117_cf30';
+import { showToast } from '../ui/notifications.js?v=20261117_cf30';
 
 let activeChannel = null;
 let currentSubscribedProjectId = null;
@@ -2553,6 +2553,12 @@ function isUserMentionedInIncomingMsg(currentUser, proj, message) {
   if (myName) {
     addTok('@' + myName.replace(/\s+/g, '.'));
     addTok('@' + myName.replace(/\s+/g, ''));
+    const parts = myName.split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    if (parts.length >= 2) {
+      const surname = parts.length >= 4 ? parts[2] : parts[1];
+      addTok(`@${parts[0]}.${surname.charAt(0)}`);
+      addTok(`@${parts[0]}.${surname.charAt(0)}.`);
+    }
   }
   const members = Array.isArray(proj?.members) ? proj.members : [];
   members.forEach(m => {
@@ -2560,7 +2566,14 @@ function isUserMentionedInIncomingMsg(currentUser, proj, message) {
     const mNameNorm = normChatTextToken(m?.name);
     if ((myEmail && mEmail === myEmail) || (myName && mNameNorm && mNameNorm === normChatTextToken(myName))) {
       const cleanName = String(m?.name || '').trim();
-      if (cleanName) addTok('@' + cleanName.replace(/\s+/g, '.'));
+      if (cleanName) {
+        addTok('@' + cleanName.replace(/\s+/g, '.'));
+        const mParts = cleanName.split(/\s+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+        if (mParts.length >= 2) {
+          const mSurname = mParts.length >= 4 ? mParts[2] : mParts[1];
+          addTok(`@${mParts[0]}.${mSurname.charAt(0)}`);
+        }
+      }
     }
   });
   return mentions.some(tag => selfTokens.has(normChatTextToken(tag)) || selfTokens.has(String(tag).toLowerCase().trim()));

@@ -1,15 +1,15 @@
-import { state } from '../../state/store.js?v=20261117_cf27';
-import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261117_cf27';
-import { getHierarchyColor } from '../../core/colors.js?v=20261117_cf27';
-import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261117_cf27';
-import { findNodeById } from './treeService.js?v=20261117_cf27';
-import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261117_cf27';
-import { clampApuWidth } from '../../ui/resizer.js?v=20261117_cf27';
-import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261117_cf27';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf27';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261117_cf27';
-import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261117_cf27';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261117_cf27';
+import { state } from '../../state/store.js?v=20261117_cf30';
+import { formatMoney, formatQty, getCurrencySymbol, round2 } from '../../core/formatters.js?v=20261117_cf30';
+import { getHierarchyColor } from '../../core/colors.js?v=20261117_cf30';
+import { calculateParentTotal, getEffectivePrecioUnitario, updateGrandTotal, updateSobrecostoBadge, calculateProrrateoCascade, getGroupProrrateoStatus } from '../../core/calculations.js?v=20261117_cf30';
+import { findNodeById } from './treeService.js?v=20261117_cf30';
+import { APU_WIDTH_KEY } from '../../config/constants.js?v=20261117_cf30';
+import { clampApuWidth } from '../../ui/resizer.js?v=20261117_cf30';
+import { isTabLocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261117_cf30';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf30';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261117_cf30';
+import { switchSidePanelTab } from '../proveedores/proveedoresView.js?v=20261117_cf30';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261117_cf30';
 
 const SIDEPANEL_BTN_BASE_CLASS = 'sidepanel-row-btn px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0';
 const SIDEPANEL_BTN_ACTIVE_CLASS = `${SIDEPANEL_BTN_BASE_CLASS} bg-blue-600 text-white shadow-xs`;

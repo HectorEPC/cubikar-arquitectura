@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261117_cf27';
+} from '../../config/constants.js?v=20261117_cf30';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -71,8 +71,8 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getProjectCompanyLogo
-} from './projectService.js?v=20261117_cf27';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf27';
+} from './projectService.js?v=20261117_cf30';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf30';
 import {
   persistLocalData,
   state,
@@ -81,13 +81,13 @@ import {
   resolveSettingsForCloudSync,
   markCatalogTreeSynced,
   markSettingsSynced
-} from '../../state/store.js?v=20261117_cf27';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261117_cf27';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf27';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261117_cf27';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261117_cf27';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261117_cf27';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261117_cf27';
+} from '../../state/store.js?v=20261117_cf30';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261117_cf30';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf30';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261117_cf30';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261117_cf30';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261117_cf30';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261117_cf30';
 import {
   signUp,
   signInWithPassword,
@@ -98,24 +98,24 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261117_cf27';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261117_cf27';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261117_cf27';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261117_cf27';
+} from '../../core/authService.js?v=20261117_cf30';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261117_cf30';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261117_cf30';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261117_cf30';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261117_cf27';
-import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261117_cf27';
-import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261117_cf27';
+} from '../admin/cubikarAdmin.js?v=20261117_cf30';
+import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261117_cf30';
+import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261117_cf30';
 import {
   isProjectHostOwner,
   fetchTrashedProjectsForHost,
   getCachedTrashCount,
   updateTrashBadgeUI,
   openTrashModal
-} from './trashService.js?v=20261117_cf27';
+} from './trashService.js?v=20261117_cf30';
 
 let customPhotoTemp = null;
 let wizardData = {
