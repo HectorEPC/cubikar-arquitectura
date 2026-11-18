@@ -2,13 +2,13 @@
 // Modelo de datos y lógica de cálculo para ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con state.treeData (Catálogo Base)
 
-import { state } from '../../state/store.js?v=20261116_cf22';
-import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261116_cf22';
-import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261116_cf22';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261116_cf22';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261116_cf22';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf22';
-import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261116_cf22';
+import { state } from '../../state/store.js?v=20261117_cf25';
+import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261117_cf25';
+import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261117_cf25';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261117_cf25';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf25';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
+import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf25';
 
 const STORAGE_KEY_ARQ_PREFIX = 'estimaciones_arq_data_';
 const STORAGE_KEY_PREFIX = 'estimaciones_data_';
@@ -742,39 +742,29 @@ export function getEstimacionesCalculatedData() {
   };
 }
 
-// Calcular el avance estimado real de cualquier proyecto sumando TODAS sus Estimaciones registradas
-export function calculateProjectTotalEstimacionesSummary(projectId, fallbackTotalPresupuesto = 0) {
-  let treeNodes = [];
-  try {
-    if (projectId && projectId === getActiveProjectId() && Array.isArray(state.treeData) && state.treeData.length > 0) {
-      treeNodes = state.treeData;
-    } else if (typeof localStorage !== 'undefined') {
-      const rawTree = localStorage.getItem(getStorageKey(projectId));
-      if (rawTree) {
-        const parsedTree = JSON.parse(rawTree);
-        if (Array.isArray(parsedTree)) treeNodes = parsedTree;
-      }
-    }
-  } catch (e) {
-    treeNodes = [];
-  }
+const estimacionesSummaryCache = new Map();
 
-  let estimaciones = [];
-  try {
-    if (typeof localStorage !== 'undefined') {
-      const rawEst = localStorage.getItem(getEstimacionesStorageKeyForProject(projectId))
-        || localStorage.getItem(getEstimacionesLegacyKeyForProject(projectId));
-      if (rawEst) {
-        const parsedEst = JSON.parse(rawEst);
-        if (Array.isArray(parsedEst?.estimaciones)) {
-          estimaciones = parsedEst.estimaciones;
-        }
-      }
-    }
-  } catch (e) {
-    estimaciones = [];
+function fingerprintRaw(raw) {
+  if (!raw) return '0';
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
   }
+  return `${raw.length}:${(hash >>> 0).toString(36)}`;
+}
 
+function parseArrayOrEmpty(raw, pick = (v) => v) {
+  if (!raw) return [];
+  try {
+    const value = pick(JSON.parse(raw));
+    return Array.isArray(value) ? value : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function computeEstimacionesSummary(treeNodes, estimaciones, fallbackTotalPresupuesto) {
   let grandTotalBase = 0;
   let grandTotalEstimado = 0;
 
@@ -824,6 +814,46 @@ export function calculateProjectTotalEstimacionesSummary(projectId, fallbackTota
     barWidthPct,
     estimacionesCount: estimaciones.length
   };
+}
+
+// Calcular el avance estimado real de cualquier proyecto sumando TODAS sus Estimaciones registradas.
+// Para proyectos no activos en memoria, cachea el resultado por id + huella de cadenas crudas en localStorage.
+export function calculateProjectTotalEstimacionesSummary(projectId, fallbackTotalPresupuesto = 0) {
+  let rawPrimary = null;
+  let rawLegacy = null;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      rawPrimary = localStorage.getItem(getEstimacionesStorageKeyForProject(projectId));
+      if (!rawPrimary) {
+        rawLegacy = localStorage.getItem(getEstimacionesLegacyKeyForProject(projectId));
+      }
+    }
+  } catch (_) {}
+  const rawEst = rawPrimary || rawLegacy;
+  const parseEstimaciones = () => parseArrayOrEmpty(rawEst, parsed => parsed?.estimaciones);
+
+  const isActiveInMemory = projectId && projectId === getActiveProjectId() && Array.isArray(state.treeData) && state.treeData.length > 0;
+  if (isActiveInMemory) {
+    return computeEstimacionesSummary(state.treeData, parseEstimaciones(), fallbackTotalPresupuesto);
+  }
+
+  let rawTree = null;
+  try {
+    rawTree = typeof localStorage !== 'undefined' ? localStorage.getItem(getStorageKey(projectId)) : null;
+  } catch (_) {}
+
+  const cacheKey = `${fingerprintRaw(rawTree)}|${rawPrimary ? 'p' : 'l'}:${fingerprintRaw(rawEst)}|${Number(fallbackTotalPresupuesto) || 0}`;
+  const cached = estimacionesSummaryCache.get(projectId);
+  if (cached && cached.key === cacheKey) {
+    return { ...cached.result };
+  }
+
+  if (estimacionesSummaryCache.size > 500) {
+    estimacionesSummaryCache.clear();
+  }
+  const result = computeEstimacionesSummary(parseArrayOrEmpty(rawTree), parseEstimaciones(), fallbackTotalPresupuesto);
+  estimacionesSummaryCache.set(projectId, { key: cacheKey, result });
+  return { ...result };
 }
 
 // =========================================================================

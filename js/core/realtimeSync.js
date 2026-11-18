@@ -1,8 +1,8 @@
 // js/core/realtimeSync.js
 // Sincronización en tiempo real vía WebSockets (Supabase Realtime) y Colaboración en vivo
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261116_cf22';
-import { state } from '../state/store.js?v=20261116_cf22';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf25';
+import { state } from '../state/store.js?v=20261117_cf25';
 import {
   getCurrentUser,
   getStoredInvitations,
@@ -15,12 +15,16 @@ import {
   countTreePartidas,
   calculateTreeTotal,
   markProjectDeleted,
+  unmarkProjectDeleted,
   isProjectMarkedDeleted,
+  markProjectTrashedLocal,
+  unmarkProjectTrashedLocal,
+  isProjectTrashedLocal,
   saveCurrentUser
-} from '../modules/portal/projectService.js?v=20261116_cf22';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261116_cf22';
-import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261116_cf22';
-import { showToast } from '../ui/notifications.js?v=20261116_cf22';
+} from '../modules/portal/projectService.js?v=20261117_cf25';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261117_cf25';
+import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261117_cf25';
+import { showToast } from '../ui/notifications.js?v=20261117_cf25';
 
 let activeChannel = null;
 let currentSubscribedProjectId = null;
@@ -54,6 +58,10 @@ if (localBroadcastChannel) {
       handleIncomingProjectUpdate(payload);
     } else if (type === 'proyecto_eliminado') {
       handleIncomingProjectDeleted(payload);
+    } else if (type === 'proyecto_en_papelera') {
+      handleIncomingProjectTrashed(payload);
+    } else if (type === 'proyecto_restaurado') {
+      handleIncomingProjectRestored(payload);
     } else if (type === 'colaborador_removido') {
       handleIncomingCollaboratorRemoved(payload);
     } else if (type === 'chat_mensaje_nuevo') {
@@ -484,14 +492,14 @@ export function subscribeToProjectRealtime(projectId) {
   // Escuchar eliminación de este proyecto en tiempo real
   activeChannel.on('broadcast', { event: 'proyecto_eliminado' }, (payload) => {
     if (payload?.payload) {
-      handleIncomingProjectDeleted(payload.payload);
+      handleVerifiedProjectRemoval(payload.payload, handleIncomingProjectDeleted);
     }
   });
 
   // Escuchar remoción de colaboradores en tiempo real
   activeChannel.on('broadcast', { event: 'colaborador_removido' }, (payload) => {
     if (payload?.payload) {
-      handleIncomingCollaboratorRemoved(payload.payload);
+      handleVerifiedCollaboratorRemoved(payload.payload);
     }
   });
 
@@ -623,12 +631,14 @@ export function subscribeToProjectRealtime(projectId) {
     }
   });
 
-  activeChannel.subscribe(async (status) => {
+  const channelRef = activeChannel;
+  channelRef.subscribe(async (status) => {
+    if (activeChannel !== channelRef || !activeChannel) return;
     if (status === 'SUBSCRIBED') {
       console.info(`[Realtime] Conectado al canal WebSocket de la obra: ${canonicalCloudId}`);
       setTimeout(() => { hydrateProjectChatFromCloud(projectId); }, 350);
       const user = getCurrentUser();
-      if (user) {
+      if (user && activeChannel === channelRef && typeof activeChannel.track === 'function') {
         await activeChannel.track({
           userId: user.id || user.email,
           name: user.name || 'Usuario de Obra',
@@ -1283,28 +1293,55 @@ export function initGlobalRealtimeSync() {
   // 10. Escuchar eliminación global de proyectos en tiempo real
   globalSyncChannel.on('broadcast', { event: 'proyecto_eliminado_global' }, (payload) => {
     if (payload?.payload) {
-      handleIncomingProjectDeleted(payload.payload);
+      handleVerifiedProjectRemoval(payload.payload, handleIncomingProjectDeleted);
+    }
+  });
+
+  // 10B. Escuchar movimiento a papelera y restauración global en tiempo real
+  globalSyncChannel.on('broadcast', { event: 'proyecto_en_papelera_global' }, (payload) => {
+    if (payload?.payload) {
+      handleVerifiedProjectRemoval(payload.payload, handleIncomingProjectTrashed);
+    }
+  });
+  globalSyncChannel.on('broadcast', { event: 'proyecto_restaurado_global' }, (payload) => {
+    if (payload?.payload) {
+      handleIncomingProjectRestored(payload.payload);
     }
   });
 
   // 11. Escuchar remoción de colaboradores en tiempo real
   globalSyncChannel.on('broadcast', { event: 'colaborador_removido' }, (payload) => {
     if (payload?.payload) {
-      handleIncomingCollaboratorRemoved(payload.payload);
+      handleVerifiedCollaboratorRemoved(payload.payload);
     }
   });
 
-  // 12. Escuchar eliminación directa de proyectos en Supabase PostgreSQL (CDC en tiempo real)
+  // 12. Escuchar eliminación directa y cambios de papelera en Supabase PostgreSQL (CDC en tiempo real)
   globalSyncChannel.on(
     'postgres_changes',
     {
-      event: 'DELETE',
+      event: '*',
       schema: 'public',
       table: 'proyectos'
     },
     (payload) => {
-      if (payload?.old?.id) {
+      if (payload.eventType === 'DELETE' && payload?.old?.id) {
         handleIncomingProjectDeleted({ projectId: payload.old.id });
+      } else if (payload.eventType === 'UPDATE' && payload?.new?.id) {
+        const hadDeletedAt = Boolean(payload.old?.deleted_at);
+        const hasDeletedAt = Boolean(payload.new?.deleted_at);
+        if (hasDeletedAt && !hadDeletedAt) {
+          handleIncomingProjectTrashed({
+            projectId: payload.new.id,
+            ownerEmail: payload.new.owner_email || '',
+            deletedBy: payload.new.deleted_by_email || ''
+          });
+        } else if (!hasDeletedAt && hadDeletedAt) {
+          handleIncomingProjectRestored({
+            projectId: payload.new.id,
+            ownerEmail: payload.new.owner_email || ''
+          });
+        }
       }
     }
   );
@@ -1454,17 +1491,6 @@ export function broadcastNewInvitation(invitation, project) {
   if (!globalSyncChannel) initGlobalRealtimeSync();
   if (!globalSyncChannel || !invitation) return;
 
-  let localTree = null;
-  let localSettings = null;
-  if (project && project.id) {
-    try {
-      const rawTree = localStorage.getItem(getStorageKey(project.id));
-      if (rawTree) localTree = JSON.parse(rawTree);
-      const rawSettings = localStorage.getItem(getSettingsKey(project.id));
-      if (rawSettings) localSettings = JSON.parse(rawSettings);
-    } catch (_) {}
-  }
-
   globalSyncChannel.send({
     type: 'broadcast',
     event: 'nueva_invitacion',
@@ -1486,9 +1512,7 @@ export function broadcastNewInvitation(invitation, project) {
         ownerEmail: project.ownerEmail,
         ownerPlanId: project.ownerPlanId,
         members: project.members,
-        createdAt: project.createdAt,
-        treeData: localTree,
-        settings: localSettings
+        createdAt: project.createdAt
       } : null
     }
   });
@@ -1512,28 +1536,17 @@ function handleIncomingInvitation({ invitation, project }) {
     saveStoredInvitations(invs);
   }
 
-  // 2. Si viene el proyecto adjunto, guardarlo o actualizarlo en su lista local
+  // 2. Si viene el proyecto adjunto, guardar o actualizar sus metadatos en la lista local
   if (project && project.id) {
+    const cleanProject = stripProjectPayload(project);
     const list = getProjectsList();
-    const pIdx = list.findIndex(p => p.id === project.id);
+    const pIdx = list.findIndex(p => p.id === cleanProject.id);
     if (pIdx >= 0) {
-      list[pIdx] = Object.assign({}, list[pIdx], project);
+      list[pIdx] = Object.assign({}, list[pIdx], cleanProject);
     } else {
-      list.unshift(project);
+      list.unshift(cleanProject);
     }
     saveProjectsList(list);
-
-    // Guardar catálogo y configuración para que el invitado tenga acceso inmediato completo
-    if (Array.isArray(project.treeData)) {
-      try {
-        localStorage.setItem(getStorageKey(project.id), JSON.stringify(project.treeData));
-      } catch (_) {}
-    }
-    if (project.settings && typeof project.settings === 'object') {
-      try {
-        localStorage.setItem(getSettingsKey(project.id), JSON.stringify(project.settings));
-      } catch (_) {}
-    }
   }
 
   // 3. Notificar al usuario
@@ -1710,7 +1723,7 @@ function handleIncomingNewProject({ project, creatorName, creatorEmail }) {
     const list = getProjectsList();
     const exists = list.some(p => p.id === project.id);
     if (!exists) {
-      list.unshift(project);
+      list.unshift(stripProjectPayload(project));
       saveProjectsList(list);
 
       showToast(`🏢 ¡Nuevo proyecto "${project.projectName}" creado por ${creatorName || creatorEmail}!`, 'info');
@@ -1722,10 +1735,126 @@ function handleIncomingNewProject({ project, creatorName, creatorEmail }) {
   }
 }
 
-/**
- * Emitir broadcast cuando un proyecto es eliminado definitivamente
- */
-export function broadcastProjectDeleted(projectId, ownerEmail = null) {
+const PROJECT_PAYLOAD_FIELDS = ['treeData', 'settings', 'chatMessages'];
+const REMOVED_COLLABORATOR_STATES = new Set(['rejected', 'revoked']);
+
+function normalizeEmail(value) {
+  return String(value || '').toLowerCase().trim();
+}
+
+function getMyEmail() {
+  return normalizeEmail(getCurrentUser()?.email);
+}
+
+function isProjectOwnedBy(project, email) {
+  return Boolean(email) && normalizeEmail(project?.ownerEmail) === email;
+}
+
+function findProjectIndex(list, ids) {
+  const wanted = ids.filter(Boolean).map(v => String(v).trim());
+  return list.findIndex(p => p && (wanted.includes(p.id) || (p.cloudId && wanted.includes(p.cloudId))));
+}
+
+function findLocalProject(list, ...ids) {
+  const idx = findProjectIndex(list, ids);
+  return idx >= 0 ? list[idx] : null;
+}
+
+function resolveCloudProjectId(localProject, projectId) {
+  return String(localProject?.cloudId || projectId || '').trim();
+}
+
+function readLocalJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function toTimestamp(value) {
+  const ts = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+export function stripProjectPayload(project) {
+  if (!project || typeof project !== 'object') return project;
+  const clean = { ...project };
+  PROJECT_PAYLOAD_FIELDS.forEach((field) => { delete clean[field]; });
+  return clean;
+}
+
+export function isIncomingSettingsNewer(incomingSettings, localSettings) {
+  if (!incomingSettings || typeof incomingSettings !== 'object') return false;
+  if (!localSettings) return true;
+  const localTs = toTimestamp(localSettings.updatedAt);
+  return localTs > 0 && toTimestamp(incomingSettings.updatedAt) > localTs;
+}
+
+async function getVerifiedCloudClient() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+  if (!isSupabaseConfigured()) return null;
+  const sb = getSupabaseClient();
+  if (!sb) return null;
+  const { data, error } = await sb.auth.getSession();
+  return !error && data?.session ? sb : null;
+}
+
+export async function verifyProjectGoneInCloud(projectId) {
+  try {
+    const cloudId = resolveCloudProjectId(findLocalProject(getProjectsList(), projectId), projectId);
+    const sb = cloudId ? await getVerifiedCloudClient() : null;
+    if (!sb) return false;
+    const [projectRes, tombstoneRes] = await Promise.all([
+      sb.from('proyectos').select('id, deleted_at').eq('id', cloudId).limit(1),
+      sb.from('proyectos_eliminados').select('proyecto_id').eq('proyecto_id', cloudId).limit(1)
+    ]);
+    if (projectRes.error || tombstoneRes.error) return false;
+    if ((tombstoneRes.data || []).length > 0) return true;
+    const row = (projectRes.data || [])[0];
+    return !row || Boolean(row.deleted_at);
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function verifyCollaboratorRemovedInCloud(projectId, email) {
+  try {
+    const targetEmail = normalizeEmail(email);
+    const localProject = findLocalProject(getProjectsList(), projectId);
+    if (!targetEmail || isProjectOwnedBy(localProject, getMyEmail())) return false;
+    const cloudId = resolveCloudProjectId(localProject, projectId);
+    const sb = cloudId ? await getVerifiedCloudClient() : null;
+    if (!sb) return false;
+    const { data, error } = await sb
+      .from('proyecto_colaboradores')
+      .select('email_colaborador, estado_invitacion')
+      .eq('proyecto_id', cloudId)
+      .ilike('email_colaborador', targetEmail);
+    if (error) return false;
+    const row = (data || []).find(r => normalizeEmail(r.email_colaborador) === targetEmail);
+    return !row || REMOVED_COLLABORATOR_STATES.has(normalizeEmail(row.estado_invitacion));
+  } catch (_) {
+    return false;
+  }
+}
+
+async function handleVerifiedProjectRemoval(data, applyRemoval) {
+  if (!data?.projectId) return;
+  if (await verifyProjectGoneInCloud(data.projectId)) {
+    applyRemoval(data);
+  }
+}
+
+async function handleVerifiedCollaboratorRemoved(data) {
+  if (!data?.projectId || !data?.email) return;
+  const targetsMe = normalizeEmail(data.email) === getMyEmail();
+  if (targetsMe && !(await verifyCollaboratorRemovedInCloud(data.projectId, data.email))) return;
+  handleIncomingCollaboratorRemoved(data);
+}
+
+function emitProjectLifecycleEvent(localType, projectEvent, globalEvent, projectId, ownerEmail = null) {
   if (!projectId) return;
   const currentUser = getCurrentUser();
   const payload = {
@@ -1735,51 +1864,34 @@ export function broadcastProjectDeleted(projectId, ownerEmail = null) {
     timestamp: Date.now()
   };
 
-  // 0. Enviar localmente a otras pestañas/ventanas del navegador (0ms latencia)
   if (localBroadcastChannel) {
     try {
-      localBroadcastChannel.postMessage({
-        type: 'proyecto_eliminado',
-        payload
-      });
+      localBroadcastChannel.postMessage({ type: localType, payload });
     } catch (_) {}
   }
 
   const sb = getSupabaseClient();
   if (!isSupabaseConfigured() || !sb) return;
 
-  // 1. Enviar vía canal de la obra si está activo
-  if (activeChannel && currentSubscribedProjectId === projectId) {
+  if (activeChannel && currentSubscribedProjectId === projectId && projectEvent) {
     try {
-      activeChannel.send({
-        type: 'broadcast',
-        event: 'proyecto_eliminado',
-        payload
-      });
+      activeChannel.send({ type: 'broadcast', event: projectEvent, payload });
     } catch (err) {
-      console.warn('[Realtime] Aviso al emitir eliminación en canal de obra:', err);
+      console.warn(`[Realtime] Aviso al emitir ${projectEvent} en canal de obra:`, err);
     }
   }
 
-  // 2. Enviar vía canal global para sincronizar ventanas, dashboard y todos los colaboradores
   if (!globalSyncChannel) initGlobalRealtimeSync();
   if (globalSyncChannel) {
     try {
-      globalSyncChannel.send({
-        type: 'broadcast',
-        event: 'proyecto_eliminado_global',
-        payload
-      });
+      globalSyncChannel.send({ type: 'broadcast', event: globalEvent, payload });
     } catch (err) {
-      console.warn('[Realtime] Aviso al emitir eliminación en canal global:', err);
+      console.warn(`[Realtime] Aviso al emitir ${globalEvent} en canal global:`, err);
     }
   }
 }
 
-/**
- * Procesar eliminación entrante de proyecto emitida por otro usuario en tiempo real
- */
-export function handleIncomingProjectDeleted(data) {
+function applyIncomingProjectRemoval(data, { isPermanentDelete = true, toastMessage = '⚠️ Este proyecto fue eliminado.' } = {}) {
   if (!data || !data.projectId) return;
   const currentUser = getCurrentUser();
   if (!currentUser || !currentUser.email) return;
@@ -1790,37 +1902,40 @@ export function handleIncomingProjectDeleted(data) {
   const targetProj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
   const idsToPurge = Array.from(new Set([projectId, targetProj?.id, targetProj?.cloudId].filter(Boolean)));
 
-  const allAlreadyMarked = typeof isProjectMarkedDeleted === 'function' && idsToPurge.every(id => isProjectMarkedDeleted(id));
+  const checkMarkedFn = isPermanentDelete ? isProjectMarkedDeleted : isProjectTrashedLocal;
+  const allAlreadyMarked = typeof checkMarkedFn === 'function' && idsToPurge.every(id => checkMarkedFn(id));
   const stillInList = allProjects.some(p => idsToPurge.includes(p.id) || (p.cloudId && idsToPurge.includes(p.cloudId)));
   const isCurrentOpen = Boolean(currentPId && idsToPurge.includes(currentPId));
   if (allAlreadyMarked && !stillInList && !isCurrentOpen) {
     return;
   }
 
-  // 1. Marcar como eliminado localmente para que getProjectsList() nunca lo vuelva a incluir
   idsToPurge.forEach((pid) => {
-    if (typeof markProjectDeleted === 'function') {
-      markProjectDeleted(pid);
-    } else {
-      try {
-        const raw = localStorage.getItem('cubikar_deleted_projects_v1');
-        let list = raw ? JSON.parse(raw) : [];
-        if (!Array.isArray(list)) list = [];
-        if (!list.includes(pid)) {
-          list.push(pid);
-          localStorage.setItem('cubikar_deleted_projects_v1', JSON.stringify(list));
-        }
-      } catch (_) {}
+    if (isPermanentDelete) {
+      if (typeof unmarkProjectTrashedLocal === 'function') unmarkProjectTrashedLocal(pid);
+      if (typeof markProjectDeleted === 'function') {
+        markProjectDeleted(pid);
+      } else {
+        try {
+          const raw = localStorage.getItem('cubikar_deleted_projects_v1');
+          let list = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(list)) list = [];
+          if (!list.includes(pid)) {
+            list.push(pid);
+            localStorage.setItem('cubikar_deleted_projects_v1', JSON.stringify(list));
+          }
+        } catch (_) {}
+      }
+    } else if (typeof markProjectTrashedLocal === 'function') {
+      markProjectTrashedLocal(pid);
     }
   });
 
-  // 2. Limpiar de la lista en memoria y localStorage
   const filtered = allProjects.filter(p => !idsToPurge.includes(p.id) && !(p.cloudId && idsToPurge.includes(p.cloudId)));
   if (filtered.length !== allProjects.length) {
     saveProjectsList(filtered);
   }
 
-  // 3. Limpiar almacenamiento asociado
   idsToPurge.forEach((pid) => {
     try {
       localStorage.removeItem(getSettingsKey(pid));
@@ -1841,7 +1956,6 @@ export function handleIncomingProjectDeleted(data) {
     } catch (_) {}
   });
 
-  // Purgar invitaciones pendientes de este proyecto para que la campana se limpie de inmediato
   try {
     const curInvs = getStoredInvitations();
     const cleanedInvs = curInvs.filter(i => !idsToPurge.includes(i.projectId));
@@ -1855,7 +1969,6 @@ export function handleIncomingProjectDeleted(data) {
     }
   } catch (_) {}
 
-  // 4. Limpiar del cubikar_cloud_state_v2 del usuario
   if (currentUser.user_metadata?.cubikar_cloud_state_v2) {
     const cs = currentUser.user_metadata.cubikar_cloud_state_v2;
     let modified = false;
@@ -1875,10 +1988,9 @@ export function handleIncomingProjectDeleted(data) {
     }
   }
 
-  // 5. Si el usuario estaba dentro de este proyecto, expulsarlo cordialmente al portal
   if (isCurrentOpen) {
     if (typeof showToast === 'function') {
-      showToast('⚠️ Este proyecto fue eliminado.', 'warning');
+      showToast(toastMessage, 'warning');
     }
     setTimeout(() => {
       if (typeof window.exitProjectToPortal === 'function') {
@@ -1889,13 +2001,78 @@ export function handleIncomingProjectDeleted(data) {
     }, 600);
   }
 
-  // 6. Refrescar interfaz del dashboard de proyectos inmediatamente
   if (typeof window !== 'undefined') {
+    if (typeof window.invalidateCloudProjectsCache === 'function') {
+      window.invalidateCloudProjectsCache();
+    }
     if (typeof window.refreshProjectsGridUI === 'function') {
       window.refreshProjectsGridUI();
     }
     if (typeof window.renderSidebarNotificationsUI === 'function') {
       window.renderSidebarNotificationsUI();
+    }
+    if (typeof window.updateTrashBadgeUI === 'function') {
+      window.updateTrashBadgeUI();
+    }
+  }
+}
+
+export function broadcastProjectDeleted(projectId, ownerEmail = null) {
+  emitProjectLifecycleEvent('proyecto_eliminado', 'proyecto_eliminado', 'proyecto_eliminado_global', projectId, ownerEmail);
+}
+
+export function handleIncomingProjectDeleted(data) {
+  applyIncomingProjectRemoval(data, {
+    isPermanentDelete: true,
+    toastMessage: '⚠️ Este proyecto fue eliminado definitivamente.'
+  });
+}
+
+export function broadcastProjectTrashed(projectId, ownerEmail = null) {
+  emitProjectLifecycleEvent('proyecto_en_papelera', 'proyecto_eliminado', 'proyecto_en_papelera_global', projectId, ownerEmail);
+}
+
+export function handleIncomingProjectTrashed(data) {
+  applyIncomingProjectRemoval(data, {
+    isPermanentDelete: false,
+    toastMessage: '🗑️ Este proyecto fue movido a la Papelera por su anfitrión.'
+  });
+}
+
+export function broadcastProjectRestored(projectId, ownerEmail = null) {
+  emitProjectLifecycleEvent('proyecto_restaurado', null, 'proyecto_restaurado_global', projectId, ownerEmail);
+}
+
+export async function handleIncomingProjectRestored(data) {
+  if (!data || !data.projectId) return;
+  const projectId = String(data.projectId).trim();
+  if (typeof unmarkProjectTrashedLocal === 'function') unmarkProjectTrashedLocal(projectId);
+  if (typeof unmarkProjectDeleted === 'function') unmarkProjectDeleted(projectId);
+
+  if (typeof window !== 'undefined') {
+    if (typeof window.invalidateCloudProjectsCache === 'function') {
+      window.invalidateCloudProjectsCache();
+    }
+    if (typeof window.fetchCloudProjects === 'function') {
+      try {
+        const cloudList = await window.fetchCloudProjects({ force: true });
+        if (Array.isArray(cloudList)) {
+          const restored = cloudList.find(cp => cp.id === projectId || cp.cloudId === projectId);
+          if (restored) {
+            const cur = getProjectsList();
+            if (!cur.some(p => p.id === restored.id || p.cloudId === restored.id)) {
+              cur.unshift(restored);
+              saveProjectsList(cur, { skipCloudSync: true });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    if (typeof window.refreshProjectsGridUI === 'function') {
+      window.refreshProjectsGridUI();
+    }
+    if (typeof window.updateTrashBadgeUI === 'function') {
+      window.updateTrashBadgeUI();
     }
   }
 }
@@ -1955,6 +2132,7 @@ export function handleIncomingCollaboratorRemoved(data) {
   const projectId = data.projectId;
   const allProjects = getProjectsList();
   const proj = allProjects.find(p => p.id === projectId || p.cloudId === projectId);
+  if (isProjectOwnedBy(proj, myEmail)) return;
 
   if (targetEmail === myEmail) {
     // Si el usuario actual fue el removido: purgar la obra por completo de su entorno
@@ -2034,69 +2212,34 @@ export function requestPeerSync() {
   });
 }
 
+function isInvitationOfUser(invitation, email) {
+  return normalizeEmail(invitation?.email) === email || normalizeEmail(invitation?.ownerEmail) === email;
+}
+
+function isProjectMember(project, email) {
+  return Array.isArray(project?.members) && project.members.some(m => normalizeEmail(m.email) === email);
+}
+
 function handlePeerSyncRequest({ email }) {
-  const currentUser = getCurrentUser();
-  if (!currentUser || !currentUser.email || !email) return;
+  const myEmail = getMyEmail();
+  if (!myEmail || normalizeEmail(email) !== myEmail || !globalSyncChannel) return;
 
-  const targetEmail = email.toLowerCase().trim();
-  if (targetEmail === currentUser.email.toLowerCase().trim()) return;
+  const invitations = getStoredInvitations().filter(inv => isInvitationOfUser(inv, myEmail));
+  const projects = getProjectsList()
+    .filter(p => isProjectOwnedBy(p, myEmail) || isProjectMember(p, myEmail))
+    .map(p => ({
+      ...stripProjectPayload(p),
+      settings: isProjectOwnedBy(p, myEmail) ? null : readLocalJson(getSettingsKey(p.id))
+    }));
 
-  // Buscar invitaciones que yo (anfitrión) haya hecho hacia este email
-  const allInvs = getStoredInvitations();
-  const myInvsForTarget = allInvs.filter(i => (i.email || '').toLowerCase().trim() === targetEmail);
-
-  // Buscar proyectos donde targetEmail sea miembro O donde targetEmail sea el dueño y yo sea miembro
-  const allProjects = getProjectsList();
-  const myProjectsForTarget = allProjects.filter(p => {
-    const isTargetMember = Array.isArray(p.members) && p.members.some(m => (m.email || '').toLowerCase().trim() === targetEmail);
-    const isTargetOwner = (p.ownerEmail || '').toLowerCase().trim() === targetEmail;
-    return isTargetMember || isTargetOwner;
-  }).map(p => {
-    let localSettings = null;
-    try {
-      const rawSettings = localStorage.getItem(getSettingsKey(p.id));
-      if (rawSettings) localSettings = JSON.parse(rawSettings);
-    } catch (_) {}
-    return {
-      ...p,
-      settings: localSettings
-    };
-  });
-
-  // Incluir también invitaciones al plan
-  const allPlanInvs = typeof getStoredPlanInvitations === 'function' ? getStoredPlanInvitations() : [];
-  const myPlanInvsForTarget = allPlanInvs.filter(i => (i.email || '').toLowerCase().trim() === targetEmail);
-  if (myPlanInvsForTarget.length > 0) {
-    myPlanInvsForTarget.forEach(pi => {
-      myProjectsForTarget.forEach(p => {
-        if (!myInvsForTarget.some(inv => inv.projectId === p.id)) {
-          myInvsForTarget.push({
-            id: 'plan-inv-' + p.id + '-' + pi.id,
-            projectId: p.id,
-            projectName: p.projectName,
-            companyName: p.companyName || '',
-            ownerEmail: currentUser.email.toLowerCase().trim(),
-            ownerName: currentUser.name || 'Anfitrión',
-            ownerPlanId: pi.ownerPlanId || 'free',
-            email: targetEmail,
-            name: pi.name,
-            role: pi.role || 'editar',
-            status: 'pending',
-            createdAt: pi.invitedAt || new Date().toISOString()
-          });
-        }
-      });
-    });
-  }
-
-  if (myInvsForTarget.length > 0 || myProjectsForTarget.length > 0) {
+  if (invitations.length > 0 || projects.length > 0) {
     globalSyncChannel.send({
       type: 'broadcast',
       event: 'responder_sincronizacion_peer',
       payload: {
-        targetEmail,
-        invitations: myInvsForTarget,
-        projects: myProjectsForTarget
+        targetEmail: myEmail,
+        invitations,
+        projects
       }
     });
   }
@@ -2106,12 +2249,85 @@ let lastPeerDeletedCheckAt = 0;
 let lastPeerDeletedSet = new Set();
 let inFlightPeerDeletedPromise = null;
 
-async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
-  const currentUser = getCurrentUser();
-  if (!currentUser || !currentUser.email) return;
+function applyPeerProjectData(projectId, incoming) {
+  const isActive = getActiveProjectId() === projectId;
+  if (Array.isArray(incoming.treeData) && incoming.treeData.length > 0) {
+    const localTree = readLocalJson(getStorageKey(projectId));
+    if (!Array.isArray(localTree) || localTree.length === 0) {
+      try {
+        localStorage.setItem(getStorageKey(projectId), JSON.stringify(incoming.treeData));
+        if (isActive) {
+          state.treeData = JSON.parse(JSON.stringify(incoming.treeData));
+          if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
+          if (typeof window.renderTAB1 === 'function') window.renderTAB1();
+        }
+      } catch (_) {}
+    }
+  }
+  if (isIncomingSettingsNewer(incoming.settings, readLocalJson(getSettingsKey(projectId)))) {
+    try {
+      localStorage.setItem(getSettingsKey(projectId), JSON.stringify(incoming.settings));
+      if (isActive) {
+        state.settings = Object.assign({}, state.settings, incoming.settings);
+      }
+    } catch (_) {}
+  }
+}
 
-  const myEmail = currentUser.email.toLowerCase().trim();
-  if (String(targetEmail || '').toLowerCase().trim() !== myEmail) return;
+function mergePeerChatMessages(projectId, messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+  try {
+    const chatKey = resolveChatStorageKey(projectId);
+    const curChat = readLocalJson(chatKey);
+    const msgMap = new Map();
+    (Array.isArray(curChat) ? curChat : []).forEach(m => msgMap.set(m.id, m));
+    messages.forEach(m => msgMap.set(m.id, m));
+    localStorage.setItem(chatKey, JSON.stringify(Array.from(msgMap.values())));
+    if (getActiveProjectId() === projectId && typeof window !== 'undefined' && typeof window.renderProjectChatDock === 'function') {
+      window.renderProjectChatDock();
+    }
+  } catch (_) {}
+}
+
+function mergePeerProjectEntry(localProj, incoming) {
+  if (toTimestamp(incoming.updatedAt) <= toTimestamp(localProj.updatedAt)) return null;
+  return stripProjectPayload({
+    ...localProj,
+    ...incoming,
+    id: localProj.id,
+    ownerEmail: localProj.ownerEmail || incoming.ownerEmail
+  });
+}
+
+function applyPeerProjectPatches(patches) {
+  if (patches.size === 0) return false;
+  const freshProjs = getProjectsList();
+  let projChanged = false;
+  patches.forEach(({ entry, isNew }, localId) => {
+    const idx = findProjectIndex(freshProjs, [localId, entry.id, entry.cloudId]);
+    if (idx < 0) {
+      if (isNew) {
+        freshProjs.unshift(entry);
+        projChanged = true;
+      }
+      return;
+    }
+    const merged = mergePeerProjectEntry(freshProjs[idx], entry);
+    if (merged) {
+      freshProjs[idx] = merged;
+      projChanged = true;
+    }
+  });
+  if (projChanged) {
+    saveProjectsList(freshProjs, { skipCloudSync: true });
+  }
+  return projChanged;
+}
+
+export async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
+  const currentUser = getCurrentUser();
+  const myEmail = normalizeEmail(currentUser?.email);
+  if (!myEmail || normalizeEmail(targetEmail) !== myEmail) return;
 
   let changed = false;
 
@@ -2119,7 +2335,7 @@ async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
   if (Array.isArray(invitations) && invitations.length > 0) {
     const currentInvs = getStoredInvitations();
     invitations.forEach(inv => {
-      if (!currentInvs.some(ci => ci.id === inv.id)) {
+      if (isInvitationOfUser(inv, myEmail) && !currentInvs.some(ci => ci.id === inv.id)) {
         currentInvs.unshift(inv);
         changed = true;
       }
@@ -2131,9 +2347,9 @@ async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
 
   // Mergear proyectos filtrando lápidas locales y en la nube (sin resurrección)
   if (Array.isArray(projects) && projects.length > 0) {
-    const currentProjs = getProjectsList();
+    const knownBeforeFetch = getProjectsList();
     const activeKnownIds = new Set(
-      currentProjs.flatMap(cp => [cp?.id, cp?.cloudId]).filter(Boolean).map(v => String(v).trim())
+      knownBeforeFetch.flatMap(cp => [cp?.id, cp?.cloudId]).filter(Boolean).map(v => String(v).trim())
     );
     const incomingIds = Array.from(new Set(
       projects.flatMap(p => [p?.id, p?.cloudId]).filter(Boolean).map(v => String(v).trim())
@@ -2177,7 +2393,8 @@ async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
       }
     } catch (_) {}
 
-    let projChanged = false;
+    const listAfterFetch = getProjectsList();
+    const patches = new Map();
     projects.forEach(p => {
       if (!p || !p.id) return;
       const pIdStr = String(p.id).trim();
@@ -2193,67 +2410,32 @@ async function handlePeerSyncResponse({ targetEmail, invitations, projects }) {
       if (typeof isProjectMarkedDeleted === 'function' && (isProjectMarkedDeleted(pIdStr) || (cIdStr && isProjectMarkedDeleted(cIdStr)))) {
         return;
       }
+      if (typeof isProjectTrashedLocal === 'function' && (isProjectTrashedLocal(pIdStr) || (cIdStr && isProjectTrashedLocal(cIdStr)))) {
+        return;
+      }
+      if (typeof window !== 'undefined' && typeof window.getTrashedCloudProjectIds === 'function') {
+        const cTrashed = window.getTrashedCloudProjectIds();
+        if (cTrashed.has(pIdStr) || (cIdStr && cTrashed.has(cIdStr))) return;
+      }
 
-      const idx = currentProjs.findIndex(cp => cp.id === p.id || (cIdStr && (cp.id === cIdStr || cp.cloudId === cIdStr)));
-      const incomingUpdated = p.updatedAt ? new Date(p.updatedAt).getTime() : 0;
+      const localProj = findLocalProject(listAfterFetch, pIdStr, cIdStr);
+      const existedBeforeFetch = activeKnownIds.has(pIdStr) || (cIdStr && activeKnownIds.has(cIdStr));
+      if (existedBeforeFetch && !localProj) return;
 
       // Si pertenece a la misma cuenta y no existe localmente, no reinyectar si es anterior al último cierre/purga
-      const pOwner = (p.ownerEmail || '').toLowerCase().trim();
-      if (idx < 0 && pOwner === myEmail && lastSignoutTs > 0 && incomingUpdated > 0 && incomingUpdated < lastSignoutTs) {
+      const incomingUpdated = toTimestamp(p.updatedAt);
+      if (!localProj && isProjectOwnedBy(p, myEmail) && lastSignoutTs > 0 && incomingUpdated > 0 && incomingUpdated < lastSignoutTs) {
         return;
       }
 
-      if (idx < 0) {
-        currentProjs.unshift(p);
-        projChanged = true;
-      } else {
-        const localProj = currentProjs[idx];
-        const localUpdated = localProj.updatedAt ? new Date(localProj.updatedAt).getTime() : 0;
-        if (incomingUpdated > localUpdated) {
-          currentProjs[idx] = Object.assign({}, localProj, p);
-          projChanged = true;
-        }
+      const localId = localProj ? localProj.id : pIdStr;
+      if (!isProjectOwnedBy(localProj, myEmail) && !isProjectOwnedBy(p, myEmail)) {
+        applyPeerProjectData(localId, p);
       }
-
-      if (Array.isArray(p.treeData) && p.treeData.length > 0) {
-        try {
-          localStorage.setItem(getStorageKey(p.id), JSON.stringify(p.treeData));
-          if (typeof getActiveProjectId === 'function' && getActiveProjectId() === p.id) {
-            state.treeData = JSON.parse(JSON.stringify(p.treeData));
-            if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
-            if (typeof window.renderTAB1 === 'function') window.renderTAB1();
-          }
-        } catch (_) {}
-      }
-      if (p.settings && typeof p.settings === 'object') {
-        try {
-          localStorage.setItem(getSettingsKey(p.id), JSON.stringify(p.settings));
-          if (typeof getActiveProjectId === 'function' && getActiveProjectId() === p.id) {
-            state.settings = Object.assign({}, state.settings, p.settings);
-          }
-        } catch (_) {}
-      }
-      if (Array.isArray(p.chatMessages) && p.chatMessages.length > 0) {
-        try {
-          const chatKey = resolveChatStorageKey(p.id);
-          let curChat = [];
-          const rawChat = localStorage.getItem(chatKey);
-          if (rawChat) curChat = JSON.parse(rawChat);
-          if (!Array.isArray(curChat)) curChat = [];
-          const msgMap = new Map();
-          curChat.forEach(m => msgMap.set(m.id, m));
-          p.chatMessages.forEach(m => msgMap.set(m.id, m));
-          localStorage.setItem(chatKey, JSON.stringify(Array.from(msgMap.values())));
-          if (typeof getActiveProjectId === 'function' && getActiveProjectId() === p.id) {
-            if (typeof window !== 'undefined' && typeof window.renderProjectChatDock === 'function') {
-              window.renderProjectChatDock();
-            }
-          }
-        } catch (_) {}
-      }
+      mergePeerChatMessages(localId, p.chatMessages);
+      patches.set(localId, { entry: stripProjectPayload(p), isNew: !localProj });
     });
-    if (projChanged) {
-      saveProjectsList(currentProjs, { skipCloudSync: true });
+    if (applyPeerProjectPatches(patches)) {
       changed = true;
     }
   }
@@ -3000,6 +3182,10 @@ if (typeof window !== 'undefined') {
     broadcastNewProject,
     broadcastProjectDeleted,
     handleIncomingProjectDeleted,
+    broadcastProjectTrashed,
+    handleIncomingProjectTrashed,
+    broadcastProjectRestored,
+    handleIncomingProjectRestored,
     broadcastCollaboratorRemoved,
     handleIncomingCollaboratorRemoved,
     broadcastProjectMutation,
@@ -3010,10 +3196,15 @@ if (typeof window !== 'undefined') {
     handleIncomingChatDelete,
     hydrateProjectChatFromCloud,
     hydrateAllUserProjectsChatFromCloud,
-    requestPeerSync
+    requestPeerSync,
+    handlePeerSyncResponse
   };
   window.broadcastProjectDeleted = broadcastProjectDeleted;
   window.handleIncomingProjectDeleted = handleIncomingProjectDeleted;
+  window.broadcastProjectTrashed = broadcastProjectTrashed;
+  window.handleIncomingProjectTrashed = handleIncomingProjectTrashed;
+  window.broadcastProjectRestored = broadcastProjectRestored;
+  window.handleIncomingProjectRestored = handleIncomingProjectRestored;
   window.broadcastCollaboratorRemoved = broadcastCollaboratorRemoved;
   window.handleIncomingCollaboratorRemoved = handleIncomingCollaboratorRemoved;
   window.subscribeToProjectRealtime = subscribeToProjectRealtime;

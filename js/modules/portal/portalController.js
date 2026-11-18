@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261116_cf22';
+} from '../../config/constants.js?v=20261117_cf25';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -62,17 +62,32 @@ import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
   SAMPLE_LOGOS,
+  unmarkProjectDeleted,
+  isProjectTrashedLocal,
   setActiveWorkspaceData,
-  getActiveWorkspaceData
-} from './projectService.js?v=20261116_cf22';
-import { showToast } from '../../ui/notifications.js?v=20261116_cf22';
-import { persistLocalData, state, initStore } from '../../state/store.js?v=20261116_cf22';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261116_cf22';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261116_cf22';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261116_cf22';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261116_cf22';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261116_cf22';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261116_cf22';
+  getActiveWorkspaceData,
+  getStoredInvitations,
+  saveStoredInvitations,
+  getStoredPlanInvitations,
+  saveStoredPlanInvitations,
+  getProjectCompanyLogo
+} from './projectService.js?v=20261117_cf25';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
+import {
+  persistLocalData,
+  state,
+  initStore,
+  resolveTreeDataForCloudSync,
+  resolveSettingsForCloudSync,
+  markCatalogTreeSynced,
+  markSettingsSynced
+} from '../../state/store.js?v=20261117_cf25';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261117_cf25';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf25';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261117_cf25';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261117_cf25';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261117_cf25';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261117_cf25';
 import {
   signUp,
   signInWithPassword,
@@ -83,16 +98,24 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261116_cf22';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261116_cf22';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261116_cf22';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261116_cf22';
+} from '../../core/authService.js?v=20261117_cf25';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261117_cf25';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261117_cf25';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261117_cf25';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261116_cf22';
-import { syncProjectToCloud, fetchCloudProjects, isValidUUID, generateUUID } from '../../core/cloudProjectService.js?v=20261116_cf22';
+} from '../admin/cubikarAdmin.js?v=20261117_cf25';
+import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261117_cf25';
+import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261117_cf25';
+import {
+  isProjectHostOwner,
+  fetchTrashedProjectsForHost,
+  getCachedTrashCount,
+  updateTrashBadgeUI,
+  openTrashModal
+} from './trashService.js?v=20261117_cf25';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -114,9 +137,47 @@ let wizardData = {
 };
 
 // ==========================================
-// INICIALIZACIÓN DEL PORTAL
+// INICIALIZACIÓN DEL PORTAL Y NAVEGACIÓN POPSTATE
 // ==========================================
+let popstateListenerBound = false;
+
+function bindPortalPopstateListener() {
+  if (popstateListenerBound || typeof window === 'undefined') return;
+  popstateListenerBound = true;
+  window.addEventListener('popstate', () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const projIdFromUrl = urlParams.get('project');
+      if (!projIdFromUrl) {
+        setSimulatedUserView(null);
+        try { window.unsubscribeFromProjectRealtime?.(); } catch (_) {}
+        setActiveProjectId(null);
+        const user = getCurrentUser();
+        showPortalView(user ? 'dashboard' : 'login');
+        return;
+      }
+      const isWorkspaceActive = initPortal();
+      if (isWorkspaceActive) {
+        if (typeof window.onWorkspaceProjectActivated === 'function') {
+          window.onWorkspaceProjectActivated(projIdFromUrl);
+        } else {
+          initStore();
+          renderBrandingUI();
+          renderTAB1();
+        }
+      }
+    } catch (err) {
+      console.warn('[Portal] Error manejando popstate:', err);
+    }
+  });
+}
+
+if (typeof window !== 'undefined') {
+  bindPortalPopstateListener();
+}
+
 export function initPortal() {
+  bindPortalPopstateListener();
   const urlParams = new URLSearchParams(window.location.search);
   const projIdFromUrl = urlParams.get('project');
   const user = getCurrentUser();
@@ -177,10 +238,7 @@ export function initPortal() {
         const downloadedProj = getProjectById(projIdFromUrl);
         if (downloadedProj) {
           setActiveProjectId(downloadedProj.id);
-          showWorkspaceView(user, downloadedProj);
-          if (typeof window !== 'undefined' && typeof window.openProjectInWorkspace === 'function') {
-            window.openProjectInWorkspace(downloadedProj.id);
-          }
+          openProjectInWorkspace(downloadedProj.id);
         } else {
           showToast('No se encontró el proyecto especificado. Mostrando lista de proyectos.', 'error');
           showPortalView('dashboard');
@@ -198,6 +256,7 @@ export function initPortal() {
   }
 
   // Si no hay proyecto en la URL
+  setActiveProjectId(null);
   if (user) {
     showPortalView('dashboard');
   } else {
@@ -321,10 +380,12 @@ function showWorkspaceView(user, project) {
       } catch (_) {}
     }
   }
-  if (project && project.ownerEmail) {
+  if (project && project.ownerEmail && !project.isSample) {
     const hostEmail = (project.ownerEmail || '').toLowerCase().trim();
-    const hostName = resolveCleanHostName(hostEmail, project.ownerName, project);
-    setActiveWorkspaceData(hostEmail, hostName);
+    if (hostEmail && hostEmail !== 'admin.general@constructora.com') {
+      const hostName = resolveCleanHostName(hostEmail, project.ownerName, project);
+      setActiveWorkspaceData(hostEmail, hostName);
+    }
   }
   updateWorkspaceHeaderUser(user);
   renderHeaderCollaborators();
@@ -1382,72 +1443,142 @@ export function renderModeStatusBadgeHTML(scope, user, invitersList = null, allP
   `;
 }
 
+function renderHeaderTrashButtonHTML(scope) {
+  const showTrash = !scope || scope === 'owned' || scope === 'all';
+  if (!showTrash) return '';
+  const trashCount = getCachedTrashCount();
+  const badgeText = trashCount > 99 ? '99+' : String(trashCount);
+  return `
+    <button type="button"
+            id="btn-portal-papelera"
+            onclick="openTrashModal()"
+            class="relative w-10 h-10 inline-flex items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-rose-400 border border-slate-700/80 hover:border-rose-500/40 transition shadow-sm active:scale-95 cursor-pointer shrink-0"
+            title="Papelera de reciclaje (proyectos eliminados, 7 días)"
+            aria-label="Abrir papelera de reciclaje">
+      <i class="fa-solid fa-trash-can text-sm"></i>
+      <span id="portal-trash-badge" class="${trashCount > 0 ? '' : 'hidden'} absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center border border-slate-950 shadow">${badgeText}</span>
+    </button>
+  `;
+}
+
 // Helper: Botón de Crear Proyecto adaptado al Modo y Permiso actual
 export function renderHeaderCreateButtonHTML(user, scope) {
   const u = user || getCurrentUser();
   const check = canUserCreateProject(u, scope);
+  const trashBtnHtml = renderHeaderTrashButtonHTML(scope);
+  let createBtnHtml = '';
 
   if (check.allowed) {
     const btnTooltip = check.isHostContext ? `Crear proyecto en la organización de ${check.hostName} consumiendo su membresía Plan ${getPlanLimits(check.planId).name}` : 'Crear un nuevo proyecto propio';
-    return `
-      <button onclick="openNuevoProyectoModal()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition shadow-lg shadow-blue-600/30 active:scale-95 cursor-pointer" title="${btnTooltip.replace(/"/g, '&quot;')}">
+    createBtnHtml = `
+      <button id="btn-portal-nuevo-proyecto" onclick="openNuevoProyectoModal()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition shadow-lg shadow-blue-600/30 active:scale-95 cursor-pointer" title="${btnTooltip.replace(/"/g, '&quot;')}">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
         <span>+ Nuevo Proyecto</span>
       </button>
     `;
-  }
-
-  if (check.isHostContext) {
+  } else if (check.isHostContext) {
     if (check.userRole === 'lector/escritor') {
-      return `
+      createBtnHtml = `
         <button onclick="showToast('${(check.reason || 'Solo colaboradores con rol de Editor pueden crear proyectos aquí.').replace(/'/g, "\\'")}', 'warning');" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 font-medium text-xs transition border border-slate-800 cursor-pointer" title="${(check.reason || '').replace(/"/g, '&quot;')}">
           <i class="fa-solid fa-lock text-xs text-amber-400"></i>
           <span>Solo Editores Pueden Crear</span>
         </button>
       `;
+    } else {
+      createBtnHtml = `
+        <button onclick="showToast('${(check.reason || 'Límite de proyectos del anfitrión alcanzado.').replace(/'/g, "\\'")}', 'warning');" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 font-medium text-xs transition border border-slate-800 cursor-pointer" title="${(check.reason || '').replace(/"/g, '&quot;')}">
+          <i class="fa-solid fa-lock text-xs text-amber-400"></i>
+          <span>Límite del Anfitrión (${check.currentProjects}/${check.maxProjects})</span>
+        </button>
+      `;
     }
-    return `
-      <button onclick="showToast('${(check.reason || 'Límite de proyectos del anfitrión alcanzado.').replace(/'/g, "\\'")}', 'warning');" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 font-medium text-xs transition border border-slate-800 cursor-pointer" title="${(check.reason || '').replace(/"/g, '&quot;')}">
+  } else {
+    createBtnHtml = `
+      <button onclick="showToast('${(check.reason || 'Límite de proyectos alcanzado para tu suscripción.').replace(/'/g, "\\'")}', 'warning'); openSubscriptionModal();" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition border border-slate-700 active:scale-95 cursor-pointer" title="${(check.reason || 'Límite de proyectos alcanzado').replace(/"/g, '&quot;')}">
         <i class="fa-solid fa-lock text-xs text-amber-400"></i>
-        <span>Límite del Anfitrión (${check.currentProjects}/${check.maxProjects})</span>
+        <span>Nuevo Proyecto (${check.currentProjects || 0}/${check.maxProjects || 2})</span>
       </button>
     `;
   }
 
-  return `
-    <button onclick="showToast('${(check.reason || 'Límite de proyectos alcanzado para tu suscripción.').replace(/'/g, "\\'")}', 'warning'); openSubscriptionModal();" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm transition border border-slate-700 active:scale-95 cursor-pointer" title="${(check.reason || 'Límite de proyectos alcanzado').replace(/"/g, '&quot;')}">
-      <i class="fa-solid fa-lock text-xs text-amber-400"></i>
-      <span>Nuevo Proyecto (${check.currentProjects || 0}/${check.maxProjects || 2})</span>
-    </button>
-  `;
+  return `${trashBtnHtml}${createBtnHtml}`;
 }
 
 // ==========================================
 // VISTA: DASHBOARD "MIS PROYECTOS"
 // ==========================================
-export function renderPortalDashboard() {
+const BACKGROUND_REFRESH_TTL_MS = 15000;
+const lastBackgroundRefreshAt = new Map();
+
+function runThrottledBackgroundRefresh(key, taskFn, force = false) {
+  if (typeof taskFn !== 'function') return;
+  const now = Date.now();
+  const last = lastBackgroundRefreshAt.get(key) || 0;
+  if (!force && (now - last) < BACKGROUND_REFRESH_TTL_MS) return;
+  lastBackgroundRefreshAt.set(key, now);
+  try {
+    taskFn();
+  } catch (_) {}
+}
+
+function resolveValidatedScopeFilter(user, invitersList) {
+  const uEmail = (user?.email || '').toLowerCase().trim();
+  const validOwners = new Set(
+    (Array.isArray(invitersList) ? invitersList : [])
+      .map(i => (i?.email || '').toLowerCase().trim())
+      .filter(Boolean)
+  );
+  const activeWs = typeof getActiveWorkspaceData === 'function' ? getActiveWorkspaceData() : null;
+  if (activeWs && activeWs.ownerEmail) {
+    const wsEmail = activeWs.ownerEmail.toLowerCase().trim();
+    if (wsEmail && wsEmail !== uEmail && validOwners.has(wsEmail)) {
+      currentScopeFilter = `owner:${wsEmail}`;
+      return currentScopeFilter;
+    }
+  }
+  if (currentScopeFilter && currentScopeFilter.startsWith('owner:')) {
+    const targetEmail = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
+    if (targetEmail && targetEmail !== uEmail && validOwners.has(targetEmail)) {
+      return currentScopeFilter;
+    }
+  }
+  currentScopeFilter = 'owned';
+  if (uEmail && typeof setActiveWorkspaceData === 'function') {
+    if (!activeWs || (activeWs.ownerEmail || '').toLowerCase().trim() !== uEmail) {
+      setActiveWorkspaceData(uEmail, user?.name || uEmail);
+    }
+  }
+  return currentScopeFilter;
+}
+
+export function renderPortalDashboard(options = {}) {
   const user = getCurrentUser();
 
   if (!user) {
     showPortalView('login');
     return;
   }
+  const forceRefresh = Boolean(options && options.forceBackgroundRefresh);
+  const userEmail = (user.email || '').toLowerCase().trim();
   updatePortalHeaderUserArea(user);
-  try {
+  runThrottledBackgroundRefresh(`peerSync:${userEmail}`, () => {
     if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.requestPeerSync === 'function') {
       window.CubikarRealtime.requestPeerSync();
     }
-  } catch (_) {}
+  }, forceRefresh);
 
   // Sincronizar en segundo plano proyectos desde Supabase si hay sesión activa
   if (isSupabaseConfigured() && user?.id) {
-    const cloudFetchStartedAt = Date.now();
-    fetchCloudProjects().then(cloudList => {
+    runThrottledBackgroundRefresh(`cloudProjects:${userEmail}`, () => {
+      const cloudFetchStartedAt = Date.now();
+      fetchCloudProjects().then(cloudList => {
       if (Array.isArray(cloudList)) {
         const deletedList = getDeletedProjectsList();
         const isDeleted = (id) => Array.isArray(deletedList) && deletedList.includes(id);
+        const trashedCloudIds = new Set(getTrashedCloudProjectIds());
+        const isTrashed = (id) => Boolean(id && (trashedCloudIds.has(id) || isProjectTrashedLocal(id)));
         const localList = getProjectsList();
         const myEmail = (user.email || '').toLowerCase().trim();
         const cloudIds = new Set(cloudList.map(cp => cp.id));
@@ -1455,10 +1586,22 @@ export function renderPortalDashboard() {
         let changed = false;
 
         // 1. REGLA DE ORO / CONFIRMACIONES 1 Y 2:
-        // Purgar de localList cualquier proyecto que pertenezca a un anfitrión externo
-        // pero que YA NO exista en la lista autorizada de la nube (fue eliminado o revocada la invitación).
+        // Purgar de localList cualquier proyecto eliminado, en papelera, o de anfitrión externo
+        // que YA NO exista en la lista autorizada de la nube.
         const cleanedList = localList.filter(lp => {
-          if (isDeleted(lp.id) || isDeleted(lp.cloudId)) {
+          if (isDeleted(lp.id) || isDeleted(lp.cloudId) || isTrashed(lp.id) || isTrashed(lp.cloudId)) {
+            try {
+              localStorage.removeItem(getSettingsKey(lp.id));
+              localStorage.removeItem(getStorageKey(lp.id));
+              if (lp.cloudId) {
+                localStorage.removeItem(getSettingsKey(lp.cloudId));
+                localStorage.removeItem(getStorageKey(lp.cloudId));
+              }
+              const activePid = typeof getActiveProjectId === 'function' ? getActiveProjectId() : null;
+              if (activePid && (activePid === lp.id || activePid === lp.cloudId)) {
+                setActiveProjectId(null);
+              }
+            } catch (_) {}
             changed = true;
             return false;
           }
@@ -1469,6 +1612,18 @@ export function renderPortalDashboard() {
           // Si es proyecto de un anfitrión (colaboración externa):
           if (!isMyOwnProject) {
             const existsInCloud = cloudIds.has(lp.id) || cloudIds.has(lp.cloudId);
+            if (!existsInCloud && lp.isCloudSynced) {
+              try {
+                localStorage.removeItem(getSettingsKey(lp.id));
+                localStorage.removeItem(getStorageKey(lp.id));
+                if (lp.cloudId) {
+                  localStorage.removeItem(getSettingsKey(lp.cloudId));
+                  localStorage.removeItem(getStorageKey(lp.cloudId));
+                }
+              } catch (_) {}
+              changed = true;
+              return false;
+            }
             const hasLocalInvite = Array.isArray(lp.members) && lp.members.some(m => (m.email || '').toLowerCase().trim() === myEmail && (m.status === 'active' || m.status === 'accepted' || m.status === 'pending'));
             if (!existsInCloud && !hasLocalInvite) {
               console.info(`[PortalReconcile] Purgando proyecto fantasma/eliminado de anfitrión: ${lp.projectName} (${lp.id})`);
@@ -1520,12 +1675,13 @@ export function renderPortalDashboard() {
           }
         });
 
-        if (changed || cleanedList.length !== localList.length) {
-          saveProjectsList(cleanedList, { skipCloudSync: true });
-          refreshProjectsGridUI();
+          if (changed || cleanedList.length !== localList.length) {
+            saveProjectsList(cleanedList, { skipCloudSync: true });
+            refreshProjectsGridUI();
+          }
         }
-      }
-    }).catch(err => console.warn('[CloudDashboard] Aviso al consultar proyectos de la nube:', err));
+      }).catch(err => console.warn('[CloudDashboard] Aviso al consultar proyectos de la nube:', err));
+    }, forceRefresh);
   }
 
   const projects = getProjectsForUser(user);
@@ -1533,31 +1689,35 @@ export function renderPortalDashboard() {
   if (!main) return;
 
   const activeCount = projects.length;
-  const userEmail = (user.email || '').toLowerCase().trim();
   const ownedCount = projects.filter(p => (p.ownerEmail || '').toLowerCase().trim() === userEmail).length;
   const invitersList = getWorkspaceInviters(user, projects);
   const userPlanId = getUserPlanId(user);
   const userPlanLimits = getPlanLimits(userPlanId);
 
-  // Restaurar el modo de trabajo persistido si el usuario estaba en el espacio de un anfitrión
-  const activeWs = getActiveWorkspaceData();
-  const uEmail = (user.email || '').toLowerCase().trim();
-  if (activeWs && activeWs.ownerEmail && activeWs.ownerEmail !== uEmail) {
-    currentScopeFilter = `owner:${activeWs.ownerEmail}`;
-  }
+  // Restaurar y validar el modo de trabajo persistido frente a anfitriones vigentes
+  resolveValidatedScopeFilter(user, invitersList);
 
   // Sincronizar y purgar proyectos eliminados del anfitrión si estamos en su espacio de trabajo
   try {
     if (typeof window !== 'undefined' && typeof window.syncHostWorkspaceProjects === 'function') {
       if (currentScopeFilter && currentScopeFilter.startsWith('owner:')) {
         const hEmail = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
-        window.syncHostWorkspaceProjects(hEmail).then((pruned) => {
-          if (pruned) refreshProjectsGridUI();
-        });
+        runThrottledBackgroundRefresh(`host:${userEmail}:${hEmail}`, () => {
+          window.syncHostWorkspaceProjects(hEmail).then((pruned) => {
+            if (pruned) refreshProjectsGridUI();
+          });
+        }, forceRefresh);
       }
       if (Array.isArray(invitersList) && invitersList.length > 0) {
         invitersList.forEach(inv => {
-          if (inv.email) window.syncHostWorkspaceProjects(inv.email);
+          const invEmail = (inv?.email || '').toLowerCase().trim();
+          if (invEmail) {
+            runThrottledBackgroundRefresh(`host:${userEmail}:${invEmail}`, () => {
+              window.syncHostWorkspaceProjects(invEmail).then((pruned) => {
+                if (pruned) refreshProjectsGridUI();
+              });
+            }, forceRefresh);
+          }
         });
       }
     }
@@ -1740,7 +1900,6 @@ export function renderPortalDashboard() {
 
     <!-- GRID VIEW OF PROJECTS -->
     <div id="projectsGrid" class="${currentViewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'}">
-      ${renderProjectCardsHTML()}
     </div>
 
     <!-- TABLE VIEW (ALTERNATIVE VIEW) -->
@@ -1760,7 +1919,6 @@ export function renderPortalDashboard() {
             </tr>
           </thead>
           <tbody id="projectsTableBody" class="divide-y divide-slate-800/60">
-            ${renderProjectTableRowsHTML()}
           </tbody>
         </table>
       </div>
@@ -1775,7 +1933,11 @@ export function renderPortalDashboard() {
     </div>
   `;
 
-  refreshProjectsGridUI();
+  renderProjectsGridNow();
+  updateTrashBadgeUI();
+  runThrottledBackgroundRefresh(`trash:${userEmail}`, () => {
+    fetchTrashedProjectsForHost({ silent: true }).catch(() => {});
+  }, forceRefresh);
 }
 
 export function getCompanyBadgeMeta(companyName) {
@@ -1852,24 +2014,31 @@ let currentSortMode = 'date-desc'; // 'date-desc' | 'date-asc' | 'az-asc' | 'az-
 let currentViewMode = 'grid'; // 'grid' | 'list'
 
 export function setProjectScopeFilter(scope) {
-  currentScopeFilter = (scope && scope !== 'all') ? scope : 'owned';
+  const requestedScope = (scope && scope !== 'all') ? scope : 'owned';
   const user = getCurrentUser();
   const uEmail = (user?.email || '').toLowerCase().trim();
+  const allProjects = user ? getProjectsForUser(user) : getProjectsList();
+  const inviters = getWorkspaceInviters(user, allProjects);
 
-  if (currentScopeFilter && currentScopeFilter.startsWith('owner:')) {
-    const targetEmail = currentScopeFilter.replace('owner:', '').toLowerCase().trim();
-    const allProjects = getProjectsForUser(user);
-    const inviters = getWorkspaceInviters(user, allProjects);
+  if (requestedScope && requestedScope.startsWith('owner:')) {
+    const targetEmail = requestedScope.replace('owner:', '').toLowerCase().trim();
     const inv = inviters.find(i => (i.email || '').toLowerCase().trim() === targetEmail);
-    setActiveWorkspaceData(targetEmail, inv?.name || targetEmail);
+    if (inv && targetEmail !== uEmail) {
+      currentScopeFilter = `owner:${targetEmail}`;
+      setActiveWorkspaceData(targetEmail, inv.name || targetEmail);
 
-    // Sincronizar y purgar proyectos eliminados del anfitrión en segundo plano
-    if (typeof window !== 'undefined' && typeof window.syncHostWorkspaceProjects === 'function') {
-      window.syncHostWorkspaceProjects(targetEmail).then(() => {
-        refreshProjectsGridUI();
-      });
+      // Sincronizar y purgar proyectos eliminados del anfitrión en segundo plano
+      if (typeof window !== 'undefined' && typeof window.syncHostWorkspaceProjects === 'function') {
+        window.syncHostWorkspaceProjects(targetEmail).then(() => {
+          refreshProjectsGridUI();
+        });
+      }
+    } else {
+      currentScopeFilter = 'owned';
+      setActiveWorkspaceData(uEmail, user?.name || uEmail);
     }
   } else {
+    currentScopeFilter = 'owned';
     setActiveWorkspaceData(uEmail, user?.name || uEmail);
   }
 
@@ -1880,8 +2049,6 @@ export function setProjectScopeFilter(scope) {
   }
   const statusBadge = document.getElementById('mode-status-badge');
   if (statusBadge && user) {
-    const allProjects = getProjectsForUser(user);
-    const inviters = getWorkspaceInviters(user, allProjects);
     statusBadge.innerHTML = renderModeStatusBadgeHTML(currentScopeFilter, user, inviters, allProjects);
   }
   refreshProjectsGridUI();
@@ -2123,11 +2290,43 @@ export function getFilteredProjectsList(allProjects) {
   return filtered;
 }
 
+let projectsGridRefreshQueued = false;
+let projectsGridRefreshTimer = null;
+
 export function refreshProjectsGridUI() {
+  if (projectsGridRefreshQueued) return;
+  projectsGridRefreshQueued = true;
+  const flush = () => {
+    if (!projectsGridRefreshQueued) return;
+    projectsGridRefreshQueued = false;
+    if (projectsGridRefreshTimer) {
+      clearTimeout(projectsGridRefreshTimer);
+      projectsGridRefreshTimer = null;
+    }
+    renderProjectsGridNow();
+  };
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(flush);
+    // Fallback por si la pestaña está en background y rAF queda pausado
+    projectsGridRefreshTimer = setTimeout(flush, 150);
+  } else {
+    flush();
+  }
+}
+
+function renderProjectsGridNow() {
+  projectsGridRefreshQueued = false;
+  if (projectsGridRefreshTimer) {
+    clearTimeout(projectsGridRefreshTimer);
+    projectsGridRefreshTimer = null;
+  }
   const user = getCurrentUser();
 
   const allProjects = user ? getProjectsForUser(user) : getProjectsList();
   const invitersList = getWorkspaceInviters(user, allProjects);
+  if (user) {
+    resolveValidatedScopeFilter(user, invitersList);
+  }
   const filtered = getFilteredProjectsList(allProjects);
 
   const uEmail = (user?.email || '').toLowerCase().trim();
@@ -2338,6 +2537,7 @@ export function renderProjectCardsHTML(customFiltered, customAll) {
     const totalEstimadoFmt = `${sym}${estSummary.totalEstimado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const pctEstimadoFmt = `${estSummary.pctAvance.toFixed(2)}%`;
     const progressVal = estSummary.barWidthPct;
+    const cardLogo = getProjectCompanyLogo(proj);
 
     return `
     <div class="project-card group bg-slate-950/70 hover:bg-slate-950/90 border border-slate-800/90 ${isWarning ? 'hover:border-amber-500/50' : 'hover:border-blue-500/50'} rounded-2xl p-5 transition duration-200 shadow-lg flex flex-col justify-between"
@@ -2352,7 +2552,7 @@ export function renderProjectCardsHTML(customFiltered, customAll) {
         <div class="flex items-start justify-between gap-3 mb-3">
           <div class="flex items-center gap-3 min-w-0">
             <div class="w-11 h-11 rounded-xl ${badgeMeta.bg} border ${badgeMeta.border} flex items-center justify-center ${badgeMeta.text} font-bold text-sm tracking-wider shadow-inner shrink-0 overflow-hidden">
-              ${proj.companyLogo ? `<img src="${proj.companyLogo}" class="max-h-full max-w-full object-contain">` : badgeMeta.initials}
+              ${cardLogo ? `<img src="${cardLogo}" class="max-h-full max-w-full object-contain">` : badgeMeta.initials}
             </div>
             <div class="min-w-0 flex-1">
               <span class="text-xs font-semibold text-blue-400 tracking-wide uppercase block truncate">${proj.companyName}</span>
@@ -2386,11 +2586,12 @@ export function renderProjectCardsHTML(customFiltered, customAll) {
                   <i class="fa-solid fa-cloud-arrow-up text-[10px] text-blue-400"></i>
                   <span>Respaldar en la Nube</span>
                 </button>
+                ${isProjectHostOwner(proj, user) ? `
                 <div class="h-px bg-slate-800 my-1"></div>
-                <button type="button" onclick="deleteProjectAction('${proj.id}', event)" class="w-full text-left px-3 py-2 text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 cursor-pointer">
+                <button type="button" onclick="deleteProjectAction('${proj.id}', event)" class="w-full text-left px-3 py-2 text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 cursor-pointer" title="Mover a la Papelera (se conservará 7 días)">
                   <i class="fa-solid fa-trash-can text-[10px]"></i>
-                  <span>Eliminar Proyecto</span>
-                </button>
+                  <span>Enviar a Papelera</span>
+                </button>` : ''}
               </div>
             </div>
           </div>
@@ -2664,25 +2865,41 @@ export function goToProjectsDashboard() {
     return;
   }
   if (departingProj && isSupabaseConfigured() && typeof syncProjectToCloud === 'function') {
-    const markDepartingSynced = (syncedId) => {
-      const targetId = syncedId || departingProj.cloudId || departingProj.id;
-      const list = getProjectsList();
-      const idx = list.findIndex(p => p.id === departingProj.id || p.cloudId === targetId);
-      if (idx !== -1) {
-        list[idx].isCloudSynced = true;
-        list[idx].cloudId = targetId;
-        list[idx].lastCloudSyncAt = Date.now();
-        saveProjectsList(list);
-      }
-    };
-    syncProjectToCloud(departingProj, departingSettings, departingTree, {
-      onHeaderSynced: markDepartingSynced
-    }).then((res) => {
-      if (res && res.success) {
-        markDepartingSynced(res.projectId);
-        refreshProjectsGridUI();
-      }
-    }).catch(() => {});
+    const { treeToUpload, fingerprint: treeFp, treeChanged } = resolveTreeDataForCloudSync(
+      departingProj.id,
+      departingProj,
+      departingTree
+    );
+    const { fingerprint: settingsFp, settingsChanged } = resolveSettingsForCloudSync(
+      departingProj.id,
+      departingProj,
+      departingSettings
+    );
+    if (treeChanged || settingsChanged || !departingProj.isCloudSynced) {
+      const markDepartingSynced = (syncedId) => {
+        const targetId = syncedId || departingProj.cloudId || departingProj.id;
+        const list = getProjectsList();
+        const idx = list.findIndex(p => p.id === departingProj.id || p.cloudId === targetId);
+        if (idx !== -1) {
+          list[idx].isCloudSynced = true;
+          list[idx].cloudId = targetId;
+          list[idx].lastCloudSyncAt = Date.now();
+          saveProjectsList(list, { skipCloudSync: true });
+        }
+      };
+      syncProjectToCloud(departingProj, departingSettings, treeToUpload, {
+        onHeaderSynced: markDepartingSynced
+      }).then((res) => {
+        if (res && res.success) {
+          markSettingsSynced(departingProj.id, settingsFp);
+          if (treeToUpload !== null && res.catalogUploaded !== false) {
+            markCatalogTreeSynced(departingProj.id, treeFp);
+          }
+          markDepartingSynced(res.projectId);
+          refreshProjectsGridUI();
+        }
+      }).catch(() => {});
+    }
   }
   try {
     const url = new URL(window.location.href);
@@ -2758,36 +2975,33 @@ export async function deleteProjectAction(projectId, event) {
 
   const p = getProjectById(projectId);
   const user = getCurrentUser();
-  const uEmail = (user?.email || '').toLowerCase().trim();
-  const pOwner = (p?.ownerEmail || '').toLowerCase().trim();
 
-  const isOwner = !p || !pOwner || pOwner === uEmail;
-
-  const myMem = (p && Array.isArray(p.members))
-    ? p.members.find(m => (m.email || '').toLowerCase().trim() === uEmail && m.status !== 'pending' && m.status !== 'rejected')
-    : null;
-  const isEditor = isOwner || myMem?.role === 'editar';
-
-  if (!isEditor) {
-    showToast('🔒 Solo el propietario o colaboradores con rol de Editor pueden eliminar este proyecto.', 'warning');
+  if (p && !isProjectHostOwner(p, user)) {
+    showToast('🔒 Solo el anfitrión (propietario) del proyecto puede enviarlo a la papelera.', 'warning');
     return;
   }
 
   const projName = p?.projectName || 'este proyecto';
-  if (!confirm(`¿Deseas eliminar permanentemente el proyecto "${projName}"? Esta acción no se puede deshacer.`)) {
+  if (!confirm(`¿Deseas enviar el proyecto "${projName}" a la Papelera de Reciclaje?\n\nSe conservará durante 7 días antes de eliminarse definitivamente, y solo tú (anfitrión) podrás restaurarlo o respaldarlo.`)) {
     return;
   }
 
   try {
-    await deleteProject(projectId);
-    showToast(`Proyecto "${projName}" eliminado exitosamente.`, 'error');
+    const res = await deleteProject(projectId);
+    if (!res || res.success !== true) {
+      showToast(res?.reason || res?.error || 'No se pudo mover el proyecto a la papelera.', res?.forbidden ? 'warning' : 'error');
+      return;
+    }
+    showToast(`Proyecto "${projName}" enviado a la Papelera (se conservará 7 días).`, 'success');
   } catch (err) {
     console.warn('[deleteProjectAction] Error al eliminar:', err);
-    showToast('Proyecto eliminado localmente.', 'error');
+    showToast('No se pudo mover el proyecto a la papelera.', 'error');
+    return;
   }
 
   renderPortalDashboard();
   refreshProjectsGridUI();
+  updateTrashBadgeUI();
 }
 
 // ==========================================
@@ -3027,82 +3241,37 @@ export async function finalizeCreateProject() {
     finishBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Creando proyecto...`;
   }
 
-  const newProj = createNewProject(projPayload);
+  projPayload.companyLogo = await compressWizardLogo(projPayload.companyLogo);
+  const newProj = createNewProject(projPayload, { skipCloudSync: true });
 
   try {
-    const oldId = newProj.id;
-    const assignedUuid = isValidUUID(newProj.id) ? newProj.id : (newProj.cloudId && isValidUUID(newProj.cloudId) ? newProj.cloudId : generateUUID());
-    newProj.id = assignedUuid;
-    newProj.cloudId = assignedUuid;
-    newProj.isCloudSynced = false;
-
-    const rawTree = localStorage.getItem(getStorageKey(oldId));
-    const rawSettings = localStorage.getItem(getSettingsKey(oldId));
-    if (oldId !== newProj.id) {
-      if (rawTree) localStorage.setItem(getStorageKey(newProj.id), rawTree);
-      if (rawSettings) localStorage.setItem(getSettingsKey(newProj.id), rawSettings);
-    }
-
-    const markProjectSyncedInStorage = (syncedId) => {
-      const targetId = syncedId || assignedUuid;
-      newProj.isCloudSynced = true;
-      newProj.cloudId = targetId;
-      newProj.lastCloudSyncAt = Date.now();
-      const latest = getProjectsList();
-      const idx = latest.findIndex(p => p.id === oldId || p.id === newProj.id || p.cloudId === targetId);
-      if (idx !== -1) {
-        latest[idx] = {
-          ...latest[idx],
-          id: newProj.id,
-          cloudId: targetId,
-          isCloudSynced: true,
-          lastCloudSyncAt: newProj.lastCloudSyncAt
-        };
-        saveProjectsList(latest);
-      }
-    };
-
-    const projects = getProjectsList();
-    const pIdx = projects.findIndex(p => p.id === oldId || p.id === newProj.id);
-    if (pIdx !== -1) {
-      projects[pIdx] = { ...projects[pIdx], ...newProj, id: newProj.id, cloudId: newProj.cloudId, isCloudSynced: false };
-    } else {
-      projects.unshift(newProj);
-    }
-    saveProjectsList(projects);
-
-    const pTree = rawTree ? JSON.parse(rawTree) : [];
-    const pSettings = rawSettings ? JSON.parse(rawSettings) : projPayload;
-    let initialSyncFinished = false;
+    const pTree = readStoredJson(getStorageKey(newProj.id)) || [];
+    const pSettings = readStoredJson(getSettingsKey(newProj.id)) || projPayload;
     try { sessionStorage.setItem(`cubikar_pending_initial_upload_${newProj.id}`, '1'); } catch (_) {}
-    const syncTask = syncProjectToCloud(newProj, pSettings, pTree).then((res) => {
-      initialSyncFinished = true;
-      if (res && res.success) {
-        try {
-          if (Array.isArray(pTree) && pTree.length > 0) {
-            localStorage.setItem(getStorageKey(newProj.id), JSON.stringify(pTree));
-          }
-          sessionStorage.removeItem(`cubikar_pending_initial_upload_${newProj.id}`);
-        } catch (_) {}
-        markProjectSyncedInStorage(res.projectId || assignedUuid);
+
+    let resolveHeaderSynced;
+    const headerSynced = new Promise(resolve => { resolveHeaderSynced = resolve; });
+    syncProjectToCloud(newProj, pSettings, pTree, {
+      onHeaderSynced: (syncedId) => {
+        markProjectHeaderSynced(newProj.id, syncedId);
+        resolveHeaderSynced(true);
       }
-      return res;
+    }).then((res) => {
+      resolveHeaderSynced(false);
+      if (res && res.success) {
+        try { sessionStorage.removeItem(`cubikar_pending_initial_upload_${newProj.id}`); } catch (_) {}
+        markCatalogTreeSynced(newProj.id, pTree);
+        markSettingsSynced(newProj.id, pSettings);
+      }
     }).catch((err) => {
+      resolveHeaderSynced(false);
       console.warn('[CloudSync] Aviso al respaldar nuevo proyecto:', err);
-      return null;
     });
 
     await Promise.race([
-      syncTask,
-      new Promise(resolve => setTimeout(resolve, 6500))
+      headerSynced,
+      new Promise(resolve => setTimeout(resolve, NEW_PROJECT_HEADER_SYNC_TIMEOUT_MS))
     ]);
-    if (!initialSyncFinished) {
-      try {
-        if (Array.isArray(pTree) && pTree.length > 0) {
-          localStorage.setItem(getStorageKey(newProj.id), JSON.stringify(pTree));
-        }
-      } catch (_) {}
-    }
   } catch (err) {
     console.warn('[CloudSync] Aviso al respaldar nuevo proyecto:', err);
   } finally {
@@ -3119,6 +3288,44 @@ export async function finalizeCreateProject() {
     showToast('¡Proyecto creado con éxito! Abriendo espacio de trabajo...');
   }
   openProjectInWorkspace(newProj.id);
+}
+
+const NEW_PROJECT_HEADER_SYNC_TIMEOUT_MS = 10000;
+const WIZARD_LOGO_MAX_INLINE_CHARS = 80000;
+
+function readStoredJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function markProjectHeaderSynced(localId, syncedId) {
+  const latest = getProjectsList();
+  const idx = latest.findIndex(p => p.id === localId || p.cloudId === syncedId);
+  if (idx === -1) return;
+  latest[idx] = {
+    ...latest[idx],
+    cloudId: syncedId || latest[idx].cloudId || localId,
+    isCloudSynced: true,
+    lastCloudSyncAt: Date.now()
+  };
+  saveProjectsList(latest, { skipCloudSync: true });
+}
+
+async function compressWizardLogo(logo) {
+  if (typeof logo !== 'string' || !logo.startsWith('data:image/') || logo.startsWith('data:image/svg') || logo.length < WIZARD_LOGO_MAX_INLINE_CHARS) {
+    return logo;
+  }
+  try {
+    const mimeType = logo.startsWith('data:image/png') ? 'image/png' : 'image/jpeg';
+    const { dataUrl } = await compressImageForPdf(logo, { maxWidth: 480, maxHeight: 480, quality: 0.85, mimeType });
+    return (dataUrl && dataUrl.length < logo.length) ? dataUrl : logo;
+  } catch (_) {
+    return logo;
+  }
 }
 
 /**
@@ -4917,4 +5124,7 @@ if (typeof window !== 'undefined') {
   window.goToProjectsDashboard = goToProjectsDashboard;
   window.exitProjectToPortal = exitProjectToPortal;
   window.logoutAllDevices = logoutAllDevices;
+  window.renderHeaderCreateButtonHTML = renderHeaderCreateButtonHTML;
+  window.renderPortalDashboard = renderPortalDashboard;
+  window.refreshProjectsGridUI = refreshProjectsGridUI;
 }

@@ -13,14 +13,16 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261116_cf22';
+} from '../../config/constants.js?v=20261117_cf25';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261116_cf22';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261116_cf22';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261116_cf22';
-import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects } from '../../core/cloudProjectService.js?v=20261116_cf22';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261116_cf22';
+export const STORAGE_KEY_TRASHED_PROJECTS = 'cubikar_trashed_project_ids_v1';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261117_cf25';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261117_cf25';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261117_cf25';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261117_cf25';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261117_cf25';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -739,169 +741,226 @@ export function isProjectMarkedDeleted(projectId) {
   return getDeletedProjectsList().includes(projectId);
 }
 
+export function unmarkProjectDeleted(projectId) {
+  if (!projectId) return;
+  try {
+    const clean = String(projectId).trim();
+    const list = getDeletedProjectsList().filter(id => String(id || '').trim() !== clean);
+    localStorage.setItem(STORAGE_KEY_DELETED_PROJECTS, JSON.stringify(list));
+  } catch (_) {}
+}
+
+export function getTrashedProjectsList() {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(STORAGE_KEY_TRASHED_PROJECTS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function markProjectTrashedLocal(projectId) {
+  if (!projectId) return;
+  try {
+    const clean = String(projectId).trim();
+    const list = getTrashedProjectsList();
+    if (!list.includes(clean)) {
+      list.push(clean);
+      localStorage.setItem(STORAGE_KEY_TRASHED_PROJECTS, JSON.stringify(list.slice(-200)));
+    }
+  } catch (_) {}
+}
+
+export function unmarkProjectTrashedLocal(projectId) {
+  if (!projectId) return;
+  try {
+    const clean = String(projectId).trim();
+    const list = getTrashedProjectsList().filter(id => String(id || '').trim() !== clean);
+    localStorage.setItem(STORAGE_KEY_TRASHED_PROJECTS, JSON.stringify(list));
+  } catch (_) {}
+}
+
+export function isProjectTrashedLocal(projectId) {
+  if (!projectId) return false;
+  const clean = String(projectId).trim();
+  return getTrashedProjectsList().some(id => String(id || '').trim() === clean);
+}
+
 // ==========================================
 // GESTIÓN DE PROYECTOS
 // ==========================================
-export function getProjectsList() {
+let projectsListCache = null;
+let projectsQuotaWarningShown = false;
+
+function buildSampleCasaLauraEntry(currentUser) {
+  const proj3Id = 'proj-opus-casa-laura';
+  const proj3Settings = Object.assign({}, defaultSettings, {
+    companyName: 'Constructora Opus México',
+    companyLogo: SAMPLE_LOGOS.building,
+    projectName: 'Casa Laura (Opus 2014)',
+    projectLocation: 'Fraccionamiento Residencial, Puebla, Pue.',
+    currency: 'MXN',
+    currencySymbol: '$',
+    applySobrecosto: false,
+    pctIndirectos: 0.00,
+    pctFinanciamiento: 0.00,
+    pctUtilidad: 0.00,
+    pctAdicionales: 0.00
+  });
   try {
-    const deletedList = getDeletedProjectsList();
-    const isDeleted = (id) => Array.isArray(deletedList) && deletedList.includes(id);
-
-    const raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
-    if (raw) {
-      let list = JSON.parse(raw);
-      if (!Array.isArray(list)) list = [];
-
-      // Filtrar inmediatamente cualquier proyecto eliminado
-      if (deletedList.length > 0) {
-        const initialLen = list.length;
-        list = list.filter(p => !isDeleted(p.id) && !isDeleted(p.cloudId));
-        if (list.length !== initialLen) {
-          localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(list));
-        }
-      }
-
-      // Asegurar que cada proyecto tenga su lista de colaboradores con permisos
-      const currentUser = getCurrentUser();
-      const isRealAuthenticatedUser = Boolean(currentUser && currentUser.email && !SYSTEM_EXCLUDED_EMAILS.has(currentUser.email.toLowerCase().trim()));
-      let changed = false;
-
-      // Solo registrar el proyecto muestra para cuentas demo/sin autenticar, nunca inyectarlo a cuentas reales
-      const hasCasaLaura = list.some(p => p.id === 'proj-opus-casa-laura' || (p.projectName && p.projectName.toLowerCase().includes('casa laura')));
-      if (!isRealAuthenticatedUser && !hasCasaLaura && !isDeleted('proj-opus-casa-laura')) {
-        const proj3Id = 'proj-opus-casa-laura';
-        const proj3Settings = Object.assign({}, defaultSettings, {
-          companyName: 'Constructora Opus México',
-          companyLogo: SAMPLE_LOGOS.building,
-          projectName: 'Casa Laura (Opus 2014)',
-          projectLocation: 'Fraccionamiento Residencial, Puebla, Pue.',
-          currency: 'MXN',
-          currencySymbol: '$',
-          applySobrecosto: false,
-          pctIndirectos: 0.00,
-          pctFinanciamiento: 0.00,
-          pctUtilidad: 0.00,
-          pctAdicionales: 0.00
-        });
-        const proj3Tree = JSON.parse(JSON.stringify(CASA_LAURA_PROJECT));
-        try {
-          localStorage.setItem(getSettingsKey(proj3Id), JSON.stringify(proj3Settings));
-          localStorage.setItem(getStorageKey(proj3Id), JSON.stringify(proj3Tree));
-        } catch (e) {}
-
-        list.push({
-          id: proj3Id,
-          companyName: proj3Settings.companyName,
-          companyLogo: proj3Settings.companyLogo,
-          projectName: proj3Settings.projectName,
-          projectLocation: proj3Settings.projectLocation,
-          tipoObra: 'Vivienda',
-          currency: proj3Settings.currency,
-          currencySymbol: proj3Settings.currencySymbol,
-          factorSobrecosto: 1.0000,
-          totalPresupuesto: 2043699.54,
-          conceptCount: 94,
-          partidasCount: 12,
-          createdAt: '2024-05-20',
-          isSample: true,
-          ownerEmail: 'admin.general@constructora.com',
-          ownerName: 'Administrador de Obra',
-          ownerPlanId: 'pro',
-          members: [
-            {
-              id: 'mem-' + (currentUser ? currentUser.email : 'owner'),
-              name: (currentUser && currentUser.name) || 'Administrador de Obra',
-              email: (currentUser && currentUser.email) || 'admin@constructora.com',
-              avatar: (currentUser && currentUser.avatar) || AVATARS_BY_SEX['Masculino'],
-              role: 'editar'
-            }
-          ]
-        });
-        changed = true;
-      }
-
-      list.forEach(p => {
-        if (p.projectName) p.projectName = cleanMojibake(p.projectName);
-        if (p.companyName) p.companyName = cleanMojibake(p.companyName);
-        if (p.projectLocation) p.projectLocation = cleanMojibake(p.projectLocation);
-        if (p.tipoObra) p.tipoObra = cleanMojibake(p.tipoObra);
-        if (Array.isArray(p.members)) {
-          p.members.forEach(m => {
-            if (!Array.isArray(m.allowedTabs)) {
-              if (m.role === 'editar') {
-                m.allowedTabs = ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'];
-              } else if (m.email && m.email.includes('mariana')) {
-                m.allowedTabs = ['presupuesto', 'estimaciones'];
-              } else if (m.email && m.email.includes('roberto')) {
-                m.allowedTabs = ['alcances', 'seguimiento', 'calendario'];
-              } else {
-                m.allowedTabs = ['alcances', 'presupuesto'];
-              }
-              changed = true;
-            } else if (m.allowedTabs.includes('cat') || m.allowedTabs.includes('insumos')) {
-              // Migrar claves heredadas ('cat' -> 'alcances', 'insumos' -> 'presupuesto')
-              m.allowedTabs = Array.from(new Set(
-                m.allowedTabs.map(t => (t === 'cat' ? 'alcances' : t === 'insumos' ? 'presupuesto' : t))
-              ));
-              changed = true;
-            }
-          });
-        }
-        if (!p.members || !Array.isArray(p.members)) {
-          p.members = [];
-        }
-
-        // Asignar tipo de obra si no cuenta con él
-        if (!p.tipoObra) {
-          const nameLower = (p.projectName || '').toLowerCase();
-          if (nameLower.includes('torre') || nameLower.includes('corporativ') || nameLower.includes('edificio')) {
-            p.tipoObra = 'Edificación';
-          } else if (nameLower.includes('residencia') || nameLower.includes('casa') || nameLower.includes('vivienda') || nameLower.includes('lomas')) {
-            p.tipoObra = 'Vivienda';
-          } else if (nameLower.includes('puente') || nameLower.includes('cimentac') || nameLower.includes('pilot')) {
-            p.tipoObra = 'Obra Civil';
-          } else if (nameLower.includes('vial') || nameLower.includes('carreter') || nameLower.includes('parque')) {
-            p.tipoObra = 'Infraestructura';
-          } else {
-            p.tipoObra = 'Edificación';
-          }
-          changed = true;
-        }
-
-        // Garantizar que cada proyecto tenga ownerEmail
-        if (!p.ownerEmail) {
-          const firstEditor = Array.isArray(p.members) ? p.members.find(m => m.role === 'editar') : null;
-          p.ownerEmail = firstEditor?.email || 'admin.general@constructora.com';
-          changed = true;
-        }
-
-        // Sanitizar y curar nombre del propietario si tiene un valor de empresa o texto basura
-        const cleanOwner = (p.ownerName || '').trim();
-        if (!cleanOwner || isInvalidUserName(cleanOwner, p.ownerEmail, p)) {
-          p.ownerName = resolveCleanHostName(p.ownerEmail, '', p);
-          changed = true;
-        }
-
-        // Asignar fecha de creación si no cuenta con ella
-        if (!p.createdAt) {
-          p.createdAt = new Date().toISOString().slice(0, 10);
-          changed = true;
-        }
-      });
-      if (changed) saveProjectsList(list, { skipCloudSync: true });
-      return list;
+    if (!localStorage.getItem(getSettingsKey(proj3Id))) {
+      localStorage.setItem(getSettingsKey(proj3Id), JSON.stringify(proj3Settings));
     }
+    if (!localStorage.getItem(getStorageKey(proj3Id))) {
+      localStorage.setItem(getStorageKey(proj3Id), JSON.stringify(CASA_LAURA_PROJECT));
+    }
+  } catch (e) {}
+
+  return {
+    id: proj3Id,
+    companyName: proj3Settings.companyName,
+    companyLogo: proj3Settings.companyLogo,
+    projectName: proj3Settings.projectName,
+    projectLocation: proj3Settings.projectLocation,
+    tipoObra: 'Vivienda',
+    currency: proj3Settings.currency,
+    currencySymbol: proj3Settings.currencySymbol,
+    factorSobrecosto: 1.0000,
+    totalPresupuesto: 2043699.54,
+    conceptCount: 94,
+    partidasCount: 12,
+    createdAt: '2024-05-20',
+    isSample: true,
+    ownerEmail: 'admin.general@constructora.com',
+    ownerName: 'Administrador de Obra',
+    ownerPlanId: 'pro',
+    members: [
+      {
+        id: 'mem-' + (currentUser ? currentUser.email : 'owner'),
+        name: (currentUser && currentUser.name) || 'Administrador de Obra',
+        email: (currentUser && currentUser.email) || 'admin@constructora.com',
+        avatar: (currentUser && currentUser.avatar) || AVATARS_BY_SEX['Masculino'],
+        role: 'editar'
+      }
+    ]
+  };
+}
+
+function inferTipoObra(projectName) {
+  const nameLower = (projectName || '').toLowerCase();
+  if (nameLower.includes('torre') || nameLower.includes('corporativ') || nameLower.includes('edificio')) return 'Edificación';
+  if (nameLower.includes('residencia') || nameLower.includes('casa') || nameLower.includes('vivienda') || nameLower.includes('lomas')) return 'Vivienda';
+  if (nameLower.includes('puente') || nameLower.includes('cimentac') || nameLower.includes('pilot')) return 'Obra Civil';
+  if (nameLower.includes('vial') || nameLower.includes('carreter') || nameLower.includes('parque')) return 'Infraestructura';
+  return 'Edificación';
+}
+
+function defaultAllowedTabsForMember(m) {
+  if (m.role === 'editar') return ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'];
+  if (m.email && m.email.includes('mariana')) return ['presupuesto', 'estimaciones'];
+  if (m.email && m.email.includes('roberto')) return ['alcances', 'seguimiento', 'calendario'];
+  return ['alcances', 'presupuesto'];
+}
+
+function normalizeProjectEntry(p) {
+  if (p.projectName) p.projectName = cleanMojibake(p.projectName);
+  if (p.companyName) p.companyName = cleanMojibake(p.companyName);
+  if (p.projectLocation) p.projectLocation = cleanMojibake(p.projectLocation);
+  if (p.tipoObra) p.tipoObra = cleanMojibake(p.tipoObra);
+  if (!Array.isArray(p.members)) p.members = [];
+  p.members = p.members.filter(m => m && typeof m === 'object');
+  p.members.forEach(m => {
+    if (!Array.isArray(m.allowedTabs)) {
+      m.allowedTabs = defaultAllowedTabsForMember(m);
+    } else if (m.allowedTabs.includes('cat') || m.allowedTabs.includes('insumos')) {
+      m.allowedTabs = Array.from(new Set(
+        m.allowedTabs.map(t => (t === 'cat' ? 'alcances' : t === 'insumos' ? 'presupuesto' : t))
+      ));
+    }
+  });
+  if (!p.tipoObra) p.tipoObra = inferTipoObra(p.projectName);
+  if (!p.ownerEmail) {
+    const firstEditor = p.members.find(m => m.role === 'editar');
+    p.ownerEmail = firstEditor?.email || 'admin.general@constructora.com';
+  }
+  const cleanOwner = (p.ownerName || '').trim();
+  if (!cleanOwner || isInvalidUserName(cleanOwner, p.ownerEmail, p)) {
+    const resolvedName = resolveCleanHostName(p.ownerEmail, '', p);
+    if (resolvedName !== p.ownerName) p.ownerName = resolvedName;
+  }
+  if (!p.createdAt) p.createdAt = new Date().toISOString().slice(0, 10);
+  return p;
+}
+
+function buildNormalizedProjectsList(raw, deletedList, trashedList, currentUser) {
+  const deletedSet = new Set(deletedList.map(id => String(id || '').trim()));
+  const trashedSet = new Set(trashedList.map(id => String(id || '').trim()));
+  const isRemoved = (id) => Boolean(id) && (deletedSet.has(String(id).trim()) || trashedSet.has(String(id).trim()));
+
+  let parsed = [];
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    console.error('Error leyendo proyectos (lista local corrupta, no se sobrescribe):', e);
+    return null;
+  }
+  const list = (Array.isArray(parsed) ? parsed : [])
+    .filter(p => p && typeof p === 'object' && !Array.isArray(p))
+    .filter(p => !isRemoved(p.id) && !isRemoved(p.cloudId));
+
+  const isRealAuthenticatedUser = Boolean(currentUser && currentUser.email && !SYSTEM_EXCLUDED_EMAILS.has(currentUser.email.toLowerCase().trim()));
+  const hasCasaLaura = list.some(p => p.id === 'proj-opus-casa-laura' || (p.projectName && String(p.projectName).toLowerCase().includes('casa laura')));
+  if (!isRealAuthenticatedUser && !hasCasaLaura && !deletedSet.has('proj-opus-casa-laura')) {
+    list.push(buildSampleCasaLauraEntry(currentUser));
+  }
+
+  list.forEach(p => {
+    try {
+      normalizeProjectEntry(p);
+    } catch (e) {
+      console.warn('Aviso normalizando proyecto local:', p?.id, e);
+    }
+  });
+  return list;
+}
+
+/**
+ * Lista local de proyectos. Memoizada por el contenido crudo de localStorage (lista, eliminados,
+ * papelera y usuario); nunca escribe en localStorage al leer.
+ */
+export function getProjectsList() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY_PROJECTS);
   } catch (e) {
     console.error('Error leyendo proyectos:', e);
-  }
-  const currentUser = getCurrentUser();
-  if (currentUser && currentUser.email && !SYSTEM_EXCLUDED_EMAILS.has(currentUser.email.toLowerCase().trim())) {
-    try {
-      localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify([]));
-    } catch (_) {}
     return [];
   }
-  return initializeDefaultProjects();
+  const currentUser = getCurrentUser();
+  if (!raw) {
+    if (currentUser && currentUser.email && !SYSTEM_EXCLUDED_EMAILS.has(currentUser.email.toLowerCase().trim())) {
+      return [];
+    }
+    return initializeDefaultProjects();
+  }
+
+  let deletedRaw = '';
+  let trashedRaw = '';
+  try {
+    deletedRaw = localStorage.getItem(STORAGE_KEY_DELETED_PROJECTS) || '';
+    trashedRaw = localStorage.getItem(STORAGE_KEY_TRASHED_PROJECTS) || '';
+  } catch (_) {}
+  const userEmail = (currentUser?.email || '').toLowerCase().trim();
+  const c = projectsListCache;
+  if (!c || c.raw !== raw || c.deletedRaw !== deletedRaw || c.trashedRaw !== trashedRaw || c.userEmail !== userEmail) {
+    const normalized = buildNormalizedProjectsList(raw, getDeletedProjectsList(), getTrashedProjectsList(), currentUser);
+    if (!normalized) return [];
+    projectsListCache = { raw, deletedRaw, trashedRaw, userEmail, json: JSON.stringify(normalized) };
+  }
+  return JSON.parse(projectsListCache.json);
 }
 
 function triggerCloudCollabSync(user) {
@@ -914,16 +973,86 @@ function triggerCloudCollabSync(user) {
   } catch (_) {}
 }
 
-export function saveProjectsList(projects, opts = {}) {
+function isQuotaExceededError(e) {
+  return Boolean(e) && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+}
+
+function reportProjectsQuotaExceeded(e) {
+  console.error('Error guardando proyectos: el almacenamiento local está lleno.', e);
+  if (projectsQuotaWarningShown) return;
+  projectsQuotaWarningShown = true;
   try {
-    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(projects));
+    showToast('El almacenamiento local del navegador está lleno; no se pudo guardar la lista de proyectos. Libera espacio (papelera, logotipos pesados) e intenta de nuevo.', 'error');
+  } catch (_) {}
+}
+
+/**
+ * Los logotipos (data URL) viven solo en los settings del proyecto; la entrada de la lista no los guarda.
+ */
+function moveInlineLogoToSettings(entry) {
+  const logo = entry?.companyLogo;
+  if (typeof logo !== 'string' || !logo.startsWith('data:')) return entry;
+  try {
+    const key = getSettingsKey(entry.id);
+    const rawSettings = localStorage.getItem(key);
+    const settings = rawSettings ? JSON.parse(rawSettings) : null;
+    if (settings && typeof settings === 'object' && !settings.companyLogo) {
+      settings.companyLogo = logo;
+      localStorage.setItem(key, JSON.stringify(settings));
+    }
+  } catch (_) {}
+  const { companyLogo: _omit, ...rest } = entry;
+  return rest;
+}
+
+const PROJECT_LIST_TRANSIENT_KEYS = ['treeData', 'settings', 'chatMessages'];
+
+function slimProjectEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const slim = moveInlineLogoToSettings(entry);
+  if (!PROJECT_LIST_TRANSIENT_KEYS.some(k => k in slim)) return slim;
+  const copy = { ...slim };
+  PROJECT_LIST_TRANSIENT_KEYS.forEach(k => delete copy[k]);
+  return copy;
+}
+
+export function saveProjectsList(projects, opts = {}) {
+  const entries = (Array.isArray(projects) ? projects : []).map(slimProjectEntry).filter(Boolean);
+  try {
+    localStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(entries));
   } catch (e) {
-    console.error('Error guardando proyectos:', e);
+    if (isQuotaExceededError(e)) {
+      reportProjectsQuotaExceeded(e);
+    } else {
+      console.error('Error guardando proyectos:', e);
+    }
   }
+  projectsListCache = null;
   if (!opts?.skipCloudSync) {
     triggerCloudCollabSync();
   }
   return opts;
+}
+
+const projectLogoCache = new Map();
+
+export function getProjectCompanyLogo(project) {
+  if (!project) return '';
+  if (project.companyLogo) return project.companyLogo;
+  try {
+    const raw = localStorage.getItem(getSettingsKey(project.id)) || '';
+    const cached = projectLogoCache.get(project.id);
+    if (cached && cached.raw === raw) return cached.logo;
+    let logo = '';
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      logo = typeof parsed?.companyLogo === 'string' ? parsed.companyLogo : '';
+    }
+    projectLogoCache.set(project.id, { raw, logo });
+    return logo;
+  } catch (_) {
+    return '';
+  }
 }
 
 // Obtener proyectos accesibles para un usuario dado
@@ -1129,10 +1258,8 @@ function initializeDefaultProjects() {
 }
 
 // Crear un nuevo proyecto
-export function createNewProject(params) {
-  const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-    ? crypto.randomUUID()
-    : 'proj-' + Date.now();
+export function createNewProject(params, opts = {}) {
+  const newId = generateUUID();
   
   const parsedIva = params.ivaPct !== undefined && !isNaN(Number(params.ivaPct))
     ? Math.max(0, Math.min(100, Number(params.ivaPct)))
@@ -1178,16 +1305,11 @@ export function createNewProject(params) {
     if (!Array.isArray(nodes)) return;
     nodes.forEach((n) => {
       if (!n || typeof n !== 'object') return;
-      const uid = (n.uuid && /^[0-9a-f]{8}-/i.test(String(n.uuid)))
-        ? n.uuid
-        : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
-      n.uuid = uid;
+      if (!isValidUUID(String(n.uuid || ''))) n.uuid = generateUUID();
       if (Array.isArray(n.insumos)) {
         n.insumos.forEach((ins) => {
           if (!ins || typeof ins !== 'object') return;
-          if (!ins.uuid || !/^[0-9a-f]{8}-/i.test(String(ins.uuid))) {
-            ins.uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
-          }
+          if (!isValidUUID(String(ins.uuid || ''))) ins.uuid = generateUUID();
         });
       }
       if (Array.isArray(n.children)) assignNodeAndInsumoUuids(n.children);
@@ -1294,7 +1416,6 @@ export function createNewProject(params) {
   const projectEntry = {
     id: newId,
     companyName: projSettings.companyName,
-    companyLogo: projSettings.companyLogo,
     projectName: projSettings.projectName,
     projectLocation: projSettings.projectLocation,
     tipoObra: params.tipoObra || 'Edificación',
@@ -1307,13 +1428,14 @@ export function createNewProject(params) {
     ownerEmail: targetOwnerEmail,
     ownerName: resolveCleanHostName(targetOwnerEmail, params.ownerName || (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === targetOwnerEmail ? currentUser.name : null) || params.hostName),
     ownerPlanId: targetOwnerPlanId,
+    createdByEmail: (currentUser?.email || targetOwnerEmail).toLowerCase().trim(),
     members: initialMembers,
     createdAt: params.createdAt || new Date().toISOString().slice(0, 10)
   };
 
   const list = getProjectsList();
   list.unshift(projectEntry);
-  saveProjectsList(list);
+  saveProjectsList(list, { skipCloudSync: Boolean(opts?.skipCloudSync) });
 
   try {
     if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewProject === 'function') {
@@ -1341,25 +1463,12 @@ export function duplicateProject(projectId) {
     if (t) origTree = JSON.parse(t);
   } catch(e) {}
 
-  const newId = 'proj-' + Date.now();
+  const newId = generateUUID();
   const copySettings = JSON.parse(JSON.stringify(origSettings));
   copySettings.projectName = orig.projectName + ' (Copia)';
 
   const copyTree = JSON.parse(JSON.stringify(origTree));
-  const stripCloudUuids = (nodes) => {
-    if (!Array.isArray(nodes)) return;
-    nodes.forEach(n => {
-      if (!n || typeof n !== 'object') return;
-      delete n.uuid;
-      if (Array.isArray(n.insumos)) {
-        n.insumos.forEach(ins => {
-          if (ins && typeof ins === 'object') delete ins.uuid;
-        });
-      }
-      if (Array.isArray(n.children)) stripCloudUuids(n.children);
-    });
-  };
-  stripCloudUuids(copyTree);
+  const nodeIdMap = reassignTreeIdentities(copyTree);
 
   const newCreatedAt = new Date().toISOString().slice(0, 10);
   copySettings.createdAt = newCreatedAt;
@@ -1382,18 +1491,23 @@ export function duplicateProject(projectId) {
     if (origExpenses) {
       localStorage.setItem(`expenses_control_${newId}`, origExpenses);
     }
-    const origEst = localStorage.getItem(`estimaciones_data_${projectId}`);
-    if (origEst) {
-      localStorage.setItem(`estimaciones_data_${newId}`, origEst);
-    }
+    [`estimaciones_arq_data_`, `estimaciones_data_`].forEach(prefix => {
+      const origEst = localStorage.getItem(`${prefix}${projectId}`);
+      if (origEst) {
+        localStorage.setItem(`${prefix}${newId}`, JSON.stringify(remapNodeReferences(JSON.parse(origEst), nodeIdMap)));
+      }
+    });
   } catch(e) {}
 
+  const currentUser = getCurrentUser();
   const newProj = Object.assign({}, orig, {
     id: newId,
     cloudId: null,
     isCloudSynced: false,
+    lastCloudSyncAt: null,
     projectName: copySettings.projectName,
     members: (orig.members || []).map(m => Object.assign({}, m)),
+    createdByEmail: (currentUser?.email || orig.ownerEmail || '').toLowerCase().trim(),
     createdAt: newCreatedAt
   });
 
@@ -1402,6 +1516,45 @@ export function duplicateProject(projectId) {
   saveProjectsList(list);
 
   return newProj;
+}
+
+/**
+ * Asigna id y uuid nuevos a cada nodo e insumo de una copia del catálogo (evita que el upsert por 'id'
+ * en la nube mueva los conceptos del proyecto original). Devuelve el mapa id anterior → id nuevo.
+ */
+function reassignTreeIdentities(nodes, idMap = new Map()) {
+  if (!Array.isArray(nodes)) return idMap;
+  nodes.forEach(n => {
+    if (!n || typeof n !== 'object') return;
+    const freshId = generateUUID();
+    if (n.id !== undefined && n.id !== null) idMap.set(String(n.id), freshId);
+    if (n.uuid) idMap.set(String(n.uuid), freshId);
+    n.id = freshId;
+    n.uuid = freshId;
+    if (Array.isArray(n.insumos)) {
+      n.insumos.forEach(ins => {
+        if (!ins || typeof ins !== 'object') return;
+        const freshInsId = generateUUID();
+        ins.id = freshInsId;
+        ins.uuid = freshInsId;
+      });
+    }
+    if (Array.isArray(n.children)) reassignTreeIdentities(n.children, idMap);
+  });
+  return idMap;
+}
+
+const NODE_REFERENCE_KEYS = new Set(['nodeId', 'conceptId', 'conceptoId', 'conceptUuid']);
+
+function remapNodeReferences(value, idMap) {
+  if (Array.isArray(value)) return value.map(v => remapNodeReferences(v, idMap));
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  Object.entries(value).forEach(([k, v]) => {
+    const key = idMap.has(k) ? idMap.get(k) : k;
+    out[key] = (NODE_REFERENCE_KEYS.has(k) && typeof v === 'string' && idMap.has(v)) ? idMap.get(v) : remapNodeReferences(v, idMap);
+  });
+  return out;
 }
 
 // ==========================================
@@ -1429,6 +1582,8 @@ export function addProjectMember(projectId, memberData) {
     role: memberData.role || 'editar', // 'editar', 'escribir', 'leer'
     allowedTabs: Array.isArray(memberData.allowedTabs) ? memberData.allowedTabs : ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
   };
+  if (memberData.status) newMember.status = memberData.status;
+  if (memberData.pendingCloudAdd) newMember.pendingCloudAdd = true;
 
   if (existingIdx >= 0) {
     proj.members[existingIdx] = Object.assign(proj.members[existingIdx], newMember);
@@ -1438,6 +1593,18 @@ export function addProjectMember(projectId, memberData) {
 
   saveProjectsList(list);
   return newMember;
+}
+
+function clearMemberPendingCloudAdd(projectId, email) {
+  const cleanEmail = (email || '').toLowerCase().trim();
+  const list = getProjectsList();
+  const proj = list.find(p => p.id === projectId || p.cloudId === projectId);
+  const mem = proj && Array.isArray(proj.members)
+    ? proj.members.find(m => (m?.email || '').toLowerCase().trim() === cleanEmail)
+    : null;
+  if (!mem || !mem.pendingCloudAdd) return;
+  delete mem.pendingCloudAdd;
+  saveProjectsList(list, { skipCloudSync: true });
 }
 
 export function removeProjectMember(projectId, memberId) {
@@ -1584,8 +1751,16 @@ export function getTabAssignedMembers(projectId, tabId) {
   });
 }
 
-// Eliminar proyecto definitivamente
+// Enviar proyecto a la Papelera (retención 7 días - solo Anfitrión)
 export async function deleteProject(projectId) {
+  if (!projectId) return { success: false, error: 'Proyecto no especificado' };
+  const { moveProjectToTrash } = await import('./trashService.js?v=20261117_cf25');
+  const res = await moveProjectToTrash(projectId);
+  return (res && typeof res === 'object') ? res : { success: Boolean(res) };
+}
+
+// Eliminación permanente directa (uso interno / purga desde papelera)
+export async function permanentlyDeleteProject(projectId, opts = {}) {
   if (!projectId) return false;
 
   const currentList = getProjectsList();
@@ -1755,7 +1930,6 @@ export function syncActiveProjectSummary(projectId, treeData, settings) {
     (1 + ((parseFloat(settings.pctSegurosFianzas) || 0) / 100)) : 1.0;
 
   list[idx].companyName = settings.companyName || list[idx].companyName;
-  list[idx].companyLogo = settings.companyLogo !== undefined ? settings.companyLogo : list[idx].companyLogo;
   list[idx].projectName = settings.projectName || list[idx].projectName;
   list[idx].projectLocation = settings.projectLocation || list[idx].projectLocation;
   list[idx].currency = settings.currency || list[idx].currency;
@@ -1928,20 +2102,23 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
   filteredInvs.unshift(newInvitation);
   saveStoredInvitations(filteredInvs);
 
-  // Registrar también al miembro en el proyecto en estado 'pending'
+  // Registrar también al miembro en el proyecto en estado 'pending' (pendiente de confirmar en la nube)
   addProjectMember(projectId, {
     name: newInvitation.name,
     email: newInvitation.email,
     avatar: avatar || AVATARS_BY_SEX['Masculino'],
     role: newInvitation.role,
     allowedTabs: newInvitation.allowedTabs,
-    status: 'pending'
+    status: 'pending',
+    pendingCloudAdd: true
   });
 
   // Sincronizar colaborador directamente a Supabase PostgreSQL (public.proyecto_colaboradores)
   try {
     if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-      window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending');
+      Promise.resolve(window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending'))
+        .then(res => { if (res?.success) clearMemberPendingCloudAdd(projectId, newInvitation.email); })
+        .catch(() => {});
     }
   } catch (_) {}
 
@@ -2047,45 +2224,31 @@ export async function acceptProjectInvitation(invitationId, currentUser = null) 
   // 1. Buscar en invitaciones formales de proyectos por ID exacto
   targetInv = invs.find(i => i.id === invitationId);
 
-  // 2. Buscar en invitaciones al plan por ID exacto o coincidencia de sufijo
+  // 2. Buscar en invitaciones al plan por ID exacto
   if (!targetInv) {
-    targetPlanInv = planInvs.find(pi => 
-      pi.id === invitationId ||
-      invitationId === `plan-inv-${pi.id}` ||
-      (typeof invitationId === 'string' && (invitationId.endsWith(`-${pi.id}`) || invitationId.includes(pi.id)))
-    );
+    targetPlanInv = planInvs.find(pi => pi.id === invitationId || invitationId === `plan-inv-${pi.id}`);
   }
 
-  // 3. Si la ID tiene prefijo 'plan-inv-{projId}-{planInvId}'
-  if (!targetInv && typeof invitationId === 'string' && invitationId.startsWith('plan-inv-')) {
-    const raw = invitationId.replace('plan-inv-', '');
-    const foundProj = list.find(p => raw.startsWith(p.id));
-    if (foundProj) {
-      targetProjectId = foundProj.id;
-      targetProjectName = foundProj.projectName;
-      const restId = raw.replace(foundProj.id + '-', '');
-      if (!targetPlanInv) {
-        targetPlanInv = planInvs.find(pi => pi.id === restId || (pi.email || '').toLowerCase().trim() === userEmail);
+  // 3. ID sintética exacta 'plan-inv-{projId}-{planInvId}'
+  if (!targetInv && !targetPlanInv && typeof invitationId === 'string' && invitationId.startsWith('plan-inv-')) {
+    const raw = invitationId.slice('plan-inv-'.length);
+    for (const p of list) {
+      const pi = planInvs.find(candidate => raw === `${p.id}-${candidate.id}`);
+      if (pi) {
+        targetProjectId = p.id;
+        targetProjectName = p.projectName;
+        targetPlanInv = pi;
+        break;
       }
     }
   }
 
-  // 4. Si aún no se encontró por ID, buscar la invitación pendiente por correo del usuario conectado
+  // 4. Miembro pendiente registrado con esa misma ID
   if (!targetInv && !targetPlanInv && userEmail) {
-    targetInv = invs.find(i => (i.email || '').toLowerCase().trim() === userEmail && i.status === 'pending');
-    if (!targetInv) {
-      targetPlanInv = planInvs.find(pi => (pi.email || '').toLowerCase().trim() === userEmail && pi.status === 'pending');
-    }
-  }
-
-  // 5. Si aún no se encontró, buscar en miembros de proyectos si el usuario está registrado con status 'pending'
-  if (!targetInv && !targetPlanInv && userEmail) {
-    const projWithMember = list.find(p => 
-      Array.isArray(p.members) && 
-      p.members.some(m => (m.email || '').toLowerCase().trim() === userEmail && (m.status === 'pending' || m.id === invitationId))
-    );
+    const isTargetMember = (m) => m && m.id === invitationId && (m.email || '').toLowerCase().trim() === userEmail;
+    const projWithMember = list.find(p => Array.isArray(p.members) && p.members.some(isTargetMember));
     if (projWithMember) {
-      const mem = projWithMember.members.find(m => (m.email || '').toLowerCase().trim() === userEmail);
+      const mem = projWithMember.members.find(isTargetMember);
       if (mem) {
         mem.status = 'active';
         if (user) {
