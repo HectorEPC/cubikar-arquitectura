@@ -2,11 +2,11 @@
 // Servicio de persistencia y sincronización de Proyectos Arquitectónicos y Presupuestos con Supabase PostgreSQL
 // Diseñado para operar en segundo plano con alta resiliencia y sincronización multiusuario en la nube.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf26';
-import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId, unmarkProjectTrashedLocal, markProjectTrashedLocal } from '../modules/portal/projectService.js?v=20261117_cf26';
-import { getSettingsKey } from '../config/constants.js?v=20261117_cf26';
-import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261117_cf26';
-import { showToast } from '../ui/notifications.js?v=20261117_cf26';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf27';
+import { getCurrentUser, saveCurrentUser, getProjectsList, getUserPlanId, unmarkProjectTrashedLocal, markProjectTrashedLocal } from '../modules/portal/projectService.js?v=20261117_cf27';
+import { getSettingsKey } from '../config/constants.js?v=20261117_cf27';
+import { fetchUserProfile, resolveUserDisplayName, resolveUserRoleLabel, buildFallbackAvatarSvg } from './authService.js?v=20261117_cf27';
+import { showToast } from '../ui/notifications.js?v=20261117_cf27';
 
 function extractArqNodeMeta(node, conceptUuid) {
   if (!node || typeof node !== 'object') return null;
@@ -568,18 +568,32 @@ async function performProjectSync(project, settings = {}, treeData = null, opts 
       updated_at: new Date().toISOString()
     };
 
-    let { error: projError } = await sb
-      .from('proyectos')
-      .upsert(projectRecord, { onConflict: 'id' });
+    let projError = null;
+    if (existingCloudProj) {
+      const { id: _ignoredId, creado_por: _ignoredCreator, ...updateRecord } = projectRecord;
+      ({ error: projError } = await sb
+        .from('proyectos')
+        .update(updateRecord)
+        .eq('id', projectId));
+    } else {
+      ({ error: projError } = await sb
+        .from('proyectos')
+        .insert(projectRecord));
+    }
 
-    if (projError && isRlsError(projError)) {
+    if (projError && (isRlsError(projError) || projError.code === '23505')) {
       const cloudRow = await readCloudProjectOwnership(sb, projectId);
       if (isCloudRowOwnedBy(cloudRow, user)) {
         effectiveOwnerEmail = (cloudRow.owner_email || effectiveOwnerEmail || '').toLowerCase().trim();
         canManageMembers = Boolean(currentActorEmail) && currentActorEmail === effectiveOwnerEmail;
+        const { id: _ignoredId, creado_por: _ignoredCreator, ...retryUpdate } = {
+          ...projectRecord,
+          owner_email: cloudRow.owner_email || projectRecord.owner_email
+        };
         ({ error: projError } = await sb
           .from('proyectos')
-          .upsert({ ...projectRecord, owner_email: cloudRow.owner_email || projectRecord.owner_email, creado_por: cloudRow.creado_por || projectRecord.creado_por }, { onConflict: 'id' }));
+          .update(retryUpdate)
+          .eq('id', projectId));
         if (projError) {
           console.warn('[CloudProjectService] Reintento de subida de proyecto propio rechazado:', projError.message || projError);
           return { success: false, triggerBlocked: isP0001TriggerError(projError), error: projError };

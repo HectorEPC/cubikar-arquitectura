@@ -3,8 +3,8 @@
 // persistencia total de proyectos, anfitriones, invitaciones y membresías
 // al iniciar sesión en cualquier computadora, navegador o dispositivo.
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf26';
-import { syncProjectToCloud, fetchCloudProjects, invalidateCloudProjectsCache, getTrashedCloudProjectIds } from './cloudProjectService.js?v=20261117_cf26';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261117_cf27';
+import { syncProjectToCloud, fetchCloudProjects, invalidateCloudProjectsCache, getTrashedCloudProjectIds } from './cloudProjectService.js?v=20261117_cf27';
 import {
   getCurrentUser,
   saveCurrentUser,
@@ -21,9 +21,9 @@ import {
   isProjectMarkedDeleted,
   isProjectTrashedLocal,
   getDeletedProjectsList
-} from '../modules/portal/projectService.js?v=20261117_cf26';
-import { getSettingsKey, getStorageKey } from '../config/constants.js?v=20261117_cf26';
-import { getChatStorageKey } from '../modules/chat/projectChat.js?v=20261117_cf26';
+} from '../modules/portal/projectService.js?v=20261117_cf27';
+import { getSettingsKey, getStorageKey } from '../config/constants.js?v=20261117_cf27';
+import { getChatStorageKey } from '../modules/chat/projectChat.js?v=20261117_cf27';
 
 let syncDebounceTimer = null;
 let isCloudSyncInFlight = false;
@@ -860,7 +860,7 @@ export function restoreUserCollaborationFromCloud(user = null) {
 
       candidateIds.forEach(cid => {
         if (!cid || cid === 'default' || cid === 'proj-opus-casa-laura' || cid.startsWith('proj-default') || cid.startsWith('proj-demo')) return;
-        if (existingIds.has(cid) || confirmedCloudDeletedIds.has(cid) || cloudDeniedIds.has(cid) || isDeleted(cid)) return;
+        if (existingIds.has(cid) || confirmedCloudDeletedIds.has(cid) || cloudDeniedIds.has(cid) || isDeleted(cid) || isProjectTrashedLocal(cid)) return;
         let parsedSet = null;
         let parsedTree = null;
         try {
