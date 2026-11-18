@@ -13,16 +13,16 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261117_cf25';
+} from '../../config/constants.js?v=20261117_cf26';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 export const STORAGE_KEY_TRASHED_PROJECTS = 'cubikar_trashed_project_ids_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261117_cf25';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261117_cf25';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261117_cf25';
-import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261117_cf25';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261117_cf25';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261117_cf26';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261117_cf26';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261117_cf26';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261117_cf26';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261117_cf26';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf26';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -1260,6 +1260,13 @@ function initializeDefaultProjects() {
 // Crear un nuevo proyecto
 export function createNewProject(params, opts = {}) {
   const newId = generateUUID();
+  const currentUser = getCurrentUser();
+  const targetOwnerEmail = (params.ownerEmail || (currentUser && currentUser.email) || 'admin.general@constructora.com').toLowerCase().trim();
+  const targetOwnerPlanId = params.ownerPlanId || getUserPlanId(targetOwnerEmail);
+  const resolvedOwnerName = resolveCleanHostName(
+    targetOwnerEmail,
+    params.ownerName || (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === targetOwnerEmail ? currentUser.name : null) || params.hostName
+  );
   
   const parsedIva = params.ivaPct !== undefined && !isNaN(Number(params.ivaPct))
     ? Math.max(0, Math.min(100, Number(params.ivaPct)))
@@ -1275,6 +1282,8 @@ export function createNewProject(params, opts = {}) {
     companyLogo: params.companyLogo || '',
     projectName: params.projectName,
     projectLocation: params.projectLocation,
+    ownerEmail: targetOwnerEmail,
+    ownerName: resolvedOwnerName,
     createdAt: projectCreatedAt,
     currency: params.currency || 'MXN',
     currencySymbol: params.currencySymbol || '$',
@@ -1318,10 +1327,15 @@ export function createNewProject(params, opts = {}) {
   const projTree = params.template === 'demo' ? JSON.parse(JSON.stringify(defaultTreeData)) : [];
   assignNodeAndInsumoUuids(projTree);
 
-  // Almacenar settings y catálogo del nuevo proyecto
+  // Almacenar settings, catálogo y chat inicial vacío del nuevo proyecto
   try {
     localStorage.setItem(getSettingsKey(newId), JSON.stringify(projSettings));
     localStorage.setItem(getStorageKey(newId), JSON.stringify(projTree));
+    localStorage.setItem(`adm_arq_project_chat_${newId}`, '[]');
+    localStorage.setItem(`adm_const_project_chat_${newId}`, '[]');
+    localStorage.removeItem(`adm_arq_chat_${newId}`);
+    localStorage.removeItem(`adm_const_chat_${newId}`);
+    localStorage.removeItem(`control_obra_chat_${newId}`);
     localStorage.setItem('calendario_cfg_' + newId, JSON.stringify({
       startDate: projectCreatedAt,
       currentDate: 'auto',
@@ -1336,11 +1350,7 @@ export function createNewProject(params, opts = {}) {
   const f = projSettings.applySobrecosto ?
     (1 + projSettings.pctIndirectos/100) * (1 + projSettings.pctFinanciamiento/100) * (1 + projSettings.pctUtilidad/100) * (1 + projSettings.pctAdicionales/100) * (1 + (projSettings.pctSegurosFianzas || 0)/100) : 1.0;
 
-  const currentUser = getCurrentUser();
-  const targetOwnerEmail = (params.ownerEmail || (currentUser && currentUser.email) || 'admin.general@constructora.com').toLowerCase().trim();
-  const targetOwnerPlanId = params.ownerPlanId || getUserPlanId(targetOwnerEmail);
-
-  // Determinar miembros iniciales
+  // Determinar miembros iniciales: proyecto nuevo inicia en limpio sin heredar invitaciones ni colaboradores previos
   let initialMembers = [];
   if (Array.isArray(params.members) && params.members.length > 0) {
     initialMembers = params.members;
@@ -1350,7 +1360,7 @@ export function createNewProject(params, opts = {}) {
       initialMembers = [
         {
           id: 'mem-' + targetOwnerEmail,
-          name: resolveCleanHostName(targetOwnerEmail, params.hostName || params.ownerName),
+          name: resolvedOwnerName,
           email: targetOwnerEmail,
           avatar: AVATARS_BY_SEX['Masculino'],
           role: 'editar',
@@ -1365,23 +1375,6 @@ export function createNewProject(params, opts = {}) {
           status: 'active'
         }
       ];
-
-      // Vincular automáticamente a todos los demás colaboradores del plan del anfitrión (User A) con sus respectivos roles ('editar', 'escribir', 'leer')
-      const existingCollabs = getPlanCollaboratorsForOwner(targetOwnerEmail);
-      existingCollabs.forEach(collab => {
-        const cEmail = (collab.email || '').toLowerCase().trim();
-        if (cEmail && cEmail !== targetOwnerEmail && cEmail !== currentUser.email.toLowerCase().trim()) {
-          initialMembers.push({
-            id: 'mem-' + cEmail,
-            name: collab.name || cEmail.split('@')[0],
-            email: cEmail,
-            avatar: collab.avatar || AVATARS_BY_SEX['Masculino'],
-            role: collab.role || 'editar',
-            allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'],
-            status: collab.status || 'active'
-          });
-        }
-      });
     } else {
       initialMembers = [
         {
@@ -1393,23 +1386,6 @@ export function createNewProject(params, opts = {}) {
           status: 'active'
         }
       ];
-
-      // Si el dueño mismo crea la obra, vincular automáticamente a los colaboradores ya invitados a su plan
-      const existingCollabs = getPlanCollaboratorsForOwner(targetOwnerEmail);
-      existingCollabs.forEach(collab => {
-        const cEmail = (collab.email || '').toLowerCase().trim();
-        if (cEmail && cEmail !== targetOwnerEmail) {
-          initialMembers.push({
-            id: 'mem-' + cEmail,
-            name: collab.name || cEmail.split('@')[0],
-            email: cEmail,
-            avatar: collab.avatar || AVATARS_BY_SEX['Masculino'],
-            role: collab.role || 'editar',
-            allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'],
-            status: collab.status || 'active'
-          });
-        }
-      });
     }
   }
 
@@ -1426,7 +1402,7 @@ export function createNewProject(params, opts = {}) {
     conceptCount: countTreeConcepts(projTree),
     partidasCount: countTreePartidas(projTree),
     ownerEmail: targetOwnerEmail,
-    ownerName: resolveCleanHostName(targetOwnerEmail, params.ownerName || (currentUser && currentUser.email && currentUser.email.toLowerCase().trim() === targetOwnerEmail ? currentUser.name : null) || params.hostName),
+    ownerName: resolvedOwnerName,
     ownerPlanId: targetOwnerPlanId,
     createdByEmail: (currentUser?.email || targetOwnerEmail).toLowerCase().trim(),
     members: initialMembers,
@@ -1435,7 +1411,7 @@ export function createNewProject(params, opts = {}) {
 
   const list = getProjectsList();
   list.unshift(projectEntry);
-  saveProjectsList(list, { skipCloudSync: Boolean(opts?.skipCloudSync) });
+  saveProjectsList(list, { skipCloudSync: Boolean(params?.skipCloudSync || opts?.skipCloudSync) });
 
   try {
     if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewProject === 'function') {
@@ -1754,7 +1730,7 @@ export function getTabAssignedMembers(projectId, tabId) {
 // Enviar proyecto a la Papelera (retención 7 días - solo Anfitrión)
 export async function deleteProject(projectId) {
   if (!projectId) return { success: false, error: 'Proyecto no especificado' };
-  const { moveProjectToTrash } = await import('./trashService.js?v=20261117_cf25');
+  const { moveProjectToTrash } = await import('./trashService.js?v=20261117_cf26');
   const res = await moveProjectToTrash(projectId);
   return (res && typeof res === 'object') ? res : { success: Boolean(res) };
 }

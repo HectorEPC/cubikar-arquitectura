@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261117_cf25';
-import { getActiveProjectId } from '../../config/constants.js?v=20261117_cf25';
+import { state } from '../../state/store.js?v=20261117_cf26';
+import { getActiveProjectId } from '../../config/constants.js?v=20261117_cf26';
 import {
   getProjectById,
   getProjectsList,
@@ -23,15 +23,15 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getDeletedProjectsList
-} from '../portal/projectService.js?v=20261117_cf25';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261117_cf25';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261117_cf25';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261117_cf25';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261117_cf25';
-import { openPrintWindow } from '../io/printService.js?v=20261117_cf25';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261117_cf25';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf25';
+} from '../portal/projectService.js?v=20261117_cf26';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261117_cf26';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261117_cf26';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf26';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261117_cf26';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261117_cf26';
+import { openPrintWindow } from '../io/printService.js?v=20261117_cf26';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261117_cf26';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf26';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -317,380 +317,8 @@ export function getChatStorageKey(projectId = null) {
   return `adm_arq_project_chat_${pid}`;
 }
 
-export function generateSeedProjectChatMessages(projectId = null) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
-  const today = new Date();
-  const formatTimeAgo = (daysAgo, hour, minute) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - daysAgo);
-    const dateStr = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
-    const hh = String(hour).padStart(2, '0');
-    const mm = String(minute).padStart(2, '0');
-    return `${dateStr} • ${hh}:${mm}`;
-  };
-
-  return [
-    {
-      id: `seed_msg_01_${pid}`,
-      folioNumber: 1,
-      folio: 'BIT-001',
-      division: 'alcance_presupuesto',
-      entryType: 'orden',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(5, 8, 30),
-      partidaId: '1',
-      mentions: ['@Arq.Roberto.Mendez.Silva', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: [],
-      reportes: ['!Tabla de Alcances'],
-      readBy: ['__all__'],
-      text: 'Apertura de Bitácora: Equipo, damos inicio formal a la gestión del proyecto. En la Tabla de Alcances he configurado el árbol base de entregables con las 5 partidas del despacho: 1) Estudios Preliminares y Topografía, 2) Anteproyecto Arquitectónico, 3) Proyecto Ejecutivo, 4) Ingenierías y 5) Trámites. @Arq.Roberto.Mendez.Silva por favor coordina el levantamiento de topografía y los sondeos con el laboratorio de mecánica de suelos.'
-    },
-    {
-      id: `seed_msg_02_${pid}`,
-      folioNumber: 2,
-      folio: 'BIT-002',
-      division: 'seguimiento_calendario',
-      entryType: 'avance',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(4, 11, 15),
-      partidaId: '1',
-      mentions: ['@Arq.Director', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: [],
-      reportes: ['!Tabla de Alcances', '!Seguimiento y Bitácora'],
-      readBy: ['__all__'],
-      text: 'Enterado @Arq.Director. La brigada concluyó el levantamiento con estación total; adjunté el archivo Topografia_Curvas_Nivel.dwg con curvas de nivel cada 50 cm. Asimismo, el laboratorio entregó el Informe_Geotecnia_Laboratorio.pdf con capacidad portante de 14.5 ton/m² a 1.80 m de profundidad para cimentación por zapatas. En la pestaña Seguimiento cambié el estatus de la Partida 1 a Aprobado con avance al 100%.'
-    },
-    {
-      id: `seed_msg_03_${pid}`,
-      folioNumber: 3,
-      folio: 'BIT-003',
-      division: 'alcance_presupuesto',
-      entryType: 'nota',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(4, 15, 45),
-      partidaId: '1',
-      mentions: ['@Arq.Director', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Presupuesto_FCARM'],
-      reportes: ['!1. Presupuesto / FCARM'],
-      readBy: ['__all__'],
-      text: 'He ingresado a la pestaña 1. Presupuesto para cargar la matriz de costos directos del proyecto:\n• Subcontratos externos: Topografía ($8,500), Mecánica de suelos ($16,000), Cálculo estructural ($28,000) e Instalaciones MEP ($26,000), totalizando $78,500 MXN.\n• Horas-hombre estimadas de diseño: 184 hrs de taller a costo interno de $380.00/hr ($69,920 MXN).\n• Costo total de producción directa: $148,420 MXN.\nCon el margen de utilidad deseado del 35.00%, el precio de venta sugerido al cliente es de $228,338.46 MXN.'
-    },
-    {
-      id: `seed_msg_04_${pid}`,
-      folioNumber: 4,
-      folio: 'BIT-004',
-      division: 'alcance_presupuesto',
-      entryType: 'nota',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(3, 9, 20),
-      partidaId: '2',
-      mentions: ['@Arq.Director'],
-      estimaciones: ['#Presupuesto_FCARM'],
-      reportes: ['!1. Presupuesto / FCARM'],
-      readBy: ['__all__'],
-      text: '@Arq.Director realicé el análisis con el Arancel Oficial FCARM (Federación de Colegios de Arquitectos de la República Mexicana). Para 450 m² a $14,500/m² ($6,525,000 MXN estimados de obra) y factor C=0.048, el honorario mínimo por arancel es de $313,200.00 MXN. Nuestro precio de venta al cliente ($228,338.46 MXN) ofrece un 27% de ventaja comercial frente al arancel oficial asegurando el 35% de utilidad neta para el despacho.'
-    },
-    {
-      id: `seed_msg_05_${pid}`,
-      folioNumber: 5,
-      folio: 'BIT-005',
-      division: 'alcance_presupuesto',
-      entryType: 'acuerdo',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(3, 11, 0),
-      partidaId: '2',
-      mentions: ['@Ing.Mariana.Torres.Morales', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Presupuesto_FCARM'],
-      reportes: ['!1. Presupuesto / FCARM', '!Tabla de Alcances'],
-      readBy: ['__all__'],
-      text: 'Excelente análisis comparativo @Ing.Mariana.Torres.Morales, queda autorizada la cotización. En Seguimiento formalicé las asignaciones de trabajo: @Arq.Roberto.Mendez.Silva lidera el diseño conceptual y plantas arquitectónicas; @Ing.Mariana.Torres.Morales supervisa cuantificaciones, memorias de cálculo y subcontratos técnicos. Recuerden asentar en esta Bitácora cada iteración con el cliente.'
-    },
-    {
-      id: `seed_msg_06_${pid}`,
-      folioNumber: 6,
-      folio: 'BIT-006',
-      division: 'seguimiento_calendario',
-      entryType: 'avance',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(3, 16, 10),
-      partidaId: '2',
-      mentions: ['@Arq.Director'],
-      estimaciones: [],
-      reportes: ['!Seguimiento y Bitácora'],
-      readBy: ['__all__'],
-      text: 'Actualización en Seguimiento sobre la Partida 2 (Anteproyecto Arquitectónico):\n1) Concepto 2.1 (Programa y zonificación funcional): Aprobado al 100%.\n2) Concepto 2.2 (Plantas y modelo 3D): 75% En Proceso; subí el archivo Modelo_Volumetrico_RevA.skp.\n3) Concepto 2.3 (Renders fotorrealistas de fachada e interiores): 50% En Proceso.\nEl sistema computa un % de avance real ponderado del 68.4% en la partida de anteproyecto.'
-    },
-    {
-      id: `seed_msg_07_${pid}`,
-      folioNumber: 7,
-      folio: 'BIT-007',
-      division: 'seguimiento_calendario',
-      entryType: 'nota',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(2, 10, 30),
-      partidaId: '3',
-      mentions: ['@Arq.Director', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: [],
-      reportes: ['!3. Calendario y Ruta Crítica'],
-      readBy: ['__all__'],
-      text: 'He configurado la pestaña 3. Calendario con el cronograma Gantt general del proyecto:\n• Plazo de ejecución total: 48 días hábiles.\n• Dependencias de trabajo: La partida de cálculo estructural (4.1) tiene predecesoras obligatorias: la mecánica de suelos (1.2) y el visto bueno del anteproyecto (2.2).\n• Fecha límite para entrega de paquete de planos ejecutivos: 28 de noviembre.'
-    },
-    {
-      id: `seed_msg_08_${pid}`,
-      folioNumber: 8,
-      folio: 'BIT-008',
-      division: 'seguimiento_calendario',
-      entryType: 'incidencia',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(2, 14, 20),
-      partidaId: '4',
-      mentions: ['@Arq.Roberto.Mendez.Silva', '@Arq.Director'],
-      estimaciones: [],
-      reportes: ['!3. Calendario y Ruta Crítica'],
-      readBy: ['__all__'],
-      text: '@Arq.Roberto.Mendez.Silva estuve revisando la Ruta Crítica en el cronograma Gantt. La holgura libre para ingenierías de instalaciones y estructura es de solo 2 días. El sistema disparó una alerta de entrega para el 15 de noviembre: el estructurista necesita los ejes de columnas congelados para finalizar las armaduras de cimentación y vigas de concreto.'
-    },
-    {
-      id: `seed_msg_09_${pid}`,
-      folioNumber: 9,
-      folio: 'BIT-009',
-      division: 'seguimiento_calendario',
-      entryType: 'acuerdo',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(2, 17, 40),
-      partidaId: '3',
-      mentions: ['@Ing.Mariana.Torres.Morales', '@Arq.Director'],
-      estimaciones: [],
-      reportes: ['!Seguimiento y Bitácora', '!Tabla de Alcances'],
-      readBy: ['__all__'],
-      text: 'Registrado en Bitácora [Nota técnica #004]:\nSe ajustó la modulación de cancelería y se fijaron definitivamente los ejes estructurales A a F y 1 a 6. Subí el entregable Planos_Arquitectonicos_RevB.dwg en la Partida 3.1 con estatus En Revisión y 40% de avance. Con esto liberamos la ruta crítica para el despacho de cálculo estructural.'
-    },
-    {
-      id: `seed_msg_10_${pid}`,
-      folioNumber: 10,
-      folio: 'BIT-010',
-      division: 'estimaciones',
-      entryType: 'nota',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(1, 9, 15),
-      partidaId: '2',
-      mentions: ['@Arq.Director'],
-      estimaciones: ['#Estimación No. 1'],
-      reportes: ['!4. Estimaciones y Flujo'],
-      readBy: ['__all__'],
-      text: 'En la pestaña 4. Estimaciones definí el calendario financiero de pagos pactados sobre el contrato ($228,338.46 MXN):\n• Estimación 1 (Anticipo 30%): $68,501.54 MXN (Firma y arranque de estudios).\n• Estimación 2 (Anteproyecto 25%): $57,084.62 MXN (Aprobación de plantas y volumetría 3D).\n• Estimación 3 (Proyecto Ejecutivo 35%): $79,918.46 MXN (Planos de obra e ingenierías).\n• Estimación 4 (Finiquito y Licencia 10%): $22,833.84 MXN (Entrega de expediente sellado).'
-    },
-    {
-      id: `seed_msg_11_${pid}`,
-      folioNumber: 11,
-      folio: 'BIT-011',
-      division: 'estimaciones',
-      entryType: 'acuerdo',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(1, 11, 45),
-      partidaId: '1',
-      mentions: ['@Ing.Mariana.Torres.Morales', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Estimación No. 1'],
-      reportes: ['!4. Estimaciones y Flujo'],
-      readBy: ['__all__'],
-      text: '¡Excelente noticia equipo! El cliente realizó la transferencia bancaria por $68,501.54 MXN cubriendo el 100% de la #Estimación No. 1 (SPEI BBVA Ref. 49201). En 4. Estimaciones registré la fecha de cobro y emití el Recibo de Estimación Oficial con sellos fiscales. Nuestro Estado de Flujo de Caja reporta un balance neto positivo de +$44,001.54 MXN tras liquidar los anticipos de topografía y geotecnia.'
-    },
-    {
-      id: `seed_msg_12_${pid}`,
-      folioNumber: 12,
-      folio: 'BIT-012',
-      division: 'seguimiento_calendario',
-      entryType: 'avance',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(1, 15, 30),
-      partidaId: '5',
-      mentions: ['@Arq.Director'],
-      estimaciones: [],
-      reportes: ['!Tabla de Alcances', '!Seguimiento y Bitácora'],
-      readBy: ['__all__'],
-      text: 'Avance en la Partida 5 (Trámites y Gestoría):\nObtuvimos el dictamen favorable de la Constancia de Alineamiento y Número Oficial (Partida 5.1, estatus Aprobado al 100%). Estamos integrando las firmas del Director Responsable de Obra (D.R.O.) y las memorias técnicas en la Partida 5.2 para tramitar la Licencia de Construcción ante la Dirección de Obras Públicas.'
-    },
-    {
-      id: `seed_msg_13_${pid}`,
-      folioNumber: 13,
-      folio: 'BIT-013',
-      division: 'estimaciones',
-      entryType: 'nota',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(0, 9, 40),
-      partidaId: '2',
-      mentions: ['@Arq.Director', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Estimación No. 2'],
-      reportes: ['!4. Estimaciones y Flujo'],
-      readBy: [],
-      text: '@Arq.Director como el anteproyecto y los renders ya están por aprobarse en Seguimiento, di de alta en borrador la #Estimación No. 2 por $57,084.62 MXN (25% contractual). En cuanto el cliente dé su visto bueno por escrito generaremos el recibo de cobro formal.'
-    },
-    {
-      id: `seed_msg_14_${pid}`,
-      folioNumber: 14,
-      folio: 'BIT-014',
-      division: 'seguimiento_calendario',
-      entryType: 'avance',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(0, 11, 20),
-      partidaId: '3',
-      mentions: ['@Arq.Director', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: [],
-      reportes: ['!Seguimiento y Bitácora'],
-      readBy: [],
-      text: 'Resumen consolidado en la pestaña Seguimiento:\n• Partida 1 (Estudios): 100% Aprobado.\n• Partida 2 (Anteproyecto): 87.5% En Proceso.\n• Partida 3 (Planos Ejecutivos): 25.0% En Proceso.\n• Partida 4 (Ingenierías MEP y Estructura): 17.5% En Proceso.\n• Partida 5 (Trámites): 70.0% En Proceso.\nEl cálculo del % de Avance Real Ponderado Total del proyecto se sitúa en 48.7% conforme a los costos directos de cada entregable.'
-    },
-    {
-      id: `seed_msg_15_${pid}`,
-      folioNumber: 15,
-      folio: 'BIT-015',
-      division: 'alcance_presupuesto',
-      entryType: 'acuerdo',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(0, 13, 0),
-      partidaId: '1',
-      mentions: ['@Arq.Roberto.Mendez.Silva', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: [],
-      reportes: ['!Tabla de Alcances', '!1. Presupuesto / FCARM'],
-      readBy: [],
-      text: 'Para resguardar los costos autorizados y la confidencialidad, apliqué los candados de seguridad (Tab Locks):\n• @Ing.Mariana.Torres.Morales tiene permisos exclusivos de edición en 1. Presupuesto y 4. Estimaciones.\n• @Arq.Roberto.Mendez.Silva gestiona Tabla de Alcances, Seguimiento y 3. Calendario.\n• La Partida 1 quedó bloqueada con candado para blindar los costos de subcontratos definitivos.'
-    },
-    {
-      id: `seed_msg_16_${pid}`,
-      folioNumber: 16,
-      folio: 'BIT-016',
-      division: 'seguimiento_calendario',
-      entryType: 'orden',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(0, 14, 15),
-      partidaId: '3',
-      mentions: ['@Arq.Roberto.Mendez.Silva', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: ['#Estimación No. 1', '#Estimación No. 2'],
-      reportes: ['!Seguimiento y Bitácora'],
-      readBy: [],
-      text: 'Excelente trabajo de coordinación. Les recuerdo que con el botón 🖨️ Formato en la barra superior de esta Bitácora pueden imprimir la División actual o la Bitácora Completa (las 3 Divisiones) con membrete oficial, folios BIT-XXX y firmas de Residencia, Supervisión y Dirección.'
-    },
-    {
-      id: `seed_msg_17_${pid}`,
-      folioNumber: 17,
-      folio: 'BIT-017',
-      division: 'estimaciones',
-      entryType: 'avance',
-      authorName: 'Ing. Mariana Torres Morales',
-      authorHandle: '@Ing.Mariana.Torres.Morales',
-      authorRole: 'Coordinadora de Costos / FCARM',
-      authorInitials: 'MT',
-      time: formatTimeAgo(0, 15, 0),
-      partidaId: '1',
-      mentions: ['@Arq.Director', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Estimación No. 1'],
-      reportes: ['!4. Estimaciones y Flujo'],
-      readBy: [],
-      text: 'Adjunté en el sistema el registro fotográfico de los sondeos y banco de nivel oficial dentro de las Evidencias Fotográficas de la #Estimación No. 1. Con esto el expediente de cobro cuenta con respaldo gráfico completo para la supervisión externa del cliente.'
-    },
-    {
-      id: `seed_msg_18_${pid}`,
-      folioNumber: 18,
-      folio: 'BIT-018',
-      division: 'seguimiento_calendario',
-      entryType: 'nota',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(0, 15, 30),
-      partidaId: '3',
-      mentions: ['@Ing.Mariana.Torres.Morales', '@Arq.Director'],
-      estimaciones: [],
-      reportes: ['!Tabla de Alcances', '!Seguimiento y Bitácora'],
-      readBy: [],
-      text: 'Excelente @Ing.Mariana.Torres.Morales. La Sincronización Multiusuario en Tiempo Real reflejó de inmediato los cambios y archivos adjuntos en mi estación de trabajo. Ya vinculé las notas de bitácora técnica con los planos arquitectónicos actualizados.'
-    },
-    {
-      id: `seed_msg_19_${pid}`,
-      folioNumber: 19,
-      folio: 'BIT-019',
-      division: 'alcance_presupuesto',
-      entryType: 'nota',
-      authorName: 'Arq. Director (Hepc 90)',
-      authorHandle: '@Arq.Director',
-      authorRole: 'Director de Proyecto',
-      authorInitials: 'AD',
-      time: formatTimeAgo(0, 16, 0),
-      partidaId: '2',
-      mentions: ['@Ing.Mariana.Torres.Morales', '@Arq.Roberto.Mendez.Silva'],
-      estimaciones: ['#Presupuesto_FCARM'],
-      reportes: ['!1. Presupuesto / FCARM'],
-      readBy: [],
-      text: 'Actualicé en la Configuración del Proyecto el logotipo institucional del despacho, razón social y desglose fiscal (IVA 16% y retenciones de honorarios). Ahora los Recibos de Estimación, la Carátula Ejecutiva, esta Bitácora de Obra y los reportes de costos se generan automáticamente con membrete oficial.'
-    },
-    {
-      id: `seed_msg_20_${pid}`,
-      folioNumber: 20,
-      folio: 'BIT-020',
-      division: 'estimaciones',
-      entryType: 'acuerdo',
-      authorName: 'Arq. Roberto Méndez Silva',
-      authorHandle: '@Arq.Roberto.Mendez.Silva',
-      authorRole: 'Coordinador de Proyecto',
-      authorInitials: 'RM',
-      time: formatTimeAgo(0, 16, 30),
-      partidaId: '5',
-      mentions: ['@Arq.Director', '@Ing.Mariana.Torres.Morales'],
-      estimaciones: ['#Estimación No. 4'],
-      reportes: ['!Tabla de Alcances', '!4. Estimaciones y Flujo'],
-      readBy: [],
-      text: 'Ingresamos la carpeta ejecutiva de la Partida 5.2 ante la Dirección de Obras Públicas con firmas del D.R.O. y memorias de cálculo. En cuanto nos entreguen la Licencia de Construcción sellada, emitiremos la #Estimación No. 4 de Finiquito (10% contractual) para el cierre y entrega-recepción del proyecto.'
-    }
-  ];
+export function generateSeedProjectChatMessages(_projectId = null) {
+  return [];
 }
 
 export function normalizeChatMsgId(rawId) {
@@ -921,9 +549,9 @@ export function saveProjectChatMessages(messages, projectId = null, opts = {}) {
 }
 
 export function resetDefaultProjectChatWithFeedback(projectId = null) {
-  const pid = projectId || getActiveProjectId() || 'proj-default-01';
-  const seeds = generateSeedProjectChatMessages(pid);
-  saveProjectChatMessages(seeds, pid);
+  const pid = projectId || getActiveProjectId();
+  if (!pid) return;
+  saveProjectChatMessages([], pid);
   activeChatFilter = 'all';
   activeChatSearch = '';
   activePartidaFilterId = null;
@@ -931,12 +559,13 @@ export function resetDefaultProjectChatWithFeedback(projectId = null) {
   renderProjectChatDock();
   triggerExternalChatRefresh();
   renderSidebarNotificationsUI();
-  showToast('🎉 Bitácora de obra regenerada con asientos en las 3 divisiones', 'success');
+  showToast('Bitácora de obra limpia', 'info');
 }
 
 export function getPartidaChatCount(partidaId) {
   if (!partidaId) return 0;
-  const pid = getActiveProjectId() || 'proj-default-01';
+  const pid = getActiveProjectId();
+  if (!pid) return 0;
   const myEmail = ((getCurrentUser() || getLastKnownUser())?.email || '').toLowerCase().trim();
   const readSet = new Set(getReadMentionIds());
   const messages = loadProjectChatMessages(pid);
@@ -945,7 +574,9 @@ export function getPartidaChatCount(partidaId) {
 
 export function getPartidaTotalChatCount(partidaId) {
   if (!partidaId) return 0;
-  const messages = loadProjectChatMessages();
+  const pid = getActiveProjectId();
+  if (!pid) return 0;
+  const messages = loadProjectChatMessages(pid);
   return messages.filter(m => String(m.partidaId) === String(partidaId)).length;
 }
 
@@ -1189,7 +820,7 @@ function getProjectReportesTags() {
 
 // Obtener todos los proyectos registrados + proyecto activo + cualquier clave de chat existente en localStorage
 function getAllProjectsForNotifications() {
-  const activePid = getActiveProjectId() || 'proj-default-01';
+  const activePid = getActiveProjectId();
   const seenIds = new Set();
   const projects = [];
   const deletedList = getDeletedProjectsList();
@@ -1213,9 +844,11 @@ function getAllProjectsForNotifications() {
     });
   } catch (e) {}
 
-  const activeProjObj = getProjectById(activePid);
-  if (!isDeleted(activePid)) {
-    addProj(activePid, activeProjObj?.projectName || state.settings?.projectName || 'Proyecto Activo');
+  if (activePid) {
+    const activeProjObj = getProjectById(activePid);
+    if (!isDeleted(activePid)) {
+      addProj(activePid, activeProjObj?.projectName || state.settings?.projectName || 'Proyecto Activo');
+    }
   }
 
   try {
@@ -3779,13 +3412,6 @@ export function renderProjectChatDock() {
 
       <div class="flex items-center gap-1 shrink-0">
         <div class="hidden sm:flex items-center -space-x-1 mr-1">${miniAvatarsHtml}</div>
-        <button type="button"
-                id="btn-project-chat-seed"
-                onclick="event.stopPropagation(); resetDefaultProjectChatWithFeedback();"
-                title="Regenerar asientos de ejemplo en las 3 divisiones"
-                class="w-6 h-6 rounded bg-white/15 hover:bg-white/25 text-amber-300 inline-flex items-center justify-center cursor-pointer transition">
-          <i class="fa-solid fa-arrows-rotate text-[11px]"></i>
-        </button>
         <button type="button"
                 id="btn-project-chat-print"
                 onclick="event.stopPropagation(); openProjectChatPrintModal(event);"

@@ -2,13 +2,13 @@
 // Modelo de datos y lógica de cálculo para ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con state.treeData (Catálogo Base)
 
-import { state } from '../../state/store.js?v=20261117_cf25';
-import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261117_cf25';
-import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261117_cf25';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261117_cf25';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf25';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
-import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf25';
+import { state } from '../../state/store.js?v=20261117_cf26';
+import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261117_cf26';
+import { formatDate, parseDate, addDays, diffDays } from '../calendario/calendarioModel.js?v=20261117_cf26';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade } from '../../core/calculations.js?v=20261117_cf26';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf26';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf26';
+import { scheduleEstimacionesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf26';
 
 const STORAGE_KEY_ARQ_PREFIX = 'estimaciones_arq_data_';
 const STORAGE_KEY_PREFIX = 'estimaciones_data_';
@@ -56,11 +56,11 @@ function getDefaultEstimacionesState() {
         fechaFin: endStr,
         fechaCorte: endStr,
         partidaNombre: 'PROYECTO EJECUTIVO',
-        razonSocial: state?.settings?.companyName || 'DESARROLLADORA PANORAMA REAL',
+        razonSocial: state?.settings?.companyName || '',
         direccion: state?.settings?.projectLocation || '',
         contacto: state?.settings?.projectContact || '',
         telefono: state?.settings?.projectPhone || '',
-        notas: 'Estimación inicial de avance de obra y entregables',
+        notas: '',
         conceptos: {}, // { [conceptId]: pctAvance }
         fotos: {}
       }

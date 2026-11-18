@@ -54,7 +54,7 @@ import {
   runCalendarioGeminiAiProposal,
   applyCalendarioAiProposal,
   selectCalendarioRow
-} from './modules/calendario/calendarioView.js?v=20261117_cf25';
+} from './modules/calendario/calendarioView.js?v=20261117_cf26';
 import {
   renderPresupuestoView,
   togglePresupuestoSelectNode,
@@ -62,19 +62,19 @@ import {
   togglePresupuestoSubtituloExpand,
   agruparPresupuestoConceptos,
   desagruparPresupuestoConceptos
-} from './modules/presupuesto/presupuestoView.js?v=20261117_cf25';
-import { getProjectPresupuestoConfig } from './modules/presupuesto/presupuestoModel.js?v=20261117_cf25';
-import { renderSeguimientoView } from './modules/seguimiento/seguimientoView.js?v=20261117_cf25';
-import { initStore, state, syncClipboardFromStorage } from './state/store.js?v=20261117_cf25';
-import { STORAGE_KEY_CLIPBOARD, getActiveProjectId } from './config/constants.js?v=20261117_cf25';
-import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback } from './state/history.js?v=20261117_cf25';
-import { showToast } from './ui/notifications.js?v=20261117_cf25';
-import { formatMoney, formatQty } from './core/formatters.js?v=20261117_cf25';
-import { updateSobrecostoBadge, updateGrandTotal, calculateProrrateoCascade } from './core/calculations.js?v=20261117_cf25';
-import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261117_cf25';
-import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession, hasOversizedLocalJwt, ensureCompactAuthSession } from './core/authService.js?v=20261117_cf25';
-import { getCurrentUser } from './modules/portal/projectService.js?v=20261117_cf25';
-import { initAppSwitcher } from './ui/appSwitcher.js?v=20261117_cf25';
+} from './modules/presupuesto/presupuestoView.js?v=20261117_cf26';
+import { getProjectPresupuestoConfig } from './modules/presupuesto/presupuestoModel.js?v=20261117_cf26';
+import { renderSeguimientoView } from './modules/seguimiento/seguimientoView.js?v=20261117_cf26';
+import { initStore, state, syncClipboardFromStorage } from './state/store.js?v=20261117_cf26';
+import { STORAGE_KEY_CLIPBOARD, getActiveProjectId } from './config/constants.js?v=20261117_cf26';
+import { undoAction, redoAction, updateUndoRedoButtons, setHistoryRenderCallback } from './state/history.js?v=20261117_cf26';
+import { showToast } from './ui/notifications.js?v=20261117_cf26';
+import { formatMoney, formatQty } from './core/formatters.js?v=20261117_cf26';
+import { updateSobrecostoBadge, updateGrandTotal, calculateProrrateoCascade } from './core/calculations.js?v=20261117_cf26';
+import { subscribeToProjectRealtime, unsubscribeFromProjectRealtime, initGlobalRealtimeSync, requestPeerSync } from './core/realtimeSync.js?v=20261117_cf26';
+import { initAuthListener, hasPendingIncomingSsoSession, hydrateIncomingSsoSession, isSsoHydrationPending, syncLocalUserSession, hasOversizedLocalJwt, ensureCompactAuthSession } from './core/authService.js?v=20261117_cf26';
+import { getCurrentUser } from './modules/portal/projectService.js?v=20261117_cf26';
+import { initAppSwitcher } from './ui/appSwitcher.js?v=20261117_cf26';
 
 import {
   findNodeById,
@@ -106,7 +106,7 @@ import {
   repartirEquitativamente,
   toggleSelectNode,
   toggleSelectAll
-} from './modules/catalog/treeService.js?v=20261117_cf25';
+} from './modules/catalog/treeService.js?v=20261117_cf26';
 
 import {
   openImportConceptsModal,
@@ -118,9 +118,9 @@ import {
   toggleMatrixPreviewAccordion,
   quickCopyPasteSingleConcept,
   importSelectedConceptsToCurrentProject
-} from './modules/catalog/importFromProjectModal.js?v=20261117_cf25';
+} from './modules/catalog/importFromProjectModal.js?v=20261117_cf26';
 
-import { renderTAB1, selectRow, highlightCatalogRowInPlace, closeApuPanel, toggleDropdownMenu, closeAllDropdownMenus } from './modules/catalog/catalogView.js?v=20261117_cf25';
+import { renderTAB1, selectRow, highlightCatalogRowInPlace, closeApuPanel, toggleDropdownMenu, closeAllDropdownMenus } from './modules/catalog/catalogView.js?v=20261117_cf26';
 
 import {
   switchSidePanelTab,
@@ -133,7 +133,7 @@ import {
   handleModalFileInputChange,
   handleCardDirectFileUpload,
   viewCotizacionPdf
-} from './modules/proveedores/proveedoresView.js?v=20261117_cf25';
+} from './modules/proveedores/proveedoresView.js?v=20261117_cf26';
 
 import {
   cleanPhoneForWhatsApp,
@@ -143,7 +143,7 @@ import {
   deleteCotizacion,
   setCotizacionGanadora,
   unsetCotizacionGanadora
-} from './modules/proveedores/cotizacionesService.js?v=20261117_cf25';
+} from './modules/proveedores/cotizacionesService.js?v=20261117_cf26';
 
 import {
   renderInsumosGenerales,
@@ -165,7 +165,7 @@ import {
   actualizarCostosConIASeleccionados,
   actualizarTodosLosInsumosSeleccionadosConIA,
   selectInsumoBaseRow
-} from './modules/insumosGenerales/insumosView.js?v=20261117_cf25';
+} from './modules/insumosGenerales/insumosView.js?v=20261117_cf26';
 
 import {
   exportData,
@@ -178,8 +178,8 @@ import {
   exportCatalogOpus,
   exportCatalogNeodata,
   exportCatalogCsv
-} from './modules/io/csvHandler.js?v=20261117_cf25';
-import { initPanelResizer } from './ui/resizer.js?v=20261117_cf25';
+} from './modules/io/csvHandler.js?v=20261117_cf26';
+import { initPanelResizer } from './ui/resizer.js?v=20261117_cf26';
 
 import {
   openImportModal,
@@ -192,7 +192,7 @@ import {
   onZoneSelectChange,
   calculateParsedBudgetTotal,
   loadCasaLauraOpusDirectly
-} from './modules/io/universalImporter.js?v=20261117_cf25';
+} from './modules/io/universalImporter.js?v=20261117_cf26';
 
 import {
   printTab1Catalog,
@@ -203,7 +203,7 @@ import {
   printInsumosGenerales,
   printCalendarioObraFormat,
   printEstimacionesFormat
-} from './modules/io/printService.js?v=20261117_cf25';
+} from './modules/io/printService.js?v=20261117_cf26';
 
 import {
   openMasterCatalogModal,
@@ -214,11 +214,11 @@ import {
   switchMasterCatalogTab,
   handleDeleteCatalog,
   refreshMasterCatalogList
-} from './modules/reference/masterCatalogModal.js?v=20261117_cf25';
+} from './modules/reference/masterCatalogModal.js?v=20261117_cf26';
 
-import { installPresetCatalog, installAllPresets } from './modules/reference/presetCatalogs.js?v=20261117_cf25';
+import { installPresetCatalog, installAllPresets } from './modules/reference/presetCatalogs.js?v=20261117_cf26';
 
-import { openReferenceDb } from './modules/reference/referenceDb.js?v=20261117_cf25';
+import { openReferenceDb } from './modules/reference/referenceDb.js?v=20261117_cf26';
 
 import {
   openSettingsModal,
@@ -245,7 +245,7 @@ import {
   closePlatformInfoModal,
   handlePlatformInfoEmpiezaGratis,
   handlePlatformInfoVerPlanes
-} from './ui/modalController.js?v=20261117_cf25';
+} from './ui/modalController.js?v=20261117_cf26';
 
 import {
   openTutorialHubModal,
@@ -253,20 +253,20 @@ import {
   launchTourFromHub,
   launchVideoFromHub,
   resetTourPreferencesFromHub
-} from './ui/tutorialHubModal.js?v=20261117_cf25';
+} from './ui/tutorialHubModal.js?v=20261117_cf26';
 
 import {
   startInteractiveTour,
   skipInteractiveTour,
   closeInteractiveTour,
   checkAndResumeTourOnLoad
-} from './ui/interactiveTour.js?v=20261117_cf25';
+} from './ui/interactiveTour.js?v=20261117_cf26';
 
 import {
   openVideoSimulatorModal,
   closeVideoSimulatorModal,
   toggleVoiceNarration
-} from './ui/videoSimulatorModal.js?v=20261117_cf25';
+} from './ui/videoSimulatorModal.js?v=20261117_cf26';
 
 import {
   openFirmasResponsablesModal,
@@ -280,7 +280,7 @@ import {
   previewPrintWithFirmasAction,
   quickAssignPersonToFirstEmptySlot,
   getFirmasPrintHtml
-} from './ui/firmasController.js?v=20261117_cf25';
+} from './ui/firmasController.js?v=20261117_cf26';
 
 import {
   initBranding,
@@ -301,7 +301,7 @@ import {
   resetLogoPosition,
   setLogoBgMode,
   applyAdjustedLogo
-} from './ui/brandingController.js?v=20261117_cf25';
+} from './ui/brandingController.js?v=20261117_cf26';
 
 import {
   STORAGE_KEY_THEME,
@@ -310,7 +310,7 @@ import {
   applyThemeMode,
   isNightMode,
   setThemeRenderCallback
-} from './ui/themeController.js?v=20261117_cf25';
+} from './ui/themeController.js?v=20261117_cf26';
 
 import {
   isTabLocked,
@@ -319,8 +319,8 @@ import {
   guardTabUnlocked,
   applyTabLocksToDOM,
   setTabLockRenderCallback
-} from './ui/tabLockController.js?v=20261117_cf25';
-import { hydrateProjectModulesFromCloud } from './core/cloudModulesSyncService.js?v=20261117_cf25';
+} from './ui/tabLockController.js?v=20261117_cf26';
+import { hydrateProjectModulesFromCloud } from './core/cloudModulesSyncService.js?v=20261117_cf26';
 
 import {
   setProjectChatDivision,
@@ -360,7 +360,7 @@ import {
   loadProjectChatMessages,
   resetDefaultProjectChatWithFeedback,
   generateSeedProjectChatMessages
-} from './modules/chat/projectChat.js?v=20261117_cf25';
+} from './modules/chat/projectChat.js?v=20261117_cf26';
 
 import {
   initPortal,
@@ -475,7 +475,7 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261117_cf25';
+} from './modules/portal/portalController.js?v=20261117_cf26';
 import {
   openTrashModal,
   closeTrashModal,
@@ -485,7 +485,7 @@ import {
   backupTrashedProjectAction,
   backupAllTrashedProjectsAction,
   emptyTrashAction
-} from './modules/portal/trashService.js?v=20261117_cf25';
+} from './modules/portal/trashService.js?v=20261117_cf26';
 
 import {
   openCubikarAdminModal,
@@ -504,7 +504,7 @@ import {
   isUserAdmin,
   isUserMasterAdmin,
   showAdminDualLoginModal
-} from './modules/admin/cubikarAdmin.js?v=20261117_cf25';
+} from './modules/admin/cubikarAdmin.js?v=20261117_cf26';
 import {
   openSubscriptionModal,
   closeSubscriptionModal,
@@ -513,7 +513,7 @@ import {
   renderSubscriptionCards,
   updateSubscriptionBadgesUI,
   getCurrentSubscription
-} from './modules/portal/subscriptionModal.js?v=20261117_cf25';
+} from './modules/portal/subscriptionModal.js?v=20261117_cf26';
 
 import {
   renderEstimacionesView,
@@ -560,7 +560,7 @@ import {
   handleSaveSpecialistPayment,
   confirmDeleteSpecialistPayment,
   exportPagosEspecialistasExcel
-} from './modules/estimaciones/estimacionesView.js?v=20261117_cf25';
+} from './modules/estimaciones/estimacionesView.js?v=20261117_cf26';
 
 // Exponer funciones públicas al objeto global window para compatibilidad total con eventos inline del HTML
 Object.assign(window, {
@@ -1458,12 +1458,8 @@ window.renderSidebarNotificationsUI = renderSidebarNotificationsUI;
 window.loadProjectChatMessages = loadProjectChatMessages;
 window.resetDefaultProjectChatWithFeedback = resetDefaultProjectChatWithFeedback;
 window.generateSeedProjectChatMessages = generateSeedProjectChatMessages;
-window.seedDefaultProjectChat = (pid, force = false) => {
-  if (force) {
-    resetDefaultProjectChatWithFeedback(pid);
-  } else {
-    return loadProjectChatMessages ? loadProjectChatMessages(pid) : generateSeedProjectChatMessages(pid);
-  }
+window.seedDefaultProjectChat = (pid, _force = false) => {
+  return loadProjectChatMessages ? loadProjectChatMessages(pid) : [];
 };
 window.openEstimacionConceptPhotosModal = openEstimacionConceptPhotosModal;
 window.closeEstimacionConceptPhotosModal = closeEstimacionConceptPhotosModal;

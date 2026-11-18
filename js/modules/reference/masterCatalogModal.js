@@ -1,22 +1,22 @@
 // js/modules/reference/masterCatalogModal.js
 // Modal de Catálogo Maestro y Biblioteca de Referencia (Opción 1)
 
-import { state, persistLocalData } from '../../state/store.js?v=20261117_cf25';
-import { saveState } from '../../state/history.js?v=20261117_cf25';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf25';
-import { formatMoney } from '../../core/formatters.js?v=20261117_cf25';
-import { findNodeById, recalculateClaves } from '../catalog/treeService.js?v=20261117_cf25';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf25';
+import { state, persistLocalData } from '../../state/store.js?v=20261117_cf26';
+import { saveState } from '../../state/history.js?v=20261117_cf26';
+import { showToast } from '../../ui/notifications.js?v=20261117_cf26';
+import { formatMoney } from '../../core/formatters.js?v=20261117_cf26';
+import { findNodeById, recalculateClaves } from '../catalog/treeService.js?v=20261117_cf26';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf26';
 import {
   listReferenceCatalogs,
   searchReferenceItems,
   deleteReferenceCatalog,
   getReferenceDatabaseStats
-} from './referenceDb.js?v=20261117_cf25';
-import { openImportModal } from '../io/universalImporter.js?v=20261117_cf25';
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261117_cf25';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf25';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261117_cf25';
+} from './referenceDb.js?v=20261117_cf26';
+import { openImportModal } from '../io/universalImporter.js?v=20261117_cf26';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261117_cf26';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf26';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261117_cf26';
 
 let debounceTimer = null;
 let currentSearchResults = [];
