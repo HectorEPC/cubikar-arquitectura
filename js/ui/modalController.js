@@ -1,4 +1,4 @@
-import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261117_cf30';
+﻿import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261117_cf30';
 import { defaultTreeData } from '../config/defaultData.js?v=20261117_cf30';
 import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261117_cf30';
 import { showToast } from './notifications.js?v=20261117_cf30';
@@ -19,7 +19,7 @@ import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoM
 import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261117_cf30';
 import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261117_cf30';
 import { renderBrandingUI } from './brandingController.js?v=20261117_cf30';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261117_cf30';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261119_cf34';
 import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261117_cf30';
 import { getActiveProjectId } from '../config/constants.js?v=20261117_cf30';
 import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261117_cf30';

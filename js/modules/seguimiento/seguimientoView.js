@@ -1,4 +1,4 @@
-// js/modules/seguimiento/seguimientoView.js
+﻿// js/modules/seguimiento/seguimientoView.js
 // Pestaña Seguimiento (Asignación de Responsables, Estatus, Archivos y % Avance Real Ponderado)
 
 import { state, persistLocalData } from '../../state/store.js?v=20261117_cf30';
@@ -16,7 +16,7 @@ import {
   getStoredPlanInvitations,
   canCurrentUserEditProject
 } from '../portal/projectService.js?v=20261117_cf30';
-import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261117_cf30';
+import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261119_cf34';
 import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js?v=20261117_cf30';
 import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js?v=20261117_cf30';
 

@@ -1,5 +1,5 @@
-import { printEstimacionesFormat } from '../io/printService.js?v=20261117_cf30';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261117_cf30';
+﻿import { printEstimacionesFormat } from '../io/printService.js?v=20261117_cf30';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf34';
 // js/modules/estimaciones/estimacionesView.js
 // Renderizador y controlador de eventos para la pestaña ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con Catálogo Base, con soporte multiestimaciones,

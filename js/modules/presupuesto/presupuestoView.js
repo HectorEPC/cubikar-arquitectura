@@ -1,4 +1,4 @@
-// js/modules/presupuesto/presupuestoView.js
+﻿// js/modules/presupuesto/presupuestoView.js
 // Pestaña 1: Presupuesto al Cliente (Barra de botones, Desglose de Presupuesto, Resumen Ejecutivo y Notas)
 
 import { state, persistLocalData } from '../../state/store.js?v=20261117_cf30';
@@ -8,7 +8,7 @@ import { showToast } from '../../ui/notifications.js?v=20261117_cf30';
 import { isTabLocked, guardTabUnlocked } from '../../ui/tabLockController.js?v=20261117_cf30';
 import { getActiveProjectId } from '../../config/constants.js?v=20261117_cf30';
 import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf30';
-import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261117_cf30';
+import { openTabMembersAssignModal, renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf34';
 
 import {
   getProjectPresupuestoConfig,

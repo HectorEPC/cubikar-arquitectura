@@ -1,5 +1,5 @@
-import { printCalendarioObraFormat } from '../io/printService.js?v=20261117_cf30';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261117_cf30';
+﻿import { printCalendarioObraFormat } from '../io/printService.js?v=20261117_cf30';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf34';
 // js/modules/calendario/calendarioView.js
 // Renderizador y controlador de la pestaña CALENDARIO DE OBRA
 // Diseño ejecutivo de alta fidelidad, interactivo y sincronizado 100% con Catálogo Base

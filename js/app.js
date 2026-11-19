@@ -1,4 +1,4 @@
-import {
+﻿import {
   renderCalendarioObra,
   setCalendarioViewMode,
   setCalendarioTimeScale,
@@ -475,7 +475,22 @@ import {
   setStatusFilter,
   resetFilters,
   exportProjectToExcelAction
-} from './modules/portal/portalController.js?v=20261117_cf30';
+} from './modules/portal/portalController.js?v=20261119_cf34';
+import {
+  exportFullProjectZipAction,
+  openImportProjectZipModal,
+  closeImportProjectZipModal,
+  executeConfirmedProjectZipImport,
+  executeConfirmedBatchZipImport,
+  toggleBatchImportItem,
+  updateBatchImportItemName,
+  enterProjectMultiSelectMode,
+  exitProjectMultiSelectMode,
+  toggleProjectMultiSelect,
+  selectAllVisibleProjectsAction,
+  downloadSelectedProjectsZipAction,
+  syncProjectMultiSelectUI
+} from './modules/portal/projectPackageService.js?v=20261119_cf33';
 import {
   openTrashModal,
   closeTrashModal,
@@ -1008,6 +1023,19 @@ Object.assign(window, {
   subscribeToProjectRealtime,
   unsubscribeFromProjectRealtime,
   exportProjectToExcelAction,
+  exportFullProjectZipAction,
+  openImportProjectZipModal,
+  closeImportProjectZipModal,
+  executeConfirmedProjectZipImport,
+  executeConfirmedBatchZipImport,
+  toggleBatchImportItem,
+  updateBatchImportItemName,
+  enterProjectMultiSelectMode,
+  exitProjectMultiSelectMode,
+  toggleProjectMultiSelect,
+  selectAllVisibleProjectsAction,
+  downloadSelectedProjectsZipAction,
+  syncProjectMultiSelectUI,
 
   // Información de la Plataforma
   openPlatformInfoModal,
