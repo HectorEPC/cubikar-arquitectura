@@ -25,7 +25,7 @@ import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261117_
 import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261117_cf30';
 import { showToast } from '../ui/notifications.js?v=20261117_cf30';
 import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261117_cf30';
-import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261117_cf30';
+import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261118_c2';
 import { openMobileProjectById } from './mobileProjects.js?v=20261117_cf30';
 
 async function bootstrapMobileArq() {

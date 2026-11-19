@@ -22,7 +22,7 @@ import { renderMobileProjects, openMobileProjectById } from './mobileProjects.js
 import { renderMobileAlcances } from './mobileAlcances.js?v=20261117_cf30';
 import { renderMobilePresupuestoArq } from './mobilePresupuestoArq.js?v=20261117_cf30';
 import { renderMobileSeguimiento } from './mobileSeguimiento.js?v=20261117_cf30';
-import { renderMobileCalendarioArq } from './mobileCalendarioArq.js?v=20261117_cf30';
+import { renderMobileCalendarioArq } from './mobileCalendarioArq.js?v=20261118_c2';
 import { renderMobileEstimacionesArq } from './mobileEstimacionesArq.js?v=20261117_cf30';
 import { renderMobileChatArq, setArqChatConceptFilter, getUnreadArqChatCount } from './mobileChatArq.js?v=20261117_cf30';
 
