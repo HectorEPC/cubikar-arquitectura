@@ -1,16 +1,16 @@
-﻿import { printEstimacionesFormat } from '../io/printService.js?v=20261119_cf40';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf40';
+﻿import { printEstimacionesFormat } from '../io/printService.js?v=20261119_cf41';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf41';
 // js/modules/estimaciones/estimacionesView.js
 // Renderizador y controlador de eventos para la pestaña ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con Catálogo Base, con soporte multiestimaciones,
 // amortización progresiva de anticipo al 100%, reflejo de cantidades acumuladas,
 // justificación de conceptos, encabezados en una sola línea y resizer vertical de columna de concepto.
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf40';
-import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261119_cf40';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
-import { findNodeById, collapseAllCatalogNodes, expandAllCatalogNodes } from '../catalog/treeService.js?v=20261119_cf40';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf40';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf41';
+import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261119_cf41';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
+import { findNodeById, collapseAllCatalogNodes, expandAllCatalogNodes } from '../catalog/treeService.js?v=20261119_cf41';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf41';
 import {
   getEstimacionesCalculatedData,
   getActiveEstimacion,
@@ -36,10 +36,10 @@ import {
   deleteSpecialistPayment,
   updateSpecialistProveedor,
   getCashFlowSummary
-} from './estimacionesModel.js?v=20261119_cf40';
-import { guardTabUnlocked, applyTabLocksToDOM, toggleTabLock } from '../../ui/tabLockController.js?v=20261119_cf40';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf40';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261119_cf40';
+} from './estimacionesModel.js?v=20261119_cf41';
+import { guardTabUnlocked, applyTabLocksToDOM, toggleTabLock } from '../../ui/tabLockController.js?v=20261119_cf41';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf41';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261119_cf41';
 
 let estimacionesSearchTerm = '';
 let selectedEstimacionRowId = null;

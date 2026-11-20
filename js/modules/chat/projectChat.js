@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261119_cf40';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf40';
+import { state } from '../../state/store.js?v=20261119_cf41';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf41';
 import {
   getProjectById,
   getProjectsList,
@@ -25,15 +25,15 @@ import {
   getDeletedProjectsList,
   canCurrentUserEditProject,
   getUserRoleInProject
-} from '../portal/projectService.js?v=20261119_cf40';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf40';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261119_cf40';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261119_cf40';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf40';
-import { openPrintWindow } from '../io/printService.js?v=20261119_cf40';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261119_cf40';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf40';
+} from '../portal/projectService.js?v=20261119_cf41';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf41';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261119_cf41';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261119_cf41';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf41';
+import { openPrintWindow } from '../io/printService.js?v=20261119_cf41';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261119_cf41';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf41';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 

@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261119_cf40';
+} from '../../config/constants.js?v=20261119_cf41';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -71,8 +71,8 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getProjectCompanyLogo
-} from './projectService.js?v=20261119_cf40';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
+} from './projectService.js?v=20261119_cf41';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
 import {
   persistLocalData,
   state,
@@ -81,13 +81,13 @@ import {
   resolveSettingsForCloudSync,
   markCatalogTreeSynced,
   markSettingsSynced
-} from '../../state/store.js?v=20261119_cf40';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261119_cf40';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf40';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf40';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261119_cf40';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261119_cf40';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261119_cf40';
+} from '../../state/store.js?v=20261119_cf41';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261119_cf41';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf41';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf41';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261119_cf41';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261119_cf41';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261119_cf41';
 import {
   signUp,
   signInWithPassword,
@@ -98,24 +98,24 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261119_cf40';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261119_cf40';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261119_cf40';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf40';
+} from '../../core/authService.js?v=20261119_cf41';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261119_cf41';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261119_cf41';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf41';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261119_cf40';
-import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261119_cf40';
-import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261119_cf40';
+} from '../admin/cubikarAdmin.js?v=20261119_cf41';
+import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261119_cf41';
+import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261119_cf41';
 import {
   isProjectHostOwner,
   fetchTrashedProjectsForHost,
   getCachedTrashCount,
   updateTrashBadgeUI,
   openTrashModal
-} from './trashService.js?v=20261119_cf40';
+} from './trashService.js?v=20261119_cf41';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -2934,6 +2934,7 @@ export function goToProjectsDashboard() {
         }
       };
       syncProjectToCloud(departingProj, departingSettings, treeToUpload, {
+        syncHeader: Boolean(settingsChanged || !departingProj.isCloudSynced),
         onHeaderSynced: markDepartingSynced
       }).then((res) => {
         if (res && res.success) {
@@ -3397,7 +3398,7 @@ export async function syncProjectToCloudAction(projectId, event) {
     if (rawT) tree = JSON.parse(rawT);
     if (rawS) settings = JSON.parse(rawS);
 
-    const res = await syncProjectToCloud(proj, settings, tree);
+    const res = await syncProjectToCloud(proj, settings, tree, { forceHeaderSync: true });
     if (res && res.success) {
       proj.isCloudSynced = true;
       const list = getProjectsList();

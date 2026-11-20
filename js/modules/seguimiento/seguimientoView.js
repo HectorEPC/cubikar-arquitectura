@@ -1,10 +1,10 @@
 ﻿// js/modules/seguimiento/seguimientoView.js
 // Pestaña Seguimiento (Asignación de Responsables, Estatus, Archivos y % Avance Real Ponderado)
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf40';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf40';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
-import { isTabLocked } from '../../ui/tabLockController.js?v=20261119_cf40';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf41';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf41';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
+import { isTabLocked } from '../../ui/tabLockController.js?v=20261119_cf41';
 import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
@@ -15,10 +15,10 @@ import {
   getStoredInvitations,
   getStoredPlanInvitations,
   canCurrentUserEditProject
-} from '../portal/projectService.js?v=20261119_cf40';
-import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261119_cf40';
-import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js?v=20261119_cf40';
-import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf40';
+} from '../portal/projectService.js?v=20261119_cf41';
+import { openTabMembersAssignModal, renderTabAssignedAvatars, getActiveOrFallbackProjectId, openInviteModal } from '../portal/portalController.js?v=20261119_cf41';
+import { renderPartidaNivel1ChatButton } from '../chat/projectChat.js?v=20261119_cf41';
+import { scheduleBitacoraCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf41';
 
 function persistSeguimientoCloudSummary() {
   const pid = getActiveProjectId() || getActiveOrFallbackProjectId();

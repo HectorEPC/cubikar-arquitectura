@@ -1,14 +1,14 @@
 // js/mobile/mobilePresupuestoArq.js — Pestaña 2 de cubikar Arquitectura: Resumen Financiero, Costo/m2, IVA y Márgenes
 
-import { state } from '../state/store.js?v=20261119_cf40';
-import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf40';
-import { calcularResumenPresupuesto, updatePresupuestoNodeField } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf40';
-import { hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf40';
-import { findNodeById } from '../modules/catalog/treeService.js?v=20261119_cf40';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf40';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf40';
-import { showToast } from '../ui/notifications.js?v=20261119_cf40';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf40';
+import { state } from '../state/store.js?v=20261119_cf41';
+import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf41';
+import { calcularResumenPresupuesto, updatePresupuestoNodeField } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf41';
+import { hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf41';
+import { findNodeById } from '../modules/catalog/treeService.js?v=20261119_cf41';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf41';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf41';
+import { showToast } from '../ui/notifications.js?v=20261119_cf41';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf41';
 
 export function renderMobilePresupuestoArq(container, { openSheet, closeSheet }) {
   if (!container) return;

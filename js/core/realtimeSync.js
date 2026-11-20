@@ -1,8 +1,8 @@
 // js/core/realtimeSync.js
 // Sincronización en tiempo real vía WebSockets (Supabase Realtime) y Colaboración en vivo
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf40';
-import { state } from '../state/store.js?v=20261119_cf40';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf41';
+import { state } from '../state/store.js?v=20261119_cf41';
 import {
   getCurrentUser,
   getStoredInvitations,
@@ -21,10 +21,10 @@ import {
   unmarkProjectTrashedLocal,
   isProjectTrashedLocal,
   saveCurrentUser
-} from '../modules/portal/projectService.js?v=20261119_cf40';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf40';
-import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261119_cf40';
-import { showToast } from '../ui/notifications.js?v=20261119_cf40';
+} from '../modules/portal/projectService.js?v=20261119_cf41';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf41';
+import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261119_cf41';
+import { showToast } from '../ui/notifications.js?v=20261119_cf41';
 
 let activeChannel = null;
 let currentSubscribedProjectId = null;
@@ -609,6 +609,22 @@ export function subscribeToProjectRealtime(projectId) {
   };
 
   const chatCdcIds = Array.from(new Set([canonicalCloudId, projectId].filter(Boolean)));
+  if (isUuid(canonicalCloudId)) {
+    activeChannel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'proyectos',
+        filter: `id=eq.${canonicalCloudId}`
+      },
+      () => {
+        if (typeof window !== 'undefined' && typeof window.refreshActiveProjectFromCloud === 'function') {
+          window.refreshActiveProjectFromCloud({ force: true, fromRealtime: true });
+        }
+      }
+    );
+  }
   chatCdcIds.forEach((cid) => {
     activeChannel.on(
       'postgres_changes',
@@ -924,18 +940,24 @@ export function handleIncomingProjectUpdate(data) {
     }).catch(() => {});
   }
 
-  if (data.settings && typeof data.settings === 'object') {
-    try {
-      localStorage.setItem(getSettingsKey(effectiveStorageId), JSON.stringify(data.settings));
-    } catch (_) {}
-    if (isCurrentActive) {
-      state.settings = Object.assign({}, state.settings, data.settings);
-      if (typeof window !== 'undefined') {
-        if (typeof window.renderBrandingUI === 'function') {
-          try { window.renderBrandingUI(); } catch (_) {}
-        }
-        if (typeof window.updateSobrecostoBadge === 'function') {
-          try { window.updateSobrecostoBadge(); } catch (_) {}
+  if (data.changeType === 'settings_updated' && data.settings && typeof data.settings === 'object') {
+    const ownerEmailLower = (proj?.ownerEmail || '').toLowerCase().trim();
+    const isLocalOwner = Boolean(myEmail && ownerEmailLower && myEmail === ownerEmailLower);
+    const isAuthorOwner = Boolean(authorEmail && ownerEmailLower && authorEmail === ownerEmailLower);
+    const acceptRemoteSettings = !isLocalOwner || isAuthorOwner || Boolean(data.forceSettingsSync);
+    if (acceptRemoteSettings) {
+      try {
+        localStorage.setItem(getSettingsKey(effectiveStorageId), JSON.stringify(data.settings));
+      } catch (_) {}
+      if (isCurrentActive) {
+        state.settings = Object.assign({}, state.settings, data.settings);
+        if (typeof window !== 'undefined') {
+          if (typeof window.renderBrandingUI === 'function') {
+            try { window.renderBrandingUI(); } catch (_) {}
+          }
+          if (typeof window.updateSobrecostoBadge === 'function') {
+            try { window.updateSobrecostoBadge(); } catch (_) {}
+          }
         }
       }
     }

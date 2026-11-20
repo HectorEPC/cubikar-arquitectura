@@ -1,14 +1,14 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf40';
-import { saveState } from '../../state/history.js?v=20261119_cf40';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf40';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261119_cf40';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261119_cf40';
-import { getProjectById, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf40';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261119_cf40';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf40';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261119_cf40';
-import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261119_cf40';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf41';
+import { saveState } from '../../state/history.js?v=20261119_cf41';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf41';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261119_cf41';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261119_cf41';
+import { getProjectById, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf41';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261119_cf41';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf41';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261119_cf41';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261119_cf41';
 
 function createNodeUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
