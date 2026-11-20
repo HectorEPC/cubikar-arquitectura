@@ -1,14 +1,14 @@
 // js/mobile/mobileAlcances.js — Pestaña 1 de cubikar Arquitectura: Alcances y Conceptos de Proyecto
 
-import { state, persistLocalData } from '../state/store.js?v=20261119_cf41';
-import { formatMoney, formatQty, round2 } from '../core/formatters.js?v=20261119_cf41';
-import { calculateParentTotal, hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf41';
-import { findNodeById, updateNode, addRootRow, addChildRow } from '../modules/catalog/treeService.js?v=20261119_cf41';
-import { getPartidaChatCount } from '../modules/chat/projectChat.js?v=20261119_cf41';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf41';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf41';
-import { showToast } from '../ui/notifications.js?v=20261119_cf41';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf41';
+import { state, persistLocalData } from '../state/store.js?v=20261119_cf42';
+import { formatMoney, formatQty, round2 } from '../core/formatters.js?v=20261119_cf42';
+import { calculateParentTotal, hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf42';
+import { findNodeById, updateNode, addRootRow, addChildRow } from '../modules/catalog/treeService.js?v=20261119_cf42';
+import { getPartidaChatCount } from '../modules/chat/projectChat.js?v=20261119_cf42';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf42';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf42';
+import { showToast } from '../ui/notifications.js?v=20261119_cf42';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf42';
 
 let searchText = '';
 

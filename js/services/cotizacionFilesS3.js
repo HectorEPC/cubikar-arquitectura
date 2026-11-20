@@ -4,9 +4,9 @@
 // - El proyecto solo guarda la llave S3 (ligero, respaldable y consultable desde cualquier equipo).
 // - Sin conexión, el archivo se conserva temporalmente en base64 y se sube en cuanto sea posible.
 
-import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf41';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf41';
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf41';
+import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf42';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf42';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf42';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const inFlightUploads = new Set();

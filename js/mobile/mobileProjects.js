@@ -1,12 +1,12 @@
 // js/mobile/mobileProjects.js — Proyectos de cubikar Arquitectura (Mis Proyectos vs Invitado + Papelera + Nuevo)
 
-import { setActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf41';
-import { initStore } from '../state/store.js?v=20261119_cf41';
-import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf41';
-import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf41';
-import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf41';
-import { subscribeToProjectRealtime, broadcastInvitationAccepted, broadcastInvitationRejected, requestPeerSync } from '../core/realtimeSync.js?v=20261119_cf41';
-import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects } from '../core/collaborationCloudService.js?v=20261119_cf41';
+import { setActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf42';
+import { initStore } from '../state/store.js?v=20261119_cf42';
+import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf42';
+import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf42';
+import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf42';
+import { subscribeToProjectRealtime, broadcastInvitationAccepted, broadcastInvitationRejected, requestPeerSync } from '../core/realtimeSync.js?v=20261119_cf42';
+import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects } from '../core/collaborationCloudService.js?v=20261119_cf42';
 import {
   getCurrentUser,
   getProjectsList,
@@ -24,16 +24,16 @@ import {
   getUserPlanId,
   getUserRoleInProject,
   getDeletedProjectsList
-} from '../modules/portal/projectService.js?v=20261119_cf41';
+} from '../modules/portal/projectService.js?v=20261119_cf42';
 import {
   moveProjectToTrash,
   fetchTrashedProjectsForHost,
   restoreProjectFromTrash,
   permanentlyDeleteTrashedProject,
   getCachedTrashCount
-} from '../modules/portal/trashService.js?v=20261119_cf41';
-import { showToast } from '../ui/notifications.js?v=20261119_cf41';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf41';
+} from '../modules/portal/trashService.js?v=20261119_cf42';
+import { showToast } from '../ui/notifications.js?v=20261119_cf42';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf42';
 
 let scopeTab = 'owned';
 let selectedInviterEmail = 'all';

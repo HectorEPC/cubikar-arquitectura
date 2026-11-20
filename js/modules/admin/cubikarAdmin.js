@@ -8,9 +8,9 @@ import {
   getProjectsList,
   findRegisteredUserAccount,
   deleteUserAccountAndData
-} from '../portal/projectService.js?v=20261119_cf41';
-import { SUBSCRIPTION_PLANS, openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf41';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf41';
+} from '../portal/projectService.js?v=20261119_cf42';
+import { SUBSCRIPTION_PLANS, openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf42';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf42';
 
 // Administrador Maestro Oficial
 export const MASTER_ADMIN_EMAIL = 'hepc.90@gmail.com';
