@@ -1,34 +1,87 @@
 // js/mobile/mobileApp.js — Punto de entrada móvil y tablet de cubikar Arquitectura
 
-import { setActiveProjectId } from '../config/constants.js?v=20261119_cf42';
-import { initStore } from '../state/store.js?v=20261119_cf42';
+import { setActiveProjectId } from '../config/constants.js?v=20261119_cf43';
+import { initStore } from '../state/store.js?v=20261119_cf43';
 import {
   initAuthListener,
+  signOut,
   hasPendingIncomingSsoSession,
   hydrateIncomingSsoSession,
   hasOversizedLocalJwt,
   ensureCompactAuthSession
-} from '../core/authService.js?v=20261119_cf42';
-import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf42';
-import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf42';
-import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf42';
-import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf42';
+} from '../core/authService.js?v=20261119_cf43';
+import {
+  INVITE_TOKEN_STORAGE_KEY,
+  captureInviteTokenFromUrl,
+  hasPendingInviteToken,
+  getPendingInviteToken,
+  processPendingInviteFlow
+} from '../modules/portal/inviteTokenService.js?v=20261119_cf43';
+import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf43';
+import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf43';
+import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf43';
+import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf43';
 import {
   enforceGlobalSessionRevocation,
   getCurrentUser,
+  saveCurrentUser,
   getProjectById,
   getProjectsList,
   saveProjectsList
-} from '../modules/portal/projectService.js?v=20261119_cf42';
-import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261119_cf42';
-import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261119_cf42';
-import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261119_cf42';
-import { showToast } from '../ui/notifications.js?v=20261119_cf42';
-import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261119_cf42';
-import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261119_cf42';
-import { openMobileProjectById } from './mobileProjects.js?v=20261119_cf42';
+} from '../modules/portal/projectService.js?v=20261119_cf43';
+import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261119_cf43';
+import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261119_cf43';
+import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261119_cf43';
+import { showToast } from '../ui/notifications.js?v=20261119_cf43';
+import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261119_cf43';
+import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261119_cf43';
+import { openMobileProjectById } from './mobileProjects.js?v=20261119_cf43';
+
+async function runMobileInviteDecision() {
+  const token = captureInviteTokenFromUrl() || getPendingInviteToken();
+  if (!token) return { active: false };
+  return processPendingInviteFlow({
+    isMobile: true,
+    onAuthRequired: () => {
+      setActiveProjectId(null);
+      setMobileRoute({ nextScreen: 'auth' });
+    },
+    onSwitchAccount: async (preservedToken, preservedMeta) => {
+      try { await signOut({ scope: 'local' }); } catch (_) {}
+      saveCurrentUser(null);
+      if (preservedToken) {
+        try { localStorage.setItem(INVITE_TOKEN_STORAGE_KEY, preservedToken); } catch (_) {}
+      }
+      if (preservedMeta) {
+        try { localStorage.setItem('cubikar_pending_invite_meta_v1', JSON.stringify(preservedMeta)); } catch (_) {}
+      }
+      setActiveProjectId(null);
+      setMobileRoute({ nextScreen: 'auth' });
+    },
+    onGoDashboard: () => {
+      const u = getCurrentUser();
+      setActiveProjectId(null);
+      setMobileRoute({ nextScreen: u ? 'projects' : 'auth' });
+    },
+    onAcceptedOpenProject: async (res) => {
+      if (res?.projectId) {
+        openMobileProjectById(res.projectId, (_id, nextTab) => {
+          setMobileRoute({ nextScreen: 'workspace', nextTab });
+        });
+      } else {
+        setActiveProjectId(null);
+        setMobileRoute({ nextScreen: 'projects' });
+      }
+    }
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.runMobileInviteDecision = runMobileInviteDecision;
+}
 
 async function bootstrapMobileArq() {
+  const capturedInviteToken = captureInviteTokenFromUrl();
   initThemeMode();
   syncThemeDataset();
   setThemeRenderCallback(() => syncThemeDataset());
@@ -73,6 +126,9 @@ async function bootstrapMobileArq() {
     if (event === 'SIGNED_OUT' || !currentUser) {
       setActiveProjectId(null);
       setMobileRoute({ nextScreen: 'auth' });
+    } else if (hasPendingInviteToken()) {
+      refreshCurrentMobileView();
+      runMobileInviteDecision().catch(() => {});
     } else {
       refreshCurrentMobileView();
     }
@@ -85,6 +141,13 @@ async function bootstrapMobileArq() {
   const projIdFromUrl = urlParams.get('project');
   const requestedTab = urlParams.get('tab');
   const user = getCurrentUser();
+
+  if (capturedInviteToken || hasPendingInviteToken()) {
+    setActiveProjectId(null);
+    setMobileRoute({ nextScreen: user ? 'projects' : 'auth' });
+    runMobileInviteDecision().catch(() => {});
+    return;
+  }
 
   if (projIdFromUrl) {
     if (!user) {

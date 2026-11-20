@@ -1,16 +1,16 @@
 // js/modules/catalog/importFromProjectModal.js
 // Asistente visual para explorar, seleccionar y copiar conceptos con sus matrices APU desde otro proyecto
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf42';
-import { saveState } from '../../state/history.js?v=20261119_cf42';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf42';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261119_cf42';
-import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf42';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf42';
-import { recalculateClaves } from './treeService.js?v=20261119_cf42';
-import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf42';
-import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261119_cf42';
-import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261119_cf42';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf43';
+import { saveState } from '../../state/history.js?v=20261119_cf43';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261119_cf43';
+import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf43';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf43';
+import { recalculateClaves } from './treeService.js?v=20261119_cf43';
+import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf43';
+import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261119_cf43';
+import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261119_cf43';
 
 let activeSourceProjectId = null;
 let activeSourceTreeData = [];

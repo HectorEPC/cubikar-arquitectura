@@ -1,12 +1,12 @@
 // js/mobile/mobileProjects.js — Proyectos de cubikar Arquitectura (Mis Proyectos vs Invitado + Papelera + Nuevo)
 
-import { setActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf42';
-import { initStore } from '../state/store.js?v=20261119_cf42';
-import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf42';
-import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf42';
-import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf42';
-import { subscribeToProjectRealtime, broadcastInvitationAccepted, broadcastInvitationRejected, requestPeerSync } from '../core/realtimeSync.js?v=20261119_cf42';
-import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects } from '../core/collaborationCloudService.js?v=20261119_cf42';
+import { setActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf43';
+import { initStore } from '../state/store.js?v=20261119_cf43';
+import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf43';
+import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf43';
+import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf43';
+import { subscribeToProjectRealtime, broadcastInvitationAccepted, broadcastInvitationRejected, requestPeerSync } from '../core/realtimeSync.js?v=20261119_cf43';
+import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects } from '../core/collaborationCloudService.js?v=20261119_cf43';
 import {
   getCurrentUser,
   getProjectsList,
@@ -18,22 +18,25 @@ import {
   acceptProjectInvitation,
   rejectProjectInvitation,
   canUserCreateProject,
+  canUserInviteToProject,
   createNewProject,
   duplicateProject,
   getPlanLimits,
   getUserPlanId,
   getUserRoleInProject,
+  getProjectById,
   getDeletedProjectsList
-} from '../modules/portal/projectService.js?v=20261119_cf42';
+} from '../modules/portal/projectService.js?v=20261119_cf43';
+import { openProjectTeamInvitesSheet } from '../modules/portal/inviteTokenService.js?v=20261119_cf43';
 import {
   moveProjectToTrash,
   fetchTrashedProjectsForHost,
   restoreProjectFromTrash,
   permanentlyDeleteTrashedProject,
   getCachedTrashCount
-} from '../modules/portal/trashService.js?v=20261119_cf42';
-import { showToast } from '../ui/notifications.js?v=20261119_cf42';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf42';
+} from '../modules/portal/trashService.js?v=20261119_cf43';
+import { showToast } from '../ui/notifications.js?v=20261119_cf43';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf43';
 
 let scopeTab = 'owned';
 let selectedInviterEmail = 'all';
@@ -219,6 +222,20 @@ export function renderMobileProjects(container, { openSheet, closeSheet, onOpenP
     b.addEventListener('click', () => openMobileProjectById(b.dataset.openProj, onOpenProject));
   });
 
+  container.querySelectorAll('[data-team-proj]').forEach(b => {
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const proj = getProjectById(b.dataset.teamProj);
+      if (proj) {
+        openProjectTeamInvitesSheet(proj, {
+          openSheet,
+          closeSheet,
+          onChanged: () => renderMobileProjects(container, { openSheet, closeSheet, onOpenProject })
+        });
+      }
+    });
+  });
+
   container.querySelectorAll('[data-dup-proj]').forEach(b => {
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -271,6 +288,9 @@ function renderCard(proj, user) {
       <div class="m-row-between" style="padding-top:8px;border-top:1px solid var(--border);">
         <span class="m-mono" style="font-size:14px;font-weight:800;color:var(--primary);">${escapeHtml(sym)}${total}</span>
         <div class="m-row">
+          ${canUserInviteToProject(proj.id, user).allowed ? `
+            <button type="button" data-team-proj="${escapeHtml(proj.id)}" class="m-icon-btn" style="width:32px;height:32px;font-size:12px;color:var(--primary);" title="Equipo e invitaciones"><i class="fa-solid fa-user-plus"></i></button>
+          ` : ''}
           ${isOwner ? `
             <button type="button" data-dup-proj="${escapeHtml(proj.id)}" class="m-icon-btn" style="width:32px;height:32px;"><i class="fa-regular fa-copy"></i></button>
             <button type="button" data-trash-proj="${escapeHtml(proj.id)}" class="m-icon-btn" style="width:32px;height:32px;color:var(--danger);"><i class="fa-solid fa-trash-can"></i></button>

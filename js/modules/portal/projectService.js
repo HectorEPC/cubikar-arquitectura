@@ -1,7 +1,7 @@
 // js/modules/portal/projectService.js
 // Servicio centralizado para usuarios, proyectos multi-obra y almacenamiento aislado
 
-import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf42';
+import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf43';
 import {
   STORAGE_KEY_USER,
   STORAGE_KEY_PROJECTS,
@@ -14,16 +14,16 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261119_cf42';
+} from '../../config/constants.js?v=20261119_cf43';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 export const STORAGE_KEY_TRASHED_PROJECTS = 'cubikar_trashed_project_ids_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf42';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf42';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf42';
-import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf42';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf42';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf42';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf43';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf43';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf43';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf43';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf43';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -1576,9 +1576,9 @@ export function addProjectMember(projectId, memberData) {
     email: memberData.email.trim(),
     avatar: memberData.avatar || AVATARS_BY_SEX['Masculino'],
     role: memberData.role || 'editar', // 'editar', 'escribir', 'leer'
+    status: memberData.status || 'active',
     allowedTabs: Array.isArray(memberData.allowedTabs) ? memberData.allowedTabs : ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones']
   };
-  if (memberData.status) newMember.status = memberData.status;
   if (memberData.pendingCloudAdd) newMember.pendingCloudAdd = true;
 
   if (existingIdx >= 0) {
@@ -1750,7 +1750,7 @@ export function getTabAssignedMembers(projectId, tabId) {
 // Enviar proyecto a la Papelera (retención 7 días - solo Anfitrión)
 export async function deleteProject(projectId) {
   if (!projectId) return { success: false, error: 'Proyecto no especificado' };
-  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf42');
+  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf43');
   const res = await moveProjectToTrash(projectId);
   return (res && typeof res === 'object') ? res : { success: Boolean(res) };
 }
@@ -2082,7 +2082,7 @@ export function getPendingInvitationsForUser(userEmail) {
 }
 
 // Crear o actualizar una invitación de proyecto
-export function createProjectInvitation({ projectId, email, name, role = 'editar', allowedTabs = [], invitedBy = null, avatar = null }) {
+export function createProjectInvitation({ projectId, email, name, role = 'editar', allowedTabs = [], invitedBy = null, avatar = null, id = null, skipCloudCollaboratorPush = false }) {
   if (!projectId || !email) return null;
   const list = getProjectsList();
   const proj = list.find(p => p.id === projectId);
@@ -2094,7 +2094,7 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
   // Eliminar invitaciones previas pendientes hacia este mismo email y proyecto
   const filteredInvs = invs.filter(i => !(i.projectId === projectId && (i.email || '').toLowerCase() === emailClean));
 
-  const invId = 'inv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+  const invId = id || ('inv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5));
   const newInvitation = {
     id: invId,
     projectId,
@@ -2127,7 +2127,7 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
     role: newInvitation.role,
     allowedTabs: newInvitation.allowedTabs,
     status: 'pending',
-    pendingCloudAdd: true
+    pendingCloudAdd: !skipCloudCollaboratorPush
   });
 
   // Sincronizar colaborador directamente a Supabase PostgreSQL (public.proyecto_colaboradores)
@@ -2143,17 +2143,21 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
     }
   };
 
-  try {
-    if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-      Promise.resolve(window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending'))
-        .then(res => { if (res?.success) clearMemberPendingCloudAdd(projectId, newInvitation.email); })
-        .catch(() => {})
-        .finally(broadcastAfterCloud);
-    } else {
+  if (skipCloudCollaboratorPush) {
+    broadcastAfterCloud();
+  } else {
+    try {
+      if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        Promise.resolve(window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending'))
+          .then(res => { if (res?.success) clearMemberPendingCloudAdd(projectId, newInvitation.email); })
+          .catch(() => {})
+          .finally(broadcastAfterCloud);
+      } else {
+        broadcastAfterCloud();
+      }
+    } catch (_) {
       broadcastAfterCloud();
     }
-  } catch (_) {
-    broadcastAfterCloud();
   }
 
   return newInvitation;
@@ -2825,7 +2829,10 @@ export function canUserCreateProject(user = null, targetScope = null) {
     for (const p of hostProjects) {
       if (p.ownerName && (!hostName || hostName === hostEmail)) hostName = resolveCleanHostName(hostEmail, p.ownerName, p);
       if (Array.isArray(p.members)) {
-        const mem = p.members.find(m => (m.email || '').toLowerCase().trim() === uEmail && m.status !== 'pending');
+        const mem = p.members.find(m => {
+          const st = (m?.status || '').toLowerCase().trim();
+          return (m?.email || '').toLowerCase().trim() === uEmail && (st === 'accepted' || st === 'active');
+        });
         if (mem && mem.role === 'editar') {
           userHasEditorRole = true;
         }
@@ -3065,7 +3072,7 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
       const mem = p.members.find(m => {
         const mEmail = (m.email || '').toLowerCase().trim();
         const mStatus = (m.status || '').toLowerCase().trim();
-        return mEmail === uEmail && (mStatus === 'active' || mStatus === 'accepted' || mStatus === 'pending' || !mStatus);
+        return mEmail === uEmail && (mStatus === 'active' || mStatus === 'accepted');
       });
       if (mem) {
         if (!map.has(oEmail)) {
@@ -3147,7 +3154,7 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
         return Array.isArray(p.members) && p.members.some(m => {
           const mEmail = (m?.email || '').toLowerCase().trim();
           const status = (m?.status || '').toLowerCase().trim();
-          return mEmail === uEmail && (status === 'active' || status === 'accepted' || status === 'pending' || !status);
+          return mEmail === uEmail && (status === 'active' || status === 'accepted');
         });
       });
     })
@@ -3167,7 +3174,7 @@ export function getWorkspaceInviters(user = null, allProjectsList = null) {
 }
 
 // Validar si el usuario puede invitar a colaboradores a un proyecto específico
-export function canUserInviteToProject(projectId, user = null) {
+export function canUserInviteToProject(projectId, user = null, targetEmail = '') {
   const u = user || getCurrentUser();
   if (!u || !u.email) return { allowed: false, reason: 'Debes iniciar sesión.' };
 
@@ -3181,10 +3188,13 @@ export function canUserInviteToProject(projectId, user = null) {
   const uEmail = u.email.toLowerCase().trim();
   const isOwner = (proj.ownerEmail || '').toLowerCase().trim() === uEmail;
 
-  // Si no es el dueño, verificar si es miembro con rol 'editar' (Editor)
+  // Si no es el dueño, verificar si es miembro aceptado con rol 'editar' (Editor)
   let isEditor = false;
   if (Array.isArray(proj.members)) {
-    const mem = proj.members.find(m => (m.email || '').toLowerCase().trim() === uEmail && m.status !== 'pending');
+    const mem = proj.members.find(m => {
+      const st = (m?.status || '').toLowerCase().trim();
+      return (m?.email || '').toLowerCase().trim() === uEmail && (st === 'accepted' || st === 'active');
+    });
     if (mem && mem.role === 'editar') {
       isEditor = true;
     }
@@ -3197,15 +3207,40 @@ export function canUserInviteToProject(projectId, user = null) {
     };
   }
 
-  // Verificar el límite de colaboradores según el plan de la obra (heredado del creador)
+  // Verificar el límite de colaboradores según el plan de la obra (heredado del creador),
+  // ignorando invitaciones rechazadas o canceladas para liberar el cupo
   const effectivePlanId = getProjectEffectivePlan(projectId);
   const limits = getPlanLimits(effectivePlanId);
   const members = Array.isArray(proj.members) ? proj.members : [];
-  const currentMembersCount = members.length;
+  const activeOrPending = members.filter(m => {
+    const st = (m?.status || '').toLowerCase().trim();
+    return st !== 'rejected' && st !== 'cancelled';
+  });
+  const storedPending = getStoredInvitations().filter(i => {
+    const st = (i?.status || '').toLowerCase().trim();
+    return (i?.projectId === projectId || i?.projectId === proj.cloudId) && st === 'pending';
+  });
+  const seatEmails = new Set([
+    ...activeOrPending.map(m => (m?.email || '').toLowerCase().trim()).filter(Boolean),
+    ...storedPending.map(i => (i?.email || '').toLowerCase().trim()).filter(Boolean)
+  ]);
+  const cleanTarget = (targetEmail || '').toLowerCase().trim();
+  const currentMembersCount = seatEmails.size;
+
+  if (cleanTarget && seatEmails.has(cleanTarget)) {
+    return {
+      allowed: currentMembersCount <= limits.maxMembers,
+      limitReached: currentMembersCount > limits.maxMembers,
+      planId: effectivePlanId,
+      maxMembers: limits.maxMembers,
+      currentMembers: currentMembersCount
+    };
+  }
 
   if (currentMembersCount >= limits.maxMembers) {
     return {
       allowed: false,
+      limitReached: true,
       reason: `Este proyecto ha alcanzado el límite de ${limits.maxMembers} colaboradores permitidos en el Plan ${limits.name}. Para invitar a más colaboradores, actualiza la suscripción de la obra.`,
       planId: effectivePlanId,
       maxMembers: limits.maxMembers,
@@ -3237,7 +3272,7 @@ export function getUserRoleInProject(projectId, user = null) {
   if (Array.isArray(proj.members)) {
     const mem = proj.members.find(m => {
       const st = (m.status || '').toLowerCase().trim();
-      return (m.email || '').toLowerCase().trim() === uEmail && st !== 'rejected' && st !== 'pending';
+      return (m.email || '').toLowerCase().trim() === uEmail && (st === 'accepted' || st === 'active');
     });
     if (mem && mem.role) return mem.role;
   }
@@ -3248,8 +3283,7 @@ export function getUserRoleInProject(projectId, user = null) {
       const st = (inv.status || '').toLowerCase().trim();
       return (inv.ownerEmail || '').toLowerCase().trim() === (proj.ownerEmail || '').toLowerCase().trim() &&
         (inv.email || '').toLowerCase().trim() === uEmail &&
-        st !== 'rejected' &&
-        st !== 'pending';
+        (st === 'accepted' || st === 'active');
     });
     if (planInv && planInv.role) {
       return planInv.role;
@@ -3357,6 +3391,8 @@ export function getPlanCollaboratorsForOwner(ownerEmail) {
   });
 
   const result = Array.from(map.values()).filter(inv => {
+    const st = (inv.status || '').toLowerCase().trim();
+    if (st === 'rejected' || st === 'cancelled') return false;
     const n = (inv.name || '').toLowerCase().trim();
     const em = (inv.email || '').toLowerCase().trim();
     if (!n || GENERIC_BLACKLIST.has(n)) return false;

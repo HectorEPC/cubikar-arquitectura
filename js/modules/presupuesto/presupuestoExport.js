@@ -1,13 +1,13 @@
 // js/modules/presupuesto/presupuestoExport.js
 // Impresión Ejecutiva (PDF) y Exportación Excel (.xlsx) para la pestaña 1. Presupuesto
 
-import { state } from '../../state/store.js?v=20261119_cf42';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf42';
-import { getProjectById } from '../portal/projectService.js?v=20261119_cf42';
-import { formatMoney, formatQty, formatNumber, getCurrencyCode, round2 } from '../../core/formatters.js?v=20261119_cf42';
-import { hasOwnCotizaciones } from '../../core/calculations.js?v=20261119_cf42';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf42';
-import { openPrintWindow } from '../io/printService.js?v=20261119_cf42';
+import { state } from '../../state/store.js?v=20261119_cf43';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf43';
+import { getProjectById } from '../portal/projectService.js?v=20261119_cf43';
+import { formatMoney, formatQty, formatNumber, getCurrencyCode, round2 } from '../../core/formatters.js?v=20261119_cf43';
+import { hasOwnCotizaciones } from '../../core/calculations.js?v=20261119_cf43';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
+import { openPrintWindow } from '../io/printService.js?v=20261119_cf43';
 import {
   getProjectPresupuestoConfig,
   calcularResumenPresupuesto,
@@ -16,7 +16,7 @@ import {
   getEffectiveConceptPU,
   getConceptImporte,
   computeFechaVencimiento
-} from './presupuestoModel.js?v=20261119_cf42';
+} from './presupuestoModel.js?v=20261119_cf43';
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return '';

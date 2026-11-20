@@ -3,10 +3,10 @@
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 // Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf42';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf42';
-import { isValidUUID } from './cloudProjectService.js?v=20261119_cf42';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf42';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf43';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf43';
+import { isValidUUID } from './cloudProjectService.js?v=20261119_cf43';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf43';
 
 // ============================================================================
 // GUARDIA DE HIDRATACIÓN (protección contra borrado en espejo de datos de la nube)

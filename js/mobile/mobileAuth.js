@@ -8,8 +8,8 @@ import {
   resetPasswordForEmail,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../core/authService.js?v=20261119_cf42';
-import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf42';
+} from '../core/authService.js?v=20261119_cf43';
+import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf43';
 import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
@@ -22,9 +22,15 @@ import {
   getSavedUserProfile,
   markSessionOpen,
   setActiveWorkspaceData
-} from '../modules/portal/projectService.js?v=20261119_cf42';
-import { showToast } from '../ui/notifications.js?v=20261119_cf42';
-import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf42';
+} from '../modules/portal/projectService.js?v=20261119_cf43';
+import { showToast } from '../ui/notifications.js?v=20261119_cf43';
+import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf43';
+import {
+  renderInviteAuthBannerHtml,
+  bindInviteAuthBannerActions,
+  hasPendingInviteToken,
+  showAwaitEmailConfirmationOverlay
+} from '../modules/portal/inviteTokenService.js?v=20261119_cf43';
 
 let authTab = 'login';
 let regSexo = 'Masculino';
@@ -37,6 +43,7 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
 
   container.innerHTML = `
     <div style="max-width:440px;margin:8px auto 0;width:100%;display:flex;flex-direction:column;gap:12px;">
+      ${renderInviteAuthBannerHtml()}
       <div class="m-card" style="text-align:center;padding:18px 16px;">
         <img src="assets/branding/cubikar_icon_transparent.png" alt="Cubikar" style="width:48px;height:48px;object-fit:contain;margin:0 auto 8px;display:block;">
         <h1 class="m-title" style="font-size:19px;">cubikar Arquitectura</h1>
@@ -184,6 +191,10 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
     renderMobileAuth(container, { returnProjectId, onAuthSuccess });
   });
 
+  bindInviteAuthBannerActions({
+    onDismiss: () => renderMobileAuth(container, { returnProjectId, onAuthSuccess })
+  });
+
   const gsiSlot = container.querySelector('#mobile-google-gsi-slot');
   const gsiFallback = container.querySelector('#mobile-google-fallback');
   if (gsiSlot && isSupabaseConfigured()) {
@@ -192,6 +203,10 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
       fallbackBtn: gsiFallback,
       onSuccess: () => {
         showToast('Sesión iniciada con Google.', 'success');
+        if (hasPendingInviteToken() && typeof window?.runMobileInviteDecision === 'function') {
+          window.runMobileInviteDecision().catch(() => {});
+          return;
+        }
         onAuthSuccess?.(returnProjectId);
       },
       onError: (err) => showToast(err?.message || 'Error al autenticar con Google.', 'error')
@@ -270,10 +285,14 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
         setActiveWorkspaceData(email, loggedUser.name);
         markSessionOpen(email);
         showToast(`¡Bienvenido, ${loggedUser.name}!`, 'success');
+        if (hasPendingInviteToken() && typeof window?.runMobileInviteDecision === 'function') {
+          await window.runMobileInviteDecision();
+          return;
+        }
         onAuthSuccess?.(returnProjectId);
       } catch (err) {
         const localReg = findRegisteredUserAccount(email);
-        if (localReg && (!isSupabaseConfigured() || err?.message?.includes('Failed to fetch'))) {
+        if (!hasPendingInviteToken() && localReg && (!isSupabaseConfigured() || err?.message?.includes('Failed to fetch'))) {
           saveCurrentUser(localReg, remember);
           setActiveWorkspaceData(email, localReg.name || email);
           markSessionOpen(email);
@@ -310,17 +329,47 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
       const dob = container.querySelector('#m-reg-dob')?.value || '1992-06-15';
       const remember = Boolean(container.querySelector('#reg-remember-me')?.checked);
       if (password !== pass2) { showToast('Las contraseñas no coinciden.', 'error'); return; }
+      const btn = container.querySelector('#m-reg-submit');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creando cuenta...';
+      }
       let cloudUser = null;
+      let cloudSession = null;
       try {
         if (isSupabaseConfigured() && getSupabaseClient()) {
           const data = await signUp({ email, password, fullName });
           cloudUser = data?.user || null;
-        }
-      } catch (err) {
-        if (!String(err?.message || '').toLowerCase().includes('rate limit')) {
-          showToast(err?.message || 'Error al registrar.', 'error');
+          cloudSession = data?.session || null;
+        } else if (hasPendingInviteToken()) {
+          showToast('Las invitaciones requieren registro en la nube conectado a Supabase.', 'warning');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Crear Cuenta y Entrar';
+          }
           return;
         }
+      } catch (err) {
+        if (!String(err?.message || '').toLowerCase().includes('rate limit') || hasPendingInviteToken()) {
+          showToast(err?.message || 'Error al registrar.', 'error');
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Crear Cuenta y Entrar';
+          }
+          return;
+        }
+      }
+      if (hasPendingInviteToken() && !cloudSession) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Crear Cuenta y Entrar';
+        }
+        showToast('Cuenta creada. Confirma tu correo para abrir tu invitación.', 'info');
+        showAwaitEmailConfirmationOverlay({
+          email,
+          onGoDashboard: () => renderMobileAuth(container, { returnProjectId, onAuthSuccess })
+        });
+        return;
       }
       const newUser = {
         ...(cloudUser?.id ? { id: cloudUser.id } : {}),
@@ -340,6 +389,10 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
       setActiveWorkspaceData(email, fullName);
       markSessionOpen(email);
       showToast(`¡Bienvenido, ${fullName}!`, 'success');
+      if (hasPendingInviteToken() && typeof window?.runMobileInviteDecision === 'function') {
+        await window.runMobileInviteDecision();
+        return;
+      }
       onAuthSuccess?.(returnProjectId);
     });
   }
@@ -347,6 +400,14 @@ export function renderMobileAuth(container, { returnProjectId = '', onAuthSucces
 
 function handleQuickLogin(email, returnProjectId, onAuthSuccess) {
   const clean = String(email || '').toLowerCase().trim();
+  if (!clean) return;
+  if (hasPendingInviteToken()) {
+    const emailInput = document.getElementById('m-login-email');
+    if (emailInput) emailInput.value = clean;
+    document.getElementById('m-login-pass')?.focus();
+    showToast('Por seguridad, inicia sesión con tu contraseña o Google para validar la invitación.', 'warning');
+    return;
+  }
   const user = getFeaturedProfilesList().find(p => (p.email || '').toLowerCase().trim() === clean)
     || findRegisteredUserAccount(clean)
     || (getSavedUserProfile()?.email?.toLowerCase().trim() === clean ? getSavedUserProfile() : null)
