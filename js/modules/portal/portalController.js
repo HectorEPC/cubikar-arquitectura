@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261119_cf38';
+} from '../../config/constants.js?v=20261119_cf39';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -71,8 +71,8 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getProjectCompanyLogo
-} from './projectService.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
+} from './projectService.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
 import {
   persistLocalData,
   state,
@@ -81,13 +81,13 @@ import {
   resolveSettingsForCloudSync,
   markCatalogTreeSynced,
   markSettingsSynced
-} from '../../state/store.js?v=20261119_cf38';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261119_cf38';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf38';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261119_cf38';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261119_cf38';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261119_cf38';
+} from '../../state/store.js?v=20261119_cf39';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261119_cf39';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf39';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf39';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261119_cf39';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261119_cf39';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261119_cf39';
 import {
   signUp,
   signInWithPassword,
@@ -98,24 +98,24 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261119_cf38';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261119_cf38';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261119_cf38';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf38';
+} from '../../core/authService.js?v=20261119_cf39';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261119_cf39';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf39';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261119_cf38';
-import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261119_cf38';
-import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261119_cf38';
+} from '../admin/cubikarAdmin.js?v=20261119_cf39';
+import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261119_cf39';
+import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261119_cf39';
 import {
   isProjectHostOwner,
   fetchTrashedProjectsForHost,
   getCachedTrashCount,
   updateTrashBadgeUI,
   openTrashModal
-} from './trashService.js?v=20261119_cf38';
+} from './trashService.js?v=20261119_cf39';
 
 let customPhotoTemp = null;
 let wizardData = {
@@ -323,27 +323,67 @@ function showWorkspaceView(user, project) {
     const ownerEmail = (project.ownerEmail || '').toLowerCase().trim();
     if (myEmail && ownerEmail && myEmail !== ownerEmail) {
       try {
+        const invs = getStoredInvitations();
+        let invUpdated = false;
+        let matchedInv = null;
+        invs.forEach(i => {
+          if (
+            (i.projectId === project.id || i.projectId === project.cloudId) &&
+            (i.email || '').toLowerCase().trim() === myEmail &&
+            (i.status || '').toLowerCase().trim() !== 'rejected'
+          ) {
+            matchedInv = i;
+            if (i.status === 'pending') {
+              i.status = 'accepted';
+              i.acceptedAt = new Date().toISOString();
+              invUpdated = true;
+            }
+          }
+        });
+        if (invUpdated) saveStoredInvitations(invs);
+
+        const planInvs = getStoredPlanInvitations();
+        let planInvUpdated = false;
+        let matchedPlanInv = null;
+        planInvs.forEach(pi => {
+          if (
+            (pi.ownerEmail || '').toLowerCase().trim() === ownerEmail &&
+            (pi.email || '').toLowerCase().trim() === myEmail &&
+            (pi.status || '').toLowerCase().trim() !== 'rejected'
+          ) {
+            matchedPlanInv = pi;
+            if (pi.status === 'pending') {
+              pi.status = 'accepted';
+              pi.acceptedAt = new Date().toISOString();
+              planInvUpdated = true;
+            }
+          }
+        });
+        if (planInvUpdated) saveStoredPlanInvitations(planInvs);
+
         const list = getProjectsList();
         const pObj = list.find(p => p.id === project.id || p.cloudId === project.id);
         let memUpdated = false;
-        let myRole = 'editar';
+        const resolvedFallbackRole = matchedInv?.role || matchedPlanInv?.role || project.cloudRole || pObj?.cloudRole || null;
+        let myRole = resolvedFallbackRole;
         if (pObj) {
           if (!Array.isArray(pObj.members)) pObj.members = [];
           const mem = pObj.members.find(m => (m.email || '').toLowerCase().trim() === myEmail);
           if (mem) {
-            myRole = mem.role || 'editar';
+            myRole = mem.role || resolvedFallbackRole || 'leer';
             if (mem.status !== 'active' && mem.status !== 'accepted') {
               mem.status = 'active';
               memUpdated = true;
             }
-          } else {
+          } else if (resolvedFallbackRole) {
+            myRole = resolvedFallbackRole;
             pObj.members.push({
               id: 'mem-' + myEmail,
               name: user.name || myEmail.split('@')[0],
               email: myEmail,
               avatar: user.avatar || AVATARS_BY_SEX['Masculino'],
-              role: 'editar',
-              allowedTabs: ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'],
+              role: myRole,
+              allowedTabs: matchedInv?.allowedTabs || matchedPlanInv?.allowedTabs || ['alcances', 'presupuesto', 'seguimiento', 'calendario', 'estimaciones'],
               status: 'active'
             });
             memUpdated = true;
@@ -352,29 +392,8 @@ function showWorkspaceView(user, project) {
             saveProjectsList(list);
           }
         }
-        const invs = getStoredInvitations();
-        let invUpdated = false;
-        invs.forEach(i => {
-          if ((i.projectId === project.id || i.projectId === project.cloudId) && (i.email || '').toLowerCase().trim() === myEmail && i.status === 'pending') {
-            i.status = 'accepted';
-            i.acceptedAt = new Date().toISOString();
-            invUpdated = true;
-          }
-        });
-        if (invUpdated) saveStoredInvitations(invs);
 
-        const planInvs = getStoredPlanInvitations();
-        let planInvUpdated = false;
-        planInvs.forEach(pi => {
-          if ((pi.ownerEmail || '').toLowerCase().trim() === ownerEmail && (pi.email || '').toLowerCase().trim() === myEmail && pi.status === 'pending') {
-            pi.status = 'accepted';
-            pi.acceptedAt = new Date().toISOString();
-            planInvUpdated = true;
-          }
-        });
-        if (planInvUpdated) saveStoredPlanInvitations(planInvs);
-
-        if ((memUpdated || invUpdated || planInvUpdated) && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
+        if ((memUpdated || invUpdated || planInvUpdated) && myRole && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
           window.addCollaboratorToCloud(project.id, myEmail, myRole, 'accepted');
         }
       } catch (_) {}

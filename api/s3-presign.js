@@ -14,29 +14,29 @@ export const PLAN_STORAGE_SPECS = {
   free: {
     planId: 'free',
     name: 'Gratuita',
-    totalQuotaBytes: 200 * MB,
-    catalogReservedBytes: 6 * MB,
-    projectFilesCapBytes: (200 - 6) * MB,
+    totalQuotaBytes: 50 * MB,
+    catalogReservedBytes: 5 * MB,
+    projectFilesCapBytes: (50 - 5) * MB,
     maxFileBytes: 5 * MB,
-    maxMembers: 3
+    maxMembers: 2
   },
   plus: {
     planId: 'plus',
     name: 'Plus',
-    totalQuotaBytes: 2 * GB,
-    catalogReservedBytes: 50 * MB,
-    projectFilesCapBytes: (2 * GB) - (50 * MB),
+    totalQuotaBytes: 1 * GB,
+    catalogReservedBytes: 25 * MB,
+    projectFilesCapBytes: (1 * GB) - (25 * MB),
     maxFileBytes: 15 * MB,
-    maxMembers: 10
+    maxMembers: 5
   },
   pro: {
     planId: 'pro',
     name: 'Pro',
-    totalQuotaBytes: 5 * GB,
-    catalogReservedBytes: 200 * MB,
-    projectFilesCapBytes: (5 * GB) - (200 * MB),
+    totalQuotaBytes: 2500 * MB,
+    catalogReservedBytes: 100 * MB,
+    projectFilesCapBytes: (2500 - 100) * MB,
     maxFileBytes: 25 * MB,
-    maxMembers: 30
+    maxMembers: 20
   }
 };
 

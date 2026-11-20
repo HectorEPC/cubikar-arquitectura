@@ -1,28 +1,29 @@
-﻿import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261119_cf38';
-import { defaultTreeData } from '../config/defaultData.js?v=20261119_cf38';
-import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261119_cf38';
-import { showToast } from './notifications.js?v=20261119_cf38';
-import { formatQty, round2, round5 } from '../core/formatters.js?v=20261119_cf38';
+﻿import { state, persistLocalData, persistSettings } from '../state/store.js?v=20261119_cf39';
+import { defaultTreeData } from '../config/defaultData.js?v=20261119_cf39';
+import { saveState, updateUndoRedoButtons } from '../state/history.js?v=20261119_cf39';
+import { showToast } from './notifications.js?v=20261119_cf39';
+import { formatQty, round2, round5 } from '../core/formatters.js?v=20261119_cf39';
 import {
   getDespachoGastosBreakdown,
   getNominaOficinaBreakdown,
   getUtilidadDespachoPct,
   getEjecutivoCostPlusFactor,
   updateSobrecostoBadge
-} from '../core/calculations.js?v=20261119_cf38';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261119_cf38';
-import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261119_cf38';
-import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261119_cf38';
-import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261119_cf38';
-import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261119_cf38';
-import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf38';
-import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261119_cf38';
-import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf38';
-import { renderBrandingUI } from './brandingController.js?v=20261119_cf38';
-import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf38';
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf38';
-import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261119_cf38';
+} from '../core/calculations.js?v=20261119_cf39';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../modules/catalog/treeService.js?v=20261119_cf39';
+import { renderTAB1, closeApuPanel } from '../modules/catalog/catalogView.js?v=20261119_cf39';
+import { renderInsumosGenerales } from '../modules/insumosGenerales/insumosView.js?v=20261119_cf39';
+import { renderCalendarioObra } from '../modules/calendario/calendarioView.js?v=20261119_cf39';
+import { renderEstimacionesView, switchEstimacionesSubView } from '../modules/estimaciones/estimacionesView.js?v=20261119_cf39';
+import { getProjectPresupuestoConfig } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf39';
+import { renderPresupuestoView } from '../modules/presupuesto/presupuestoView.js?v=20261119_cf39';
+import { renderSeguimientoView } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf39';
+import { renderBrandingUI } from './brandingController.js?v=20261119_cf39';
+import { canCurrentUserAccessTab, renderAllTabAssignedMembers } from '../modules/portal/portalController.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
+import { guardTabUnlocked } from './tabLockController.js?v=20261119_cf39';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf39';
+import { syncProjectChatDivisionWithTab } from '../modules/chat/projectChat.js?v=20261119_cf39';
 
 // Modo de destino del modal Google IA: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)
 export let aiModalTargetMode = 'single';
@@ -701,9 +702,15 @@ export function toggleApiKeyVisibility() {
 }
 
 export function resetToDemoData() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite restablecer el catálogo.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   if (!confirm('¿Restablecer el catálogo al ejemplo demo? Se sobrescribirán los datos actuales.')) return;
-  state.treeData = JSON.parse(JSON.stringify(defaultTreeData));
   saveState();
+  state.treeData = JSON.parse(JSON.stringify(defaultTreeData));
+  persistLocalData(true);
   closeSettingsModal();
   closeApuPanel();
   // closeApuPanel() ya limpia activeSelectedId y ejecuta renderTAB1() una sola vez
@@ -711,9 +718,15 @@ export function resetToDemoData() {
 }
 
 export function clearAllData() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite vaciar el catálogo de obra.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   if (!confirm('¿Estás seguro de vaciar todo el catálogo de obra?')) return;
-  state.treeData = [];
   saveState();
+  state.treeData = [];
+  persistLocalData(true);
   closeSettingsModal();
   closeApuPanel();
   // closeApuPanel() ya limpia activeSelectedId y ejecuta renderTAB1() una sola vez

@@ -1,16 +1,16 @@
-﻿import { printEstimacionesFormat } from '../io/printService.js?v=20261119_cf38';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf38';
+﻿import { printEstimacionesFormat } from '../io/printService.js?v=20261119_cf39';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf39';
 // js/modules/estimaciones/estimacionesView.js
 // Renderizador y controlador de eventos para la pestaña ESTIMACIONES DE OBRA
 // Sincronizado reactivamente con Catálogo Base, con soporte multiestimaciones,
 // amortización progresiva de anticipo al 100%, reflejo de cantidades acumuladas,
 // justificación de conceptos, encabezados en una sola línea y resizer vertical de columna de concepto.
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { findNodeById, collapseAllCatalogNodes, expandAllCatalogNodes } from '../catalog/treeService.js?v=20261119_cf38';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { findNodeById, collapseAllCatalogNodes, expandAllCatalogNodes } from '../catalog/treeService.js?v=20261119_cf39';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf39';
 import {
   getEstimacionesCalculatedData,
   getActiveEstimacion,
@@ -36,16 +36,33 @@ import {
   deleteSpecialistPayment,
   updateSpecialistProveedor,
   getCashFlowSummary
-} from './estimacionesModel.js?v=20261119_cf38';
-import { guardTabUnlocked, applyTabLocksToDOM, toggleTabLock } from '../../ui/tabLockController.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261119_cf38';
+} from './estimacionesModel.js?v=20261119_cf39';
+import { guardTabUnlocked, applyTabLocksToDOM, toggleTabLock } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf39';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261119_cf39';
 
 let estimacionesSearchTerm = '';
 let selectedEstimacionRowId = null;
 let specialistsSearchTerm = '';
 let specialistsStatusFilter = 'todos'; // 'todos' | 'pendientes' | 'liquidados'
 let expandedSpecialistHistories = new Set(); // Set of nodeId strings
+
+function escapeEstJsArg(val) {
+  return String(val ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;')
+    .replace(/\r?\n/g, ' ');
+}
+
+function escapeEstHtml(val) {
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // Cambiar entre Vista 1: Cobranza al Cliente y Vista 2: Pagos a Especialistas
 export function switchEstimacionesSubView(subView) {
@@ -489,7 +506,9 @@ export function renderEstimacionesView() {
     const subView = getEstimacionesSubView();
     const cashflow = getCashFlowSummary(data);
 
-    const isEstLocked = Boolean(activeEst.locked);
+    const canEditProject = canCurrentUserEditProject();
+    const isRawEstLocked = Boolean(activeEst.locked);
+    const isEstLocked = isRawEstLocked || !canEditProject;
     applyTabLocksToDOM();
 
     const pctCobrado = (Number(cashflow.pctCobradoCliente) || 0).toFixed(1);
@@ -577,8 +596,8 @@ export function renderEstimacionesView() {
 
         <!-- CONTENIDO PRINCIPAL SEGÚN SUB-VISTA SELECCIONADA -->
         ${subView === 'especialistas'
-          ? renderSpecialistsPaymentsHTML(cashflow, currencySymbol)
-          : renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbol)}
+          ? renderSpecialistsPaymentsHTML(cashflow, currencySymbol, canEditProject)
+          : renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbol, canEditProject, isRawEstLocked)}
 
       </div>`;
 
@@ -609,8 +628,10 @@ export function renderEstimacionesView() {
 // ==========================================
 // RENDERIZADOR SUB-VISTA 1: COBRANZA AL CLIENTE (FORMATO OFICIAL PANORAMA REAL)
 // ==========================================
-function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbol) {
+function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbol, canEditProject = true, isRawEstLocked = false) {
   const { activeEst, estimacionesList, kpis } = data;
+  const safeEstId = escapeEstJsArg(activeEst.id);
+  const safeEstNombre = escapeEstJsArg(activeEst.nombre);
 
   return `
       <!-- ENCABEZADO EJECUTIVO OFICIAL (FORMATO DE REFERENCIA PANORAMA REAL) -->
@@ -625,14 +646,14 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
             <div class="flex items-center gap-1.5 text-xs text-slate-700">
               <i class="fa-solid fa-diagram-project text-blue-600 shrink-0 text-xs"></i>
               <span class="font-extrabold text-slate-500 uppercase tracking-wide text-[10.5px]">PROYECTO:</span>
-              <span class="font-black text-slate-900 text-xs sm:text-sm tracking-tight truncate">${state.settings?.projectName || 'Proyecto Residencial Muestra'}</span>
+              <span class="font-black text-slate-900 text-xs sm:text-sm tracking-tight truncate">${escapeEstHtml(state.settings?.projectName || 'Proyecto Residencial Muestra')}</span>
             </div>
 
             <!-- Ubicación -->
             <div class="flex items-center gap-1.5 text-xs text-slate-600">
               <i class="fa-solid fa-location-dot text-rose-500 shrink-0 text-xs"></i>
               <span class="font-extrabold text-slate-500 uppercase tracking-wide text-[10.5px]">UBICACIÓN:</span>
-              <span class="font-medium text-slate-700 text-xs truncate">${activeEst.direccion || state.settings?.projectLocation || 'Fraccionamiento Residencial, Puebla, Pue.'}</span>
+              <span class="font-medium text-slate-700 text-xs truncate">${escapeEstHtml(activeEst.direccion || state.settings?.projectLocation || 'Fraccionamiento Residencial, Puebla, Pue.')}</span>
             </div>
 
             <!-- Fila de Herramientas: Buscador + Candado + Agrupar/Desagrupar + Imprimir + Excel + Indicador -->
@@ -642,7 +663,7 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
                 <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-slate-400 text-[11px]"></i>
                 <input type="text"
                        id="estimaciones-search-input"
-                       value="${estimacionesSearchTerm}"
+                       value="${escapeEstHtml(estimacionesSearchTerm)}"
                        oninput="onSearchEstimaciones(this.value)"
                        placeholder="Buscar concepto o clave..."
                        class="w-40 sm:w-52 bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 rounded-lg px-2 py-1 pl-7 text-xs text-slate-800 placeholder-slate-400 outline-none transition shadow-2xs">
@@ -655,9 +676,10 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
               <button type="button"
                       onclick="toggleActiveEstimacionLock()"
                       id="btn-lock-estimaciones"
-                      class="${isEstLocked ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'} border text-xs p-1.5 rounded-lg flex items-center justify-center transition active:scale-95 cursor-pointer shadow-2xs shrink-0"
-                      title="${isEstLocked ? `🔒 ${activeEst.nombre} bloqueada — Clic para desbloquear` : `Bloquear ${activeEst.nombre}`}">
-                <i class="fa-solid ${isEstLocked ? 'fa-lock text-amber-600' : 'fa-lock-open text-slate-400'} text-xs"></i>
+                      ${!canEditProject ? 'disabled' : ''}
+                      class="${isRawEstLocked || !canEditProject ? 'bg-amber-50 text-amber-700 border-amber-300 font-bold' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'} border text-xs p-1.5 rounded-lg flex items-center justify-center transition active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs shrink-0"
+                      title="${!canEditProject ? 'Modo lectura: solo puedes consultar e imprimir' : (isRawEstLocked ? `🔒 ${escapeEstHtml(activeEst.nombre)} bloqueada — Clic para desbloquear` : `Bloquear ${escapeEstHtml(activeEst.nombre)}`)}">
+                <i class="fa-solid ${isRawEstLocked || !canEditProject ? 'fa-lock text-amber-600' : 'fa-lock-open text-slate-400'} text-xs"></i>
               </button>
 
               <!-- Agrupar (Colapsar) -->
@@ -698,8 +720,8 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
                 <input type="date"
                        ${isEstLocked ? 'disabled readonly' : ''}
                        value="${activeEst.fechaInicio || ''}"
-                       onchange="onChangeEstimacionDate('${activeEst.id}', 'fechaInicio', this.value)"
-                       class="bg-transparent text-slate-800 font-mono font-semibold text-xs outline-none cursor-pointer">
+                       onchange="onChangeEstimacionDate('${safeEstId}', 'fechaInicio', this.value)"
+                       class="bg-transparent text-slate-800 font-mono font-semibold text-xs outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
               </div>
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-600">
@@ -709,8 +731,8 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
                 <input type="date"
                        ${isEstLocked ? 'disabled readonly' : ''}
                        value="${activeEst.fechaFin || ''}"
-                       onchange="onChangeEstimacionDate('${activeEst.id}', 'fechaFin', this.value)"
-                       class="bg-transparent text-slate-800 font-mono font-semibold text-xs outline-none cursor-pointer">
+                       onchange="onChangeEstimacionDate('${safeEstId}', 'fechaFin', this.value)"
+                       class="bg-transparent text-slate-800 font-mono font-semibold text-xs outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
               </div>
             </div>
           </div>
@@ -725,13 +747,13 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
               </div>
               <select onchange="onSwitchActiveEstimacion(this.value)" class="bg-transparent font-bold text-xs text-slate-900 outline-none cursor-pointer font-sans">
                 ${estimacionesList.map(est => `
-                  <option value="${est.id}" class="bg-white text-slate-900" ${est.id === activeEst.id ? 'selected' : ''}>
-                    ${est.locked ? '🔒 ' : ''}${est.nombre}
+                  <option value="${escapeEstHtml(est.id)}" class="bg-white text-slate-900" ${est.id === activeEst.id ? 'selected' : ''}>
+                    ${est.locked ? '🔒 ' : ''}${escapeEstHtml(est.nombre)}
                   </option>
                 `).join('')}
               </select>
               ${estimacionesList.length > 1 ? `
-                <button type="button" ${isEstLocked ? 'disabled' : ''} onclick="confirmDeleteCurrentEstimacion('${activeEst.id}', '${activeEst.nombre}')" class="text-slate-400 hover:text-rose-600 p-0.5 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ml-1" title="Eliminar estimación actual">
+                <button type="button" ${isEstLocked ? 'disabled' : ''} onclick="confirmDeleteCurrentEstimacion('${safeEstId}', '${safeEstNombre}')" class="text-slate-400 hover:text-rose-600 p-0.5 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ml-1" title="Eliminar estimación actual">
                   <i class="fa-solid fa-trash text-[10px]"></i>
                 </button>
               ` : ''}
@@ -745,7 +767,7 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
                      ${isEstLocked ? 'disabled readonly' : ''}
                      value="${kpis.anticipo?.pct ?? 30}"
                      onchange="onEstimacionesAnticipoInput(this.value)"
-                     class="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500">
+                     class="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
               <span id="est-header-anticipo-monto" class="text-slate-500 text-[11px] font-mono whitespace-nowrap">% (${formatCurrency(kpis.anticipo?.totalContratado ?? kpis.anticipo?.monto ?? 0, currencySymbol)})</span>
             </div>
           </div>
@@ -753,7 +775,7 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
           <!-- Bloque 4: Nueva Estimación & % IVA -->
           <div class="flex flex-col justify-center gap-1.5 shrink-0 font-sans">
             <!-- Botón Nueva Estimación -->
-            <button type="button" onclick="promptCreateNewEstimacion()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer whitespace-nowrap">
+            <button type="button" ${!canEditProject ? 'disabled' : ''} onclick="promptCreateNewEstimacion()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
               <i class="fa-solid fa-plus font-bold text-xs"></i> + Nueva Estimación
             </button>
 
@@ -765,7 +787,7 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
                      ${isEstLocked ? 'disabled readonly' : ''}
                      value="${kpis.iva?.pct ?? 16}"
                      onchange="onEstimacionesIvaInput(this.value)"
-                     class="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500">
+                     class="w-12 text-center font-mono font-bold text-xs text-slate-900 bg-white border border-slate-300 rounded px-1 py-0.5 outline-none focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed">
               <span id="est-header-iva-monto" class="text-slate-500 text-[11px] font-mono whitespace-nowrap">% (${formatCurrency(kpis.iva?.totalContratado ?? kpis.iva?.monto ?? 0, currencySymbol)})</span>
             </div>
           </div>
@@ -1102,7 +1124,7 @@ function renderCobranzaClienteHTML(data, isEstLocked, visibleRows, currencySymbo
 // ==========================================
 // RENDERIZADOR SUB-VISTA 2: PAGOS A ESPECIALISTAS Y SUBCONTRATOS
 // ==========================================
-function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
+function renderSpecialistsPaymentsHTML(cashflow, currencySymbol, canEditProject = true) {
   const allContracts = getSpecialistsContractsData();
   const term = specialistsSearchTerm.trim().toLowerCase();
 
@@ -1185,8 +1207,9 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
         </button>
 
         <button type="button"
+                ${!canEditProject ? 'disabled' : ''}
                 onclick="openRegistrarPagoModal()"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer shrink-0">
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed shrink-0">
           <i class="fa-solid fa-plus font-bold text-xs"></i>
           <span>+ Registrar Pago</span>
         </button>
@@ -1210,7 +1233,7 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
             </p>
           </div>
           ${allContracts.length > 0 ? `
-            <button type="button" onclick="openRegistrarPagoModal()" class="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-xs flex items-center gap-1.5">
+            <button type="button" ${!canEditProject ? 'disabled' : ''} onclick="openRegistrarPagoModal()" class="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed shadow-xs flex items-center gap-1.5">
               <i class="fa-solid fa-plus"></i> Registrar Pago
             </button>
           ` : `
@@ -1249,11 +1272,11 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
                   <td class="py-2.5 px-3 align-middle">
                     <div class="flex items-start gap-2">
                       <span class="font-mono font-bold text-blue-700 text-[10.5px] bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded shrink-0">
-                        ${c.clave || '---'}
+                        ${escapeEstHtml(c.clave || '---')}
                       </span>
                       <div class="min-w-0">
-                        <div class="font-bold text-slate-900 text-xs leading-snug">${c.descripcion || c.especialidad}</div>
-                        ${c.partidaNombre ? `<div class="text-[10.5px] text-slate-500">${c.partidaNombre}</div>` : ''}
+                        <div class="font-bold text-slate-900 text-xs leading-snug">${escapeEstHtml(c.descripcion || c.especialidad)}</div>
+                        ${c.partidaNombre ? `<div class="text-[10.5px] text-slate-500">${escapeEstHtml(c.partidaNombre)}</div>` : ''}
                       </div>
                     </div>
                   </td>
@@ -1262,15 +1285,17 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
                   <td class="py-2.5 px-3 align-middle">
                     <div class="flex items-center gap-1.5 group">
                       <i class="fa-solid fa-user-tie text-indigo-500 text-xs shrink-0"></i>
-                      <span class="font-semibold text-slate-800 text-xs truncate max-w-[180px]" title="${provDisplay || 'Sin proveedor asignado'}">
-                        ${provDisplay || '<span class="text-slate-400 italic">Sin proveedor</span>'}
+                      <span class="font-semibold text-slate-800 text-xs truncate max-w-[180px]" title="${escapeEstHtml(provDisplay || 'Sin proveedor asignado')}">
+                        ${provDisplay ? escapeEstHtml(provDisplay) : '<span class="text-slate-400 italic">Sin proveedor</span>'}
                       </span>
-                      <button type="button"
-                              onclick="promptEditSpecialistProveedor('${c.nodeId}')"
-                              class="text-slate-400 hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
-                              title="Editar proveedor">
-                        <i class="fa-solid fa-pen-to-square text-[11px]"></i>
-                      </button>
+                      ${canEditProject ? `
+                        <button type="button"
+                                onclick="promptEditSpecialistProveedor('${escapeEstJsArg(c.nodeId)}')"
+                                class="text-slate-400 hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer"
+                                title="Editar proveedor">
+                          <i class="fa-solid fa-pen-to-square text-[11px]"></i>
+                        </button>
+                      ` : ''}
                     </div>
                   </td>
 
@@ -1318,15 +1343,17 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
                   <!-- Acciones: [+ Pago] y [Historial] -->
                   <td class="py-2.5 px-3 align-middle text-center">
                     <div class="flex items-center justify-center gap-1.5">
+                      ${canEditProject ? `
+                        <button type="button"
+                                onclick="openRegistrarPagoModal('${escapeEstJsArg(c.nodeId)}')"
+                                class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
+                                title="Registrar nuevo pago a ${escapeEstHtml(provDisplay || c.descripcion)}">
+                          <i class="fa-solid fa-plus text-[10px]"></i>
+                          <span>+ Pago</span>
+                        </button>
+                      ` : ''}
                       <button type="button"
-                              onclick="openRegistrarPagoModal('${c.nodeId}')"
-                              class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer shadow-2xs flex items-center gap-1"
-                              title="Registrar nuevo pago a ${provDisplay || c.descripcion}">
-                        <i class="fa-solid fa-plus text-[10px]"></i>
-                        <span>+ Pago</span>
-                      </button>
-                      <button type="button"
-                              onclick="toggleSpecialistHistory('${c.nodeId}')"
+                              onclick="toggleSpecialistHistory('${escapeEstJsArg(c.nodeId)}')"
                               class="px-2.5 py-1.5 ${isExpanded ? 'bg-indigo-700 text-white' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'} rounded-lg text-xs font-semibold transition active:scale-95 cursor-pointer flex items-center gap-1"
                               title="${isExpanded ? 'Ocultar historial de pagos' : 'Ver historial de pagos'}">
                         <i class="fa-solid fa-clock-rotate-left text-[10px]"></i>
@@ -1348,17 +1375,19 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
                               <i class="fa-solid fa-receipt"></i>
                             </span>
                             <span class="font-extrabold text-xs text-slate-800">
-                              Historial de Pagos Realizados — ${provDisplay || c.descripcion}
+                              Historial de Pagos Realizados — ${escapeEstHtml(provDisplay || c.descripcion)}
                             </span>
                             <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-mono font-bold">
                               ${c.pagos.length} registro(s)
                             </span>
                           </div>
-                          <button type="button"
-                                  onclick="openRegistrarPagoModal('${c.nodeId}')"
-                                  class="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer">
-                            <i class="fa-solid fa-plus text-[10px]"></i> Agregar otro pago
-                          </button>
+                          ${canEditProject ? `
+                            <button type="button"
+                                    onclick="openRegistrarPagoModal('${escapeEstJsArg(c.nodeId)}')"
+                                    class="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 cursor-pointer">
+                              <i class="fa-solid fa-plus text-[10px]"></i> Agregar otro pago
+                            </button>
+                          ` : ''}
                         </div>
 
                         ${(!c.pagos || c.pagos.length === 0) ? `
@@ -1384,33 +1413,35 @@ function renderSpecialistsPaymentsHTML(cashflow, currencySymbol) {
                                   <tr class="hover:bg-slate-50 transition">
                                     <td class="py-1.5 px-2.5 text-center font-mono text-slate-400 text-[10.5px]">${idx + 1}</td>
                                     <td class="py-1.5 px-2.5 font-mono text-slate-700 text-[11px] whitespace-nowrap">${p.fecha ? formatDDMMAAAA(p.fecha) : ''}</td>
-                                    <td class="py-1.5 px-2.5 font-semibold text-slate-800">${p.concepto || 'Pago a especialista'}</td>
+                                    <td class="py-1.5 px-2.5 font-semibold text-slate-800">${escapeEstHtml(p.concepto || 'Pago a especialista')}</td>
                                     <td class="py-1.5 px-2.5 text-center">
                                       <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                        ${p.metodo || 'SPEI'}
+                                        ${escapeEstHtml(p.metodo || 'SPEI')}
                                       </span>
                                     </td>
-                                    <td class="py-1.5 px-2.5 font-mono text-[11px] text-slate-600 truncate max-w-[140px]" title="${p.referencia || ''}">
-                                      ${p.referencia || '<span class="text-slate-400 italic">---</span>'}
+                                    <td class="py-1.5 px-2.5 font-mono text-[11px] text-slate-600 truncate max-w-[140px]" title="${escapeEstHtml(p.referencia || '')}">
+                                      ${p.referencia ? escapeEstHtml(p.referencia) : '<span class="text-slate-400 italic">---</span>'}
                                     </td>
                                     <td class="py-1.5 px-2.5 text-right font-mono font-bold text-emerald-700 text-xs whitespace-nowrap">
                                       ${formatCurrency(p.monto, currencySymbol)}
                                     </td>
                                     <td class="py-1.5 px-2.5 text-center whitespace-nowrap">
-                                      <div class="inline-flex items-center gap-1">
-                                        <button type="button"
-                                                onclick="openRegistrarPagoModal('${c.nodeId}', '${p.id}')"
-                                                class="text-slate-400 hover:text-indigo-600 p-1 rounded transition cursor-pointer"
-                                                title="Editar pago">
-                                          <i class="fa-solid fa-pen text-[10px]"></i>
-                                        </button>
-                                        <button type="button"
-                                                onclick="confirmDeleteSpecialistPayment('${c.nodeId}', '${p.id}')"
-                                                class="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer"
-                                                title="Eliminar pago">
-                                          <i class="fa-solid fa-trash text-[10px]"></i>
-                                        </button>
-                                      </div>
+                                      ${canEditProject ? `
+                                        <div class="inline-flex items-center gap-1">
+                                          <button type="button"
+                                                  onclick="openRegistrarPagoModal('${escapeEstJsArg(c.nodeId)}', '${escapeEstJsArg(p.id)}')"
+                                                  class="text-slate-400 hover:text-indigo-600 p-1 rounded transition cursor-pointer"
+                                                  title="Editar pago">
+                                            <i class="fa-solid fa-pen text-[10px]"></i>
+                                          </button>
+                                          <button type="button"
+                                                  onclick="confirmDeleteSpecialistPayment('${escapeEstJsArg(c.nodeId)}', '${escapeEstJsArg(p.id)}')"
+                                                  class="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer"
+                                                  title="Eliminar pago">
+                                            <i class="fa-solid fa-trash text-[10px]"></i>
+                                          </button>
+                                        </div>
+                                      ` : `<span class="text-[10px] text-slate-400">Solo lectura</span>`}
                                     </td>
                                   </tr>
                                 `).join('')}
@@ -1556,6 +1587,10 @@ export function onSwitchActiveEstimacion(estimacionId) {
 }
 
 export function promptCreateNewEstimacion() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite crear estimaciones.', 'warning');
+    return;
+  }
   const data = getEstimacionesCalculatedData();
   const nextNum = data.estimacionesList.length + 1;
   const nombre = prompt(`Nombre de la nueva estimación:`, `Estimación No. ${nextNum}`);
@@ -1567,13 +1602,17 @@ export function promptCreateNewEstimacion() {
 }
 
 export function toggleActiveEstimacionLock() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite bloquear o desbloquear estimaciones.', 'warning');
+    return false;
+  }
   const locked = toggleTabLock('estimaciones');
   renderEstimacionesView();
   return locked;
 }
 
 export function confirmDeleteCurrentEstimacion(estId, estNombre) {
-  if (!guardTabUnlocked('estimaciones')) return;
+  if (!canCurrentUserEditProject() || !guardTabUnlocked('estimaciones')) return;
   if (!confirm(`¿Estás seguro de eliminar "${estNombre}"? Esta acción no se puede deshacer.`)) {
     return;
   }
@@ -1851,7 +1890,7 @@ export function openEstimacionConceptPhotosModal(conceptId) {
 
   activePhotoModalConceptId = String(conceptId);
   const activeEst = data.activeEst;
-  const isLocked = Boolean(activeEst && activeEst.locked);
+  const isLocked = Boolean(activeEst && activeEst.locked) || !canCurrentUserEditProject();
   const fotos = getConceptoFotosEstimacion(conceptId);
   const f1 = fotos[0] || { url: '', displayUrl: '', nota: '' };
   const f2 = fotos[1] || { url: '', displayUrl: '', nota: '' };
@@ -2487,7 +2526,7 @@ export function handleSaveSpecialistPayment() {
 }
 
 export function confirmDeleteSpecialistPayment(nodeId, paymentId, montoFormatted = '') {
-  if (!guardTabUnlocked('estimaciones')) return;
+  if (!canCurrentUserEditProject() || !guardTabUnlocked('estimaciones')) return;
   const msg = montoFormatted
     ? `¿Eliminar el pago de ${montoFormatted}? Esta acción actualizará los saldos en tiempo real.`
     : '¿Eliminar este pago? Esta acción actualizará los saldos en tiempo real.';

@@ -1,13 +1,14 @@
 // js/mobile/mobilePresupuestoArq.js — Pestaña 2 de cubikar Arquitectura: Resumen Financiero, Costo/m2, IVA y Márgenes
 
-import { state } from '../state/store.js?v=20261119_cf38';
-import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf38';
-import { calcularResumenPresupuesto, updatePresupuestoNodeField } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf38';
-import { findNodeById } from '../modules/catalog/treeService.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf38';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf38';
-import { showToast } from '../ui/notifications.js?v=20261119_cf38';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf38';
+import { state } from '../state/store.js?v=20261119_cf39';
+import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf39';
+import { calcularResumenPresupuesto, updatePresupuestoNodeField } from '../modules/presupuesto/presupuestoModel.js?v=20261119_cf39';
+import { hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf39';
+import { findNodeById } from '../modules/catalog/treeService.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf39';
+import { showToast } from '../ui/notifications.js?v=20261119_cf39';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf39';
 
 export function renderMobilePresupuestoArq(container, { openSheet, closeSheet }) {
   if (!container) return;
@@ -86,13 +87,16 @@ export function renderMobilePresupuestoArq(container, { openSheet, closeSheet })
 
         openSheet({
           title: `Editar Importe: ${node.descripcion || ''}`,
-          bodyHtml: leafList.slice(0, 12).map(n => `
+          bodyHtml: leafList.slice(0, 12).map(n => {
+            const hasWinnerQuote = hasOwnCotizaciones(n);
+            return `
             <div class="m-card-alt">
               <div style="font-size:12px;font-weight:700;margin-bottom:4px;">${escapeHtml(n.clave || '')} ${escapeHtml(n.descripcion || '')}</div>
+              ${hasWinnerQuote ? `<div style="font-size:10.5px;color:var(--primary);margin-bottom:4px;"><i class="fa-solid fa-trophy"></i> Precio fijado por cotización ganadora en Alcances.</div>` : ''}
               <div class="m-grid-2">
                 <div>
                   <label class="m-label">Precio Venta Unit.</label>
-                  <input type="number" step="0.01" data-pa-pu="${escapeHtml(n.id)}" class="m-input m-mono" value="${round2(n.precioUnitario || 0)}">
+                  <input type="number" step="0.01" data-pa-pu="${escapeHtml(n.id)}" class="m-input m-mono" value="${round2(n.precioUnitario || 0)}" ${hasWinnerQuote ? 'disabled readonly' : ''}>
                 </div>
                 <div>
                   <label class="m-label">Horas Hombre</label>
@@ -100,7 +104,8 @@ export function renderMobilePresupuestoArq(container, { openSheet, closeSheet })
                 </div>
               </div>
             </div>
-          `).join(''),
+          `;
+          }).join(''),
           footerHtml: `
             <button type="button" id="m-pa-cancel" class="m-btn m-btn-outline">Cerrar</button>
             <button type="button" id="m-pa-save" class="m-btn m-btn-primary">Aplicar</button>
@@ -108,10 +113,16 @@ export function renderMobilePresupuestoArq(container, { openSheet, closeSheet })
         });
         document.getElementById('m-pa-cancel')?.addEventListener('click', closeSheet);
         document.getElementById('m-pa-save')?.addEventListener('click', () => {
-          document.querySelectorAll('[data-pa-pu]').forEach(inp => updatePresupuestoNodeField(inp.dataset.paPu, 'precioUnitario', inp.value));
-          document.querySelectorAll('[data-pa-hh]').forEach(inp => updatePresupuestoNodeField(inp.dataset.paHh, 'horasHombre', inp.value));
+          let updatedCount = 0;
+          document.querySelectorAll('[data-pa-pu]').forEach(inp => {
+            if (inp.disabled) return;
+            if (updatePresupuestoNodeField(inp.dataset.paPu, 'precioUnitario', inp.value) !== false) updatedCount++;
+          });
+          document.querySelectorAll('[data-pa-hh]').forEach(inp => {
+            if (updatePresupuestoNodeField(inp.dataset.paHh, 'horasHombre', inp.value) !== false) updatedCount++;
+          });
           closeSheet();
-          showToast('Precios actualizados.', 'success');
+          if (updatedCount > 0) showToast('Precios actualizados.', 'success');
           renderMobilePresupuestoArq(container, { openSheet, closeSheet });
         });
       });

@@ -1,16 +1,16 @@
 // js/modules/catalog/importFromProjectModal.js
 // Asistente visual para explorar, seleccionar y copiar conceptos con sus matrices APU desde otro proyecto
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { saveState } from '../../state/history.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261119_cf38';
-import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
-import { recalculateClaves } from './treeService.js?v=20261119_cf38';
-import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf38';
-import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261119_cf38';
-import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261119_cf38';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { saveState } from '../../state/history.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261119_cf39';
+import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf39';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { recalculateClaves } from './treeService.js?v=20261119_cf39';
+import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf39';
+import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261119_cf39';
+import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261119_cf39';
 
 let activeSourceProjectId = null;
 let activeSourceTreeData = [];
@@ -19,6 +19,11 @@ let sourceSearchQuery = '';
 
 // Abrir el modal de copia de conceptos desde otro proyecto
 export function openImportConceptsModal() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite importar conceptos en este proyecto.', 'warning');
+    return;
+  }
+  if (!guardTabUnlocked('alcances')) return;
   const modal = document.getElementById('modal-copiar-de-otro-proyecto');
   if (!modal) return;
 
@@ -391,6 +396,16 @@ export function quickCopyPasteSingleConcept(nodeId) {
   const found = flattened.find(i => i.node.id === nodeId);
   if (!found) return;
 
+  const singleConcepts = Math.max(1, countTreeConcepts([found.node]));
+  const limitCheck = validateConceptAdditionLimit(getActiveProjectId(), singleConcepts, { liveTreeData: state.treeData });
+  if (!limitCheck.allowed) {
+    showToast(`🔒 ${limitCheck.reason}`, 'warning');
+    if (typeof window !== 'undefined' && typeof window.openSubscriptionModal === 'function') {
+      window.openSubscriptionModal();
+    }
+    return;
+  }
+
   saveState();
 
   const sourceProj = getProjectById(activeSourceProjectId);
@@ -444,6 +459,16 @@ export function importSelectedConceptsToCurrentProject() {
   const toImport = flattened.filter(i => selectedConceptIds.has(i.node.id));
 
   if (toImport.length === 0) return;
+
+  const addedConcepts = toImport.reduce((acc, item) => acc + Math.max(1, countTreeConcepts([item.node])), 0);
+  const limitCheck = validateConceptAdditionLimit(getActiveProjectId(), addedConcepts, { liveTreeData: state.treeData });
+  if (!limitCheck.allowed) {
+    showToast(`🔒 ${limitCheck.reason}`, 'warning');
+    if (typeof window !== 'undefined' && typeof window.openSubscriptionModal === 'function') {
+      window.openSubscriptionModal();
+    }
+    return;
+  }
 
   saveState();
 

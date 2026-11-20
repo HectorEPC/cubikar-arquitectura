@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { saveState } from '../../state/history.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { findNodeById, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf38';
-import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from './apuView.js?v=20261119_cf38';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { round2, round5 } from '../../core/formatters.js?v=20261119_cf38';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { saveState } from '../../state/history.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { findNodeById, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf39';
+import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from './apuView.js?v=20261119_cf39';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf39';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf39';
+import { round2, round5 } from '../../core/formatters.js?v=20261119_cf39';
 
 // Filtro de botones en la tabla Matriz APU
 export function filterMatriz(tipo) {
@@ -73,8 +73,8 @@ function syncNodeDirectCostFromInsumos(node) {
     totalCD += (Number(ins?.cantidad) || 0) * (Number(ins?.costoUnitario) || 0);
   }
   node.costoDirecto = round2(totalCD);
-  const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => c.isGanador);
-  if (!hasWinnerQuote || totalCD > 0) {
+  const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c && c.isGanador));
+  if (!hasWinnerQuote) {
     node.precioUnitario = round2(totalCD);
   }
 }
@@ -197,11 +197,14 @@ export function removeInsumo(index) {
 
 function clearNodeMatrixFields(node) {
   if (!node || typeof node !== 'object') return;
+  const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c && c.isGanador));
   node.insumos = [];
   node.isMatrixCustomized = true;
   node.userClearedMatrix = true;
-  node.costoDirecto = 0;
-  node.precioUnitario = 0;
+  if (!hasWinnerQuote) {
+    node.costoDirecto = 0;
+    node.precioUnitario = 0;
+  }
   node.aiTips = '';
   node.googleSources = [];
   node.googleSearchQueries = [];

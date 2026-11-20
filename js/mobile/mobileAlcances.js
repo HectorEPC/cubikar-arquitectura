@@ -1,14 +1,14 @@
 // js/mobile/mobileAlcances.js — Pestaña 1 de cubikar Arquitectura: Alcances y Conceptos de Proyecto
 
-import { state, persistLocalData } from '../state/store.js?v=20261119_cf38';
-import { formatMoney, formatQty, round2 } from '../core/formatters.js?v=20261119_cf38';
-import { calculateParentTotal } from '../core/calculations.js?v=20261119_cf38';
-import { findNodeById, updateNode, addRootRow, addChildRow } from '../modules/catalog/treeService.js?v=20261119_cf38';
-import { getPartidaChatCount } from '../modules/chat/projectChat.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf38';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf38';
-import { showToast } from '../ui/notifications.js?v=20261119_cf38';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf38';
+import { state, persistLocalData } from '../state/store.js?v=20261119_cf39';
+import { formatMoney, formatQty, round2 } from '../core/formatters.js?v=20261119_cf39';
+import { calculateParentTotal, hasOwnCotizaciones } from '../core/calculations.js?v=20261119_cf39';
+import { findNodeById, updateNode, addRootRow, addChildRow } from '../modules/catalog/treeService.js?v=20261119_cf39';
+import { getPartidaChatCount } from '../modules/chat/projectChat.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf39';
+import { showToast } from '../ui/notifications.js?v=20261119_cf39';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf39';
 
 let searchText = '';
 
@@ -83,7 +83,7 @@ export function renderMobileAlcances(container, { openSheet, closeSheet, onOpenC
         return `
           <div class="m-card" style="margin-left:${pad}px;">
             <div class="m-row" style="align-items:flex-start;">
-              <input type="checkbox" data-sel-alc="${escapeHtml(node.id)}" ${node.selected !== false ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;">
+              <input type="checkbox" data-sel-alc="${escapeHtml(node.id)}" ${node.selected !== false ? 'checked' : ''} ${editable ? '' : 'disabled'} style="margin-top:3px;width:16px;height:16px;">
               <button type="button" data-open-alc="${escapeHtml(node.id)}" style="flex:1;min-width:0;border:none;background:none;color:inherit;text-align:left;padding:0;cursor:pointer;">
                 <div class="m-row-between">
                   <span class="m-pill m-pill-blue m-mono">${escapeHtml(node.clave || 'S/C')}</span>
@@ -136,12 +136,18 @@ export function renderMobileAlcances(container, { openSheet, closeSheet, onOpenC
     renderMobileAlcances(container, { openSheet, closeSheet, onOpenConceptChat });
   }));
   container.querySelectorAll('[data-sel-alc]').forEach(cb => cb.addEventListener('change', () => {
+    if (!editable) {
+      cb.checked = !cb.checked;
+      showToast(canEditRole ? '🔒 Desbloquea Alcances para editar.' : '🔒 Modo lectura: tu rol no permite modificar.', 'warning');
+      return;
+    }
     const n = findNodeById(state.treeData, cb.dataset.selAlc);
     if (n) { n.selected = cb.checked; persistLocalData(true); renderMobileAlcances(container, { openSheet, closeSheet, onOpenConceptChat }); }
   }));
   container.querySelectorAll('[data-open-alc]').forEach(b => b.addEventListener('click', () => {
     const n = findNodeById(state.treeData, b.dataset.openAlc);
     if (!n) return;
+    const hasWinnerQuote = hasOwnCotizaciones(n);
     openSheet({
       title: `Alcance ${n.clave || ''}`,
       bodyHtml: `
@@ -150,6 +156,7 @@ export function renderMobileAlcances(container, { openSheet, closeSheet, onOpenC
             <label class="m-label">Descripción</label>
             <textarea id="m-ae-desc" rows="3" class="m-textarea" ${editable ? '' : 'readonly'}>${escapeHtml(n.descripcion || '')}</textarea>
           </div>
+          ${hasWinnerQuote ? `<div style="font-size:11px;color:var(--primary);"><i class="fa-solid fa-trophy"></i> El precio unitario se calcula desde la cotización ganadora en desktop.</div>` : ''}
           <div class="m-grid-2">
             <div>
               <label class="m-label">Cantidad</label>
@@ -157,7 +164,7 @@ export function renderMobileAlcances(container, { openSheet, closeSheet, onOpenC
             </div>
             <div>
               <label class="m-label">Precio Unitario</label>
-              <input id="m-ae-pu" type="number" step="0.01" class="m-input m-mono" value="${round2(n.precioUnitario || 0)}" ${editable ? '' : 'readonly'}>
+              <input id="m-ae-pu" type="number" step="0.01" class="m-input m-mono" value="${round2(n.precioUnitario || 0)}" ${editable && !hasWinnerQuote ? '' : 'readonly disabled'}>
             </div>
           </div>
         </form>
@@ -175,11 +182,17 @@ export function renderMobileAlcances(container, { openSheet, closeSheet, onOpenC
     });
     document.getElementById('m-alc-edit-form')?.addEventListener('submit', (ev) => {
       ev.preventDefault();
-      updateNode(n.id, 'descripcion', document.getElementById('m-ae-desc').value);
-      updateNode(n.id, 'cantidad', parseFloat(document.getElementById('m-ae-cant').value) || 0);
-      updateNode(n.id, 'precioUnitario', parseFloat(document.getElementById('m-ae-pu').value) || 0);
+      if (!editable) return;
+      const okDesc = updateNode(n.id, 'descripcion', document.getElementById('m-ae-desc').value);
+      const okCant = updateNode(n.id, 'cantidad', parseFloat(document.getElementById('m-ae-cant').value) || 0);
+      let okPu = true;
+      if (!hasWinnerQuote) {
+        okPu = updateNode(n.id, 'precioUnitario', parseFloat(document.getElementById('m-ae-pu').value) || 0);
+      }
       closeSheet();
-      showToast('Entregable actualizado.', 'success');
+      if (okDesc !== false && okCant !== false && okPu !== false) {
+        showToast('Entregable actualizado.', 'success');
+      }
       renderMobileAlcances(container, { openSheet, closeSheet, onOpenConceptChat });
     });
   }));

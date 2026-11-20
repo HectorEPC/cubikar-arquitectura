@@ -1,7 +1,7 @@
 // js/mobile/mobileChatArq.js — Bitácora / Chat en tiempo real de cubikar Arquitectura
 
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf38';
-import { getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf38';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf39';
+import { getCurrentUser, getProjectById, getUserRoleInProject, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
 import {
   getMessageDivision,
   loadProjectChatMessages,
@@ -9,9 +9,9 @@ import {
   markActiveProjectChatMessagesAsRead,
   deleteProjectChatMessage,
   isChatMessageReadForCurrentUser
-} from '../modules/chat/projectChat.js?v=20261119_cf38';
-import { broadcastChatMessage, hydrateProjectChatFromCloud } from '../core/realtimeSync.js?v=20261119_cf38';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf38';
+} from '../modules/chat/projectChat.js?v=20261119_cf39';
+import { broadcastChatMessage, hydrateProjectChatFromCloud } from '../core/realtimeSync.js?v=20261119_cf39';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf39';
 
 const DIVISIONS = [
   { id: 'alcance_presupuesto', label: 'Alcances y Presupuesto' },
@@ -49,6 +49,11 @@ export function renderMobileChatArq(container, { onCloseChat }) {
 
   const u = getCurrentUser();
   const myEmail = (u?.email || '').toLowerCase().trim();
+  const proj = getProjectById(pId);
+  const ownerEmail = (proj?.ownerEmail || '').toLowerCase().trim();
+  const myRole = String(getUserRoleInProject(pId, u) || '').toLowerCase().trim();
+  const canEdit = canCurrentUserEditProject(pId, u);
+  const isOwnerOrEditor = !ownerEmail || (myEmail && myEmail === ownerEmail) || myRole === 'owner' || myRole === 'admin' || myRole === 'editar' || myRole === 'editor';
 
   container.innerHTML = `
     <div class="m-row-between">
@@ -66,6 +71,7 @@ export function renderMobileChatArq(container, { onCloseChat }) {
     <div id="m-aqc-stream" class="m-card" style="min-height:260px;max-height:52dvh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
       ${msgs.length === 0 ? `<div style="margin:auto;color:var(--muted);font-size:12.5px;">Sin mensajes en esta división todavía.</div>` : msgs.map(m => {
         const mine = myEmail && String(m.authorEmail || '').toLowerCase().trim() === myEmail;
+        const canDeleteMsg = canEdit && (mine || isOwnerOrEditor);
         return `
           <div class="m-card-alt" style="align-self:${mine ? 'flex-end' : 'flex-start'};max-width:88%;border-color:${mine ? 'var(--primary)' : 'var(--border)'};background:${mine ? 'var(--primary-soft)' : 'var(--card-alt)'};">
             <div class="m-row-between" style="gap:10px;margin-bottom:3px;">
@@ -73,16 +79,22 @@ export function renderMobileChatArq(container, { onCloseChat }) {
               <span style="font-size:10px;color:var(--muted);">${escapeHtml(m.time || '')}</span>
             </div>
             <div style="font-size:12.5px;white-space:pre-wrap;">${escapeHtml(m.text || '')}</div>
-            ${mine ? `<div style="text-align:right;"><button type="button" data-aqc-del="${escapeHtml(m.id)}" style="border:none;background:none;color:var(--muted);font-size:10px;cursor:pointer;">Eliminar</button></div>` : ''}
+            ${canDeleteMsg ? `<div style="text-align:right;"><button type="button" data-aqc-del="${escapeHtml(m.id)}" style="border:none;background:none;color:var(--muted);font-size:10px;cursor:pointer;">Eliminar</button></div>` : ''}
           </div>
         `;
       }).join('')}
     </div>
 
-    <form id="m-aqc-form" class="m-row" style="gap:8px;">
-      <input id="m-aqc-input" class="m-input" required placeholder="Escribir nota o mensaje..." style="flex:1;">
-      <button type="submit" class="m-btn m-btn-primary"><i class="fa-solid fa-paper-plane"></i></button>
-    </form>
+    ${canEdit ? `
+      <form id="m-aqc-form" class="m-row" style="gap:8px;">
+        <input id="m-aqc-input" class="m-input" required placeholder="Escribir nota o mensaje..." style="flex:1;">
+        <button type="submit" class="m-btn m-btn-primary"><i class="fa-solid fa-paper-plane"></i></button>
+      </form>
+    ` : `
+      <div class="m-card-alt" style="text-align:center;font-size:12px;color:var(--muted);">
+        <i class="fa-solid fa-lock"></i> Modo lectura: solo los usuarios con permiso de edición pueden escribir en el chat.
+      </div>
+    `}
   `;
 
   const stream = container.querySelector('#m-aqc-stream');
@@ -98,11 +110,13 @@ export function renderMobileChatArq(container, { onCloseChat }) {
     renderMobileChatArq(container, { onCloseChat });
   }));
   container.querySelectorAll('[data-aqc-del]').forEach(b => b.addEventListener('click', () => {
+    if (!canEdit) return;
     deleteProjectChatMessage(b.dataset.aqcDel);
     renderMobileChatArq(container, { onCloseChat });
   }));
   container.querySelector('#m-aqc-form')?.addEventListener('submit', (ev) => {
     ev.preventDefault();
+    if (!canEdit) return;
     const inp = container.querySelector('#m-aqc-input');
     const text = (inp?.value || '').trim();
     if (!text) return;

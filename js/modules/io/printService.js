@@ -1,14 +1,14 @@
 // js/modules/io/printService.js
 // Servicio de Impresión de Formatos Profesionales para TAB1-CAT-BASE y MATRIZ / INSUMOS UNITARIOS
 
-import { state } from '../../state/store.js?v=20261119_cf38';
-import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261119_cf38';
-import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261119_cf38';
-import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261119_cf38';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261119_cf38';
-import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261119_cf38';
+import { state } from '../../state/store.js?v=20261119_cf39';
+import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261119_cf39';
+import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261119_cf39';
+import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261119_cf39';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261119_cf39';
+import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261119_cf39';
 import {
   extractScheduleItems,
   getScheduleSettings,
@@ -23,9 +23,9 @@ import {
   getGanttTodayDate,
   getWorkdaysSettings,
   getDateWorkdayInfo
-} from '../calendario/calendarioModel.js?v=20261119_cf38';
-import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261119_cf38';
-import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261119_cf38';
+} from '../calendario/calendarioModel.js?v=20261119_cf39';
+import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261119_cf39';
+import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261119_cf39';
 
 // Escapar caracteres especiales en texto HTML
 function escapeHtml(str) {
@@ -449,11 +449,15 @@ function buildCatalogItemCotizacionesRowHtml(item, indentPx) {
     const quoteRowsHtml = ordered.map((cot, idx) => {
       const isWinner = Boolean(cot.isGanador);
       const monto = round2(parseFloat(cot.monto) || 0);
-      const rowImporte = round2(conceptQty * monto);
+      const hasCotQty = cot.cantidad !== undefined && cot.cantidad !== null && cot.cantidad !== '';
+      const effQty = hasCotQty ? (parseFloat(cot.cantidad) || 0) : (item.isParent ? 1 : conceptQty);
+      const rowImporte = (cot.costo !== undefined && cot.costo !== null && cot.costo !== '')
+        ? round2(parseFloat(cot.costo) || 0)
+        : round2((effQty > 0 ? effQty : 1) * monto);
       const rowBg = isWinner ? '#ecfdf5' : '#ffffff';
-      const qtyVal = (cot.cantidad !== undefined && cot.cantidad !== null && cot.cantidad !== '')
+      const qtyVal = hasCotQty
         ? formatQty(cot.cantidad)
-        : formatQty(conceptQty);
+        : formatQty(item.isParent ? 1 : conceptQty);
       const unitVal = escapeHtml(cot.unidad || defaultUnit);
 
       const metaParts = [];
@@ -3763,7 +3767,11 @@ function formatPrintMultiline(str) {
  */
 function buildWinnerCotizacionCardHtml(winner, conceptQty, unit) {
   const monto = round2(parseFloat(winner.monto) || 0);
-  const totalImporte = round2(conceptQty * monto);
+  const hasWinnerQty = winner.cantidad !== undefined && winner.cantidad !== null && winner.cantidad !== '';
+  const effWinnerQty = hasWinnerQty ? (parseFloat(winner.cantidad) || 1) : (conceptQty > 0 ? conceptQty : 1);
+  const totalImporte = (winner.costo !== undefined && winner.costo !== null && winner.costo !== '')
+    ? round2(parseFloat(winner.costo) || 0)
+    : round2(effWinnerQty * monto);
   const contactParts = [];
   if (winner.telefono) contactParts.push(`<span><strong>Tel:</strong> ${escapeHtml(winner.telefono)}</span>`);
   if (winner.email) contactParts.push(`<span><strong>Correo:</strong> ${escapeHtml(winner.email)}</span>`);
@@ -3798,7 +3806,7 @@ function buildWinnerCotizacionCardHtml(winner, conceptQty, unit) {
             <div style="font-size: 7pt; font-weight: 700; text-transform: uppercase; color: #047857; letter-spacing: 0.03em;">Precio Adjudicado (P.U.)</div>
             <div class="font-mono" style="font-size: 13pt; font-weight: 900; color: #047857;">${formatMoney(monto)}</div>
             <div style="font-size: 7.5pt; color: #065f46; margin-top: 2px;">
-              Total (${formatQty(conceptQty)} ${escapeHtml(unit)}): <strong class="font-mono">${formatMoney(totalImporte)}</strong>
+              Total (${formatQty(effWinnerQty)} ${escapeHtml(winner.unidad || unit)}): <strong class="font-mono">${formatMoney(totalImporte)}</strong>
             </div>
           </div>
         </div>
@@ -3824,7 +3832,11 @@ function buildWinnerCotizacionCardHtml(winner, conceptQty, unit) {
 function buildCotizacionPrintRowHtml(cot, index, hasWinner, conceptQty) {
   const isWinner = Boolean(cot.isGanador);
   const monto = round2(parseFloat(cot.monto) || 0);
-  const rowTotal = round2(conceptQty * monto);
+  const hasCotQty = cot.cantidad !== undefined && cot.cantidad !== null && cot.cantidad !== '';
+  const effQty = hasCotQty ? (parseFloat(cot.cantidad) || 1) : (conceptQty > 0 ? conceptQty : 1);
+  const rowTotal = (cot.costo !== undefined && cot.costo !== null && cot.costo !== '')
+    ? round2(parseFloat(cot.costo) || 0)
+    : round2(effQty * monto);
   const rowStyle = isWinner
     ? 'background-color: #ecfdf5 !important; border: 2px solid #059669;'
     : '';

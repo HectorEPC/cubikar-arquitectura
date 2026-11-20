@@ -1,12 +1,12 @@
 // js/core/authService.js
 // Servicio de Autenticación integrado con Supabase Auth y tabla public.perfiles
 
-import { STORAGE_KEY_USER } from '../config/constants.js?v=20261119_cf38';
-import { getSupabaseClient, isSupabaseConfigured, getSupabaseConfig } from './supabaseClient.js?v=20261119_cf38';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261119_cf38';
+import { STORAGE_KEY_USER } from '../config/constants.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured, getSupabaseConfig } from './supabaseClient.js?v=20261119_cf39';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261119_cf39';
 
 export { enforceGlobalSessionRevocation };
-import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261119_cf38';
+import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261119_cf39';
 import {
   writeSharedSsoCookie,
   clearSharedSsoCookie,
@@ -16,7 +16,7 @@ import {
   scrubSsoHashParams,
   hasPendingIncomingSso,
   getLastSignOutTimestamp
-} from './ssoHelper.js?v=20261119_cf38';
+} from './ssoHelper.js?v=20261119_cf39';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -754,6 +754,9 @@ export async function signInWithGoogle() {
   });
 
   if (error) throw error;
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.setItem('cubikar_google_oauth_pending_ts', String(Date.now())); } catch (_) {}
+  }
   if (data?.url && typeof window !== 'undefined') {
     window.location.href = data.url;
   }
@@ -1303,6 +1306,7 @@ export async function hydrateIncomingSsoSession() {
 
     const email = (data.session.user.email || '').toLowerCase().trim();
     if (email) markSessionOpen(email);
+    try { sb.realtime?.setAuth?.(data.session.access_token); } catch (_) {}
     syncLocalUserSession(data.session.user, null, true, effectiveRemember);
     if (effectiveRemember) {
       writeSharedSsoCookie(data.session);
@@ -1336,19 +1340,34 @@ export function initAuthListener(onAuthChangeCallback) {
   sb.auth.onAuthStateChange((event, session) => {
     console.info(`[Supabase Auth] Evento: ${event}`);
     if (session?.user) {
+      try { sb.realtime?.setAuth?.(session.access_token); } catch (_) {}
       const email = (session.user.email || '').toLowerCase().trim();
       const current = getCurrentUser();
       const closedList = getClosedSessionsList();
       const isClosed = closedList.includes(email);
-      const isOAuthRedirect = typeof window !== 'undefined' && (
+      let hadGoogleOAuthPending = false;
+      if (typeof sessionStorage !== 'undefined') {
+        try {
+          const ts = Number(sessionStorage.getItem('cubikar_google_oauth_pending_ts') || 0);
+          if (ts > 0 && (Date.now() - ts) < 10 * 60 * 1000) {
+            hadGoogleOAuthPending = true;
+          }
+          if (ts > 0) sessionStorage.removeItem('cubikar_google_oauth_pending_ts');
+        } catch (_) {}
+      }
+      const urlHasRecovery = typeof window !== 'undefined' && (
+        window.location.hash.includes('type=recovery') ||
+        window.location.search.includes('type=recovery')
+      );
+      const isOAuthRedirect = hadGoogleOAuthPending || (typeof window !== 'undefined' && !urlHasRecovery && (
         window.location.hash.includes('cubikar_sso_at=') ||
         window.location.hash.includes('cubikar_sso_rt=') ||
         window.location.hash.includes('cubikar_sso_email=') ||
         window.location.hash.includes('access_token') ||
         window.location.hash.includes('refresh_token') ||
         window.location.search.includes('code=')
-      );
-      const isExplicitInteractive = explicitAuthDepth > 0 || isOAuthRedirect || ssoHydrationInProgress || hasPendingIncomingSso(false);
+      ));
+      const isExplicitInteractive = explicitAuthDepth > 0 || isOAuthRedirect || urlHasRecovery || ssoHydrationInProgress || hasPendingIncomingSso(false);
       const hasActiveLocal = hasValidLocalSessionForEmail(email);
       const nowBoot = Date.now();
       const isPassiveBootPair = !isExplicitInteractive && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');

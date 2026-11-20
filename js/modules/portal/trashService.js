@@ -7,9 +7,9 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261119_cf38';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
+} from '../../config/constants.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
 import {
   getCurrentUser,
   saveCurrentUser,
@@ -24,7 +24,7 @@ import {
   unmarkProjectDeleted,
   markProjectTrashedLocal,
   unmarkProjectTrashedLocal
-} from './projectService.js?v=20261119_cf38';
+} from './projectService.js?v=20261119_cf39';
 import {
   isValidUUID,
   resolveCloudProjectId,
@@ -32,7 +32,7 @@ import {
   invalidateCloudProjectsCache,
   fetchCloudProjects,
   getCachedTrashedCloudProjects
-} from '../../core/cloudProjectService.js?v=20261119_cf38';
+} from '../../core/cloudProjectService.js?v=20261119_cf39';
 
 export const TRASH_RETENTION_DAYS = 7;
 export const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -45,11 +45,14 @@ let isTrashLoading = false;
 let trashEscListenerBound = false;
 
 const PROJECT_LOCAL_PREFIXES = [
+  'estimaciones_arq_data_',
   'estimaciones_data_',
   'expenses_control_',
   'calendario_cfg_',
   'calendario_workdays_',
   'calendario_arq_cfg_',
+  'calendario_arq_workdays_',
+  'adm_arq_tab_locks_',
   'adm_const_project_chat_',
   'adm_arq_project_chat_',
   'adm_const_chat_',
@@ -61,8 +64,10 @@ const PROJECT_LOCAL_PREFIXES = [
   'adm_arq_bitacora_',
   'adm_const_expenses_',
   'adm_arq_expenses_',
+  'adm_arq_compras_',
   'adm_const_suppliers_',
   'adm_arq_suppliers_',
+  'adm_arq_proveedores_',
   'adm_arq_seguimiento_',
   'seguimiento_data_'
 ];

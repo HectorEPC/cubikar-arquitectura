@@ -1,32 +1,32 @@
 // js/mobile/mobileApp.js — Punto de entrada móvil y tablet de cubikar Arquitectura
 
-import { setActiveProjectId } from '../config/constants.js?v=20261119_cf38';
-import { initStore } from '../state/store.js?v=20261119_cf38';
+import { setActiveProjectId } from '../config/constants.js?v=20261119_cf39';
+import { initStore } from '../state/store.js?v=20261119_cf39';
 import {
   initAuthListener,
   hasPendingIncomingSsoSession,
   hydrateIncomingSsoSession,
   hasOversizedLocalJwt,
   ensureCompactAuthSession
-} from '../core/authService.js?v=20261119_cf38';
-import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf38';
-import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf38';
-import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf38';
-import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf38';
+} from '../core/authService.js?v=20261119_cf39';
+import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261119_cf39';
+import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261119_cf39';
+import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf39';
+import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf39';
 import {
   enforceGlobalSessionRevocation,
   getCurrentUser,
   getProjectById,
   getProjectsList,
   saveProjectsList
-} from '../modules/portal/projectService.js?v=20261119_cf38';
-import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261119_cf38';
-import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261119_cf38';
-import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261119_cf38';
-import { showToast } from '../ui/notifications.js?v=20261119_cf38';
-import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261119_cf38';
+} from '../modules/portal/projectService.js?v=20261119_cf39';
+import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261119_cf39';
+import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261119_cf39';
+import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261119_cf39';
+import { showToast } from '../ui/notifications.js?v=20261119_cf39';
+import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261119_cf39';
 import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261118_c2';
-import { openMobileProjectById } from './mobileProjects.js?v=20261119_cf38';
+import { openMobileProjectById } from './mobileProjects.js?v=20261119_cf39';
 
 async function bootstrapMobileArq() {
   initThemeMode();
@@ -68,8 +68,9 @@ async function bootstrapMobileArq() {
     } catch (_) {}
   }
 
-  initAuthListener((user) => {
-    if (!user) {
+  initAuthListener((event, session) => {
+    const currentUser = session?.user || getCurrentUser();
+    if (event === 'SIGNED_OUT' || !currentUser) {
       setActiveProjectId(null);
       setMobileRoute({ nextScreen: 'auth' });
     } else {

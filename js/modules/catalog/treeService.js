@@ -1,14 +1,14 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { saveState } from '../../state/history.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf38';
-import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261119_cf38';
-import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261119_cf38';
-import { getProjectById, canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261119_cf38';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
-import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261119_cf38';
-import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261119_cf38';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { saveState } from '../../state/history.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { renderTAB1, closeApuPanel, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf39';
+import { renderInsumosGenerales } from '../insumosGenerales/insumosView.js?v=20261119_cf39';
+import { getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../../config/constants.js?v=20261119_cf39';
+import { getProjectById, canCurrentUserEditProject, countTreeConcepts, validateConceptAdditionLimit } from '../portal/projectService.js?v=20261119_cf39';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario, calculateProrrateoCascade, round2 } from '../../core/calculations.js?v=20261119_cf39';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { AUTO_ROW_PALETTE } from '../../core/colors.js?v=20261119_cf39';
+import { broadcastConceptChange, pushConceptUpdateToSupabase } from '../../core/realtimeSync.js?v=20261119_cf39';
 
 function createNodeUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -32,6 +32,24 @@ function renewInsumosUuids(insumos) {
     const nextUuid = createNodeUuid();
     return { ...ins, id: nextUuid, uuid: nextUuid };
   });
+}
+
+/**
+ * Guardia centralizado de límite de conceptos por suscripción en Arquitectura (15 Gratuita, 160 Plus, 200 Pro).
+ */
+export function guardConceptLimit(additionalConcepts = 1, options = {}) {
+  const check = validateConceptAdditionLimit(getActiveProjectId(), additionalConcepts, {
+    ...options,
+    liveTreeData: Array.isArray(options?.liveTreeData) ? options.liveTreeData : state.treeData
+  });
+  if (!check.allowed) {
+    showToast(`🔒 ${check.reason}`, 'warning');
+    if (typeof window !== 'undefined' && typeof window.openSubscriptionModal === 'function') {
+      window.openSubscriptionModal();
+    }
+    return false;
+  }
+  return true;
 }
 
 // Buscar un nodo por su ID, UUID o Clave recursivamente
@@ -119,6 +137,7 @@ export function addRootRow() {
     return;
   }
   if (!guardTabUnlocked('cat')) return;
+  if (!guardConceptLimit(1)) return;
   saveState();
   const newId = createNodeUuid();
   const newPartida = {
@@ -157,6 +176,10 @@ export function addChildRow(parentId, e) {
   if (!guardTabUnlocked('cat')) return;
   const parent = findNodeById(state.treeData, parentId);
   if (!parent) return;
+
+  const wasLeaf = !Array.isArray(parent.children) || parent.children.length === 0;
+  const conceptDelta = wasLeaf ? 0 : 1;
+  if (!guardConceptLimit(conceptDelta)) return;
 
   saveState();
   if (!parent.children) parent.children = [];
@@ -205,9 +228,11 @@ export function duplicarNode(id, e) {
     return;
   }
   if (!guardTabUnlocked('cat')) return;
-  saveState();
   const nodeToDuplicate = findNodeById(state.treeData, id);
   if (!nodeToDuplicate) return;
+  const cloneConcepts = Math.max(1, countTreeConcepts([nodeToDuplicate]));
+  if (!guardConceptLimit(cloneConcepts)) return;
+  saveState();
 
   function cloneNode(node) {
     const clonedUuid = createNodeUuid();
@@ -368,6 +393,9 @@ export function pegarNode(targetId, e) {
     showToast('No hay ningún concepto copiado en el portapapeles. Copia un concepto primero.', 'warning');
     return;
   }
+
+  const pasteConcepts = Math.max(1, countTreeConcepts([clip.node]));
+  if (!guardConceptLimit(pasteConcepts)) return;
 
   saveState();
 

@@ -1,7 +1,7 @@
 // js/modules/portal/projectService.js
 // Servicio centralizado para usuarios, proyectos multi-obra y almacenamiento aislado
 
-import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf38';
+import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf39';
 import {
   STORAGE_KEY_USER,
   STORAGE_KEY_PROJECTS,
@@ -14,16 +14,16 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261119_cf38';
+} from '../../config/constants.js?v=20261119_cf39';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 export const STORAGE_KEY_TRASHED_PROJECTS = 'cubikar_trashed_project_ids_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf38';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf38';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf38';
-import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf38';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf39';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf39';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf39';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf39';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -453,7 +453,24 @@ export function deleteUserAccountAndData(email) {
       try {
         localStorage.removeItem(getSettingsKey(p.id));
         localStorage.removeItem(getStorageKey(p.id));
+        localStorage.removeItem(`estimaciones_arq_data_${p.id}`);
         localStorage.removeItem(`estimaciones_data_${p.id}`);
+        localStorage.removeItem(`expenses_control_${p.id}`);
+        localStorage.removeItem(`calendario_arq_cfg_${p.id}`);
+        localStorage.removeItem(`calendario_cfg_${p.id}`);
+        localStorage.removeItem(`calendario_arq_workdays_${p.id}`);
+        localStorage.removeItem(`calendario_workdays_${p.id}`);
+        localStorage.removeItem(`adm_arq_tab_locks_${p.id}`);
+        localStorage.removeItem(`adm_arq_project_chat_${p.id}`);
+        localStorage.removeItem(`adm_arq_chat_${p.id}`);
+        localStorage.removeItem(`adm_arq_signatures_${p.id}`);
+        localStorage.removeItem(`adm_arq_seguimiento_${p.id}`);
+        localStorage.removeItem(`adm_arq_bitacora_${p.id}`);
+        localStorage.removeItem(`seguimiento_data_${p.id}`);
+        localStorage.removeItem(`adm_arq_compras_${p.id}`);
+        localStorage.removeItem(`adm_arq_proveedores_${p.id}`);
+        localStorage.removeItem(`adm_arq_expenses_${p.id}`);
+        localStorage.removeItem(`adm_arq_suppliers_${p.id}`);
         localStorage.removeItem(`adm_const_state_${p.id}`);
         localStorage.removeItem(`adm_const_sobrecosto_${p.id}`);
         localStorage.removeItem(`project_chat_${p.id}`);
@@ -1733,7 +1750,7 @@ export function getTabAssignedMembers(projectId, tabId) {
 // Enviar proyecto a la Papelera (retención 7 días - solo Anfitrión)
 export async function deleteProject(projectId) {
   if (!projectId) return { success: false, error: 'Proyecto no especificado' };
-  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf38');
+  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf39');
   const res = await moveProjectToTrash(projectId);
   return (res && typeof res === 'object') ? res : { success: Boolean(res) };
 }
@@ -1756,22 +1773,34 @@ export async function permanentlyDeleteProject(projectId, opts = {}) {
     try {
       localStorage.removeItem(getSettingsKey(pid));
       localStorage.removeItem(getStorageKey(pid));
+      localStorage.removeItem(`estimaciones_arq_data_${pid}`);
       localStorage.removeItem(`estimaciones_data_${pid}`);
       localStorage.removeItem(`expenses_control_${pid}`);
+      localStorage.removeItem(`calendario_arq_cfg_${pid}`);
       localStorage.removeItem(`calendario_cfg_${pid}`);
+      localStorage.removeItem(`calendario_arq_workdays_${pid}`);
       localStorage.removeItem(`calendario_workdays_${pid}`);
+      localStorage.removeItem(`adm_arq_tab_locks_${pid}`);
       localStorage.removeItem(`adm_arq_project_chat_${pid}`);
       localStorage.removeItem(`adm_const_project_chat_${pid}`);
+      localStorage.removeItem(`adm_arq_chat_${pid}`);
       localStorage.removeItem(`adm_const_chat_${pid}`);
       localStorage.removeItem(`control_obra_chat_${pid}`);
       localStorage.removeItem(`adm_arq_signatures_${pid}`);
+      localStorage.removeItem(`adm_arq_seguimiento_${pid}`);
       localStorage.removeItem(`adm_arq_bitacora_${pid}`);
+      localStorage.removeItem(`seguimiento_data_${pid}`);
+      localStorage.removeItem(`adm_arq_compras_${pid}`);
+      localStorage.removeItem(`adm_arq_proveedores_${pid}`);
       localStorage.removeItem(`adm_arq_expenses_${pid}`);
       localStorage.removeItem(`adm_arq_suppliers_${pid}`);
       localStorage.removeItem(`adm_const_signatures_${pid}`);
       localStorage.removeItem(`adm_const_bitacora_${pid}`);
       localStorage.removeItem(`adm_const_expenses_${pid}`);
       localStorage.removeItem(`adm_const_suppliers_${pid}`);
+      localStorage.removeItem(`adm_const_state_${pid}`);
+      localStorage.removeItem(`adm_const_sobrecosto_${pid}`);
+      localStorage.removeItem(`project_chat_${pid}`);
     } catch (e) {}
   });
 
@@ -2093,22 +2122,29 @@ export function createProjectInvitation({ projectId, email, name, role = 'editar
   });
 
   // Sincronizar colaborador directamente a Supabase PostgreSQL (public.proyecto_colaboradores)
+  // y emitir broadcast solo después de persistir la invitación en la nube para evitar carreras de sincronización
+  const broadcastAfterCloud = () => {
+    try {
+      if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewInvitation === 'function') {
+        const updatedProj = getProjectById(projectId);
+        window.CubikarRealtime.broadcastNewInvitation(newInvitation, updatedProj);
+      }
+    } catch (e) {
+      console.warn('[Realtime] Error emitiendo invitación:', e);
+    }
+  };
+
   try {
     if (typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
       Promise.resolve(window.addCollaboratorToCloud(projectId, newInvitation.email, newInvitation.role, 'pending'))
         .then(res => { if (res?.success) clearMemberPendingCloudAdd(projectId, newInvitation.email); })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(broadcastAfterCloud);
+    } else {
+      broadcastAfterCloud();
     }
-  } catch (_) {}
-
-  // Emitir broadcast en tiempo real vía WebSockets a otros usuarios conectados
-  try {
-    if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewInvitation === 'function') {
-      const updatedProj = getProjectById(projectId);
-      window.CubikarRealtime.broadcastNewInvitation(newInvitation, updatedProj);
-    }
-  } catch (e) {
-    console.warn('[Realtime] Error emitiendo invitación:', e);
+  } catch (_) {
+    broadcastAfterCloud();
   }
 
   return newInvitation;
@@ -3190,17 +3226,22 @@ export function getUserRoleInProject(projectId, user = null) {
   }
 
   if (Array.isArray(proj.members)) {
-    const mem = proj.members.find(m => (m.email || '').toLowerCase().trim() === uEmail && (m.status || '').toLowerCase().trim() !== 'rejected');
+    const mem = proj.members.find(m => {
+      const st = (m.status || '').toLowerCase().trim();
+      return (m.email || '').toLowerCase().trim() === uEmail && st !== 'rejected' && st !== 'pending';
+    });
     if (mem && mem.role) return mem.role;
   }
 
   try {
     const allPlanInvs = getStoredPlanInvitations();
-    const planInv = allPlanInvs.find(inv =>
-      (inv.ownerEmail || '').toLowerCase().trim() === (proj.ownerEmail || '').toLowerCase().trim() &&
-      (inv.email || '').toLowerCase().trim() === uEmail &&
-      (inv.status || '').toLowerCase().trim() !== 'rejected'
-    );
+    const planInv = allPlanInvs.find(inv => {
+      const st = (inv.status || '').toLowerCase().trim();
+      return (inv.ownerEmail || '').toLowerCase().trim() === (proj.ownerEmail || '').toLowerCase().trim() &&
+        (inv.email || '').toLowerCase().trim() === uEmail &&
+        st !== 'rejected' &&
+        st !== 'pending';
+    });
     if (planInv && planInv.role) {
       return planInv.role;
     }
@@ -3231,9 +3272,9 @@ export function canCurrentUserEditProject(projectId = null, user = null) {
 
   const role = getUserRoleInProject(pId, u);
   if (!role) return false;
-  if (role === 'owner' || role === 'editar' || role === 'escribir') return true;
+  if (role === 'owner' || role === 'admin' || role === 'editar' || role === 'escribir') return true;
   const normalizedRole = String(role).toLowerCase().trim();
-  if (normalizedRole === 'editar' || normalizedRole === 'escribir' || normalizedRole === 'editor' || normalizedRole === 'escritura') return true;
+  if (normalizedRole === 'owner' || normalizedRole === 'admin' || normalizedRole === 'editar' || normalizedRole === 'escribir' || normalizedRole === 'editor' || normalizedRole === 'escritura') return true;
   if (normalizedRole === 'leer' || normalizedRole === 'lector' || normalizedRole === 'view' || normalizedRole === 'viewer') return false;
   return false;
 }
@@ -3438,8 +3479,9 @@ export function createPlanInvitation({ email, name, role = 'editar', avatar = nu
   allProjects.forEach(proj => {
     if ((proj.ownerEmail || '').toLowerCase().trim() === ownerEmail) {
       const exists = allStoredInvs.some(i => i.projectId === proj.id && (i.email || '').toLowerCase().trim() === cleanEmail);
+      let pInvEntry = null;
       if (!exists) {
-        const pInvEntry = {
+        pInvEntry = {
           id: 'inv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
           projectId: proj.id,
           projectName: proj.projectName || 'Proyecto de Obra',
@@ -3455,23 +3497,33 @@ export function createPlanInvitation({ email, name, role = 'editar', avatar = nu
           createdAt: new Date().toISOString()
         };
         allStoredInvs.unshift(pInvEntry);
+      }
 
+      const emitPlanBroadcast = () => {
+        if (!pInvEntry) return;
         try {
           if (typeof window !== 'undefined' && window.CubikarRealtime && typeof window.CubikarRealtime.broadcastNewInvitation === 'function') {
             window.CubikarRealtime.broadcastNewInvitation(pInvEntry, proj);
           }
         } catch (e) {}
-      }
+      };
 
       // Sincronizar fila de colaborador en Supabase PostgreSQL para acceso Multi-PC
+      // y emitir broadcast solo después de persistir la fila en la nube
       try {
         const cid = proj.cloudId || proj.id;
         const existingMem = Array.isArray(proj.members) ? proj.members.find(m => (m.email || '').toLowerCase().trim() === cleanEmail) : null;
         const cloudStatus = (existingMem && (existingMem.status === 'active' || existingMem.status === 'accepted')) ? 'accepted' : 'pending';
         if (cid && typeof window !== 'undefined' && typeof window.addCollaboratorToCloud === 'function') {
-          window.addCollaboratorToCloud(cid, cleanEmail, newInv.role || 'editar', cloudStatus);
+          Promise.resolve(window.addCollaboratorToCloud(cid, cleanEmail, newInv.role || 'editar', cloudStatus))
+            .catch(() => {})
+            .finally(emitPlanBroadcast);
+        } else {
+          emitPlanBroadcast();
         }
-      } catch (_) {}
+      } catch (_) {
+        emitPlanBroadcast();
+      }
     }
   });
   saveStoredInvitations(allStoredInvs);
@@ -3709,5 +3761,48 @@ export function resolveWorkspacePlanContext(projectIdOverride = null) {
     planId,
     limits: getPlanLimits(planId),
     currentUserEmail: currentEmail
+  };
+}
+
+export function validateConceptAdditionLimit(projectId = null, additionalConcepts = 1, options = {}) {
+  const ctx = resolveWorkspacePlanContext(projectId);
+  const maxConcepts = ctx.limits?.maxConcepts || 15;
+  const replaceExisting = Boolean(options?.replaceExisting);
+
+  let currentConcepts = 0;
+  if (Array.isArray(options?.liveTreeData)) {
+    currentConcepts = countTreeConcepts(options.liveTreeData);
+  } else if (typeof localStorage !== 'undefined') {
+    try {
+      const storageKey = ctx.projectId ? getStorageKey(ctx.projectId) : getStorageKey();
+      const rawTree = localStorage.getItem(storageKey);
+      if (rawTree) currentConcepts = countTreeConcepts(JSON.parse(rawTree));
+    } catch (_) {}
+  }
+
+  const addNum = Math.max(0, Number(additionalConcepts) || 0);
+  const projectedTotal = replaceExisting ? addNum : currentConcepts + addNum;
+
+  if (projectedTotal > maxConcepts) {
+    return {
+      allowed: false,
+      limitReached: true,
+      planId: ctx.planId,
+      planName: ctx.limits?.name || ctx.planId,
+      currentConcepts,
+      projectedTotal,
+      maxConcepts,
+      reason: `Has alcanzado el límite de ${maxConcepts.toLocaleString('es-MX')} conceptos por proyecto para el Plan ${ctx.limits?.name || ctx.planId} (actuales: ${currentConcepts.toLocaleString('es-MX')}, proyectados: ${projectedTotal.toLocaleString('es-MX')}). Actualiza tu suscripción para continuar agregando conceptos.`
+    };
+  }
+
+  return {
+    allowed: true,
+    planId: ctx.planId,
+    planName: ctx.limits?.name || ctx.planId,
+    currentConcepts,
+    projectedTotal,
+    maxConcepts,
+    remaining: Math.max(0, maxConcepts - currentConcepts)
   };
 }

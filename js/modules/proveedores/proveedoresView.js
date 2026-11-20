@@ -1,12 +1,12 @@
-import { state } from '../../state/store.js?v=20261119_cf38';
-import { findNodeById } from '../catalog/treeService.js?v=20261119_cf38';
-import { formatMoney, formatQty, round2 } from '../../core/formatters.js?v=20261119_cf38';
-import { calculateParentTotal } from '../../core/calculations.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
-import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf38';
+import { state } from '../../state/store.js?v=20261119_cf39';
+import { findNodeById } from '../catalog/treeService.js?v=20261119_cf39';
+import { formatMoney, formatQty, round2 } from '../../core/formatters.js?v=20261119_cf39';
+import { calculateParentTotal } from '../../core/calculations.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf39';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf39';
 import {
   cleanPhoneForWhatsApp,
   addCotizacion,
@@ -14,9 +14,16 @@ import {
   deleteCotizacion,
   setCotizacionGanadora,
   unsetCotizacionGanadora,
+  attachCotizacionFileS3,
   getCotizacionHierarchyStatus,
   getCotizacionBlockMessage
-} from './cotizacionesService.js?v=20261119_cf38';
+} from './cotizacionesService.js?v=20261119_cf39';
+import {
+  uploadCotizacionAttachment,
+  openCotizacionAttachmentFromS3,
+  deleteCotizacionAttachmentFromS3,
+  migrateInlineAttachmentsInBackground
+} from '../../services/cotizacionFilesS3.js?v=20261119_cf39';
 
 let activeSideTab = 'proveedores';
 let currentEditingCotId = null;
@@ -251,7 +258,7 @@ function renderConsolidatedParentPanel(container, status) {
     selectedItems.forEach((item) => {
       const subNode = item.node;
       const cot = item.cotizacion;
-      const tienePdf = Boolean(cot.archivoNombre && cot.archivoNombre.trim().length > 0);
+      const tienePdf = Boolean(cot.archivoS3Key || cot.archivoData || (cot.archivoNombre && cot.archivoNombre.trim().length > 0));
       html += `
         <div class="rounded-xl bg-white border-2 border-emerald-500/80 shadow-sm p-3 flex flex-col gap-2">
           <div class="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5">
@@ -394,6 +401,10 @@ export function renderCotizacionesSidePanel(node) {
     return;
   }
 
+  migrateInlineAttachmentsInBackground(node, (cotId, s3Res) => {
+    attachCotizacionFileS3(node.id, cotId, s3Res);
+  });
+
   // Actualizar contador en la pestaña
   if (badgeCount) {
     if (count > 0) {
@@ -504,7 +515,7 @@ export function renderCotizacionesSidePanel(node) {
   } else {
     cotizaciones.forEach((cot) => {
       const isWinner = Boolean(cot.isGanador);
-      const tienePdf = Boolean(cot.archivoNombre && cot.archivoNombre.trim().length > 0);
+      const tienePdf = Boolean(cot.archivoS3Key || cot.archivoData || (cot.archivoNombre && cot.archivoNombre.trim().length > 0));
       const cotQty = (cot.cantidad !== undefined && cot.cantidad !== null && cot.cantidad !== '') ? (parseFloat(cot.cantidad) || 1) : 1;
       const cotCost = (cot.costo !== undefined && cot.costo !== null) ? Number(cot.costo) : round2(Number(cot.monto || 0) * (cotQty > 0 ? cotQty : 1));
 
@@ -811,6 +822,11 @@ export function saveCotizacionForm(event) {
 
   const costo = round2(monto * (cantidad > 0 ? cantidad : 1));
 
+  const prevCot = currentEditingCotId
+    ? ((findNodeById(state.treeData, nodeId)?.cotizaciones || []).find(c => c.id === currentEditingCotId) || null)
+    : null;
+  const hasNewDataUrl = Boolean(archivoData && archivoData.startsWith('data:'));
+
   const payload = {
     proveedor,
     telefono,
@@ -828,12 +844,27 @@ export function saveCotizacionForm(event) {
     archivoSize: archivoSize || ''
   };
 
+  let savedCot = null;
   if (currentEditingCotId) {
-    updateCotizacion(nodeId, currentEditingCotId, payload);
+    savedCot = updateCotizacion(nodeId, currentEditingCotId, payload);
   } else {
-    addCotizacion(nodeId, payload);
+    savedCot = addCotizacion(nodeId, payload);
   }
   persistProveedoresCloudSummary();
+
+  if (hasNewDataUrl && savedCot?.id) {
+    if (prevCot?.archivoS3Key) {
+      deleteCotizacionAttachmentFromS3(prevCot).catch(() => {});
+    }
+    uploadCotizacionAttachment({
+      dataUrl: archivoData,
+      fileName: payload.archivoNombre || 'cotizacion.pdf'
+    }).then((res) => {
+      if (res?.s3Key) {
+        attachCotizacionFileS3(nodeId, savedCot.id, res);
+      }
+    }).catch(() => {});
+  }
 
   closeCotizacionModal();
 }
@@ -891,13 +922,26 @@ export function handleCardDirectFileUpload(nodeId, cotId, inputEl) {
     : (file.size / 1024).toFixed(0) + ' KB';
 
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
+    const dataUrl = e.target.result;
+    const prevCot = (findNodeById(state.treeData, nodeId)?.cotizaciones || []).find(c => c.id === cotId) || null;
     updateCotizacion(nodeId, cotId, {
       archivoNombre: file.name,
-      archivoData: e.target.result,
+      archivoData: dataUrl,
       archivoSize: formattedSize
     });
     persistProveedoresCloudSummary();
+    try {
+      const s3Res = await uploadCotizacionAttachment({ dataUrl, fileName: file.name });
+      if (s3Res?.s3Key) {
+        if (prevCot?.archivoS3Key && prevCot.archivoS3Key !== s3Res.s3Key) {
+          deleteCotizacionAttachmentFromS3(prevCot).catch(() => {});
+        }
+        attachCotizacionFileS3(nodeId, cotId, s3Res);
+        showToast(`Cotización "${file.name}" respaldada en la nube.`, 'success');
+        return;
+      }
+    } catch (_) {}
     showToast(`Cotización "${file.name}" adjuntada con éxito.`, 'success');
   };
   reader.readAsDataURL(file);
@@ -913,8 +957,15 @@ export function viewCotizacionPdf(nodeId, cotId) {
   if (!node) return;
 
   const cot = (node.cotizaciones || []).find(c => c.id === cotId);
-  if (!cot || !cot.archivoData) {
+  if (!cot || (!cot.archivoS3Key && !cot.archivoData)) {
     showToast('Esta cotización no tiene documento adjunto.', 'warning');
+    return;
+  }
+
+  if (cot.archivoS3Key) {
+    openCotizacionAttachmentFromS3(cot).catch((err) => {
+      showToast(err?.message || 'No se pudo abrir el documento en la nube.', 'error');
+    });
     return;
   }
 

@@ -1,11 +1,11 @@
 // js/mobile/mobileSeguimiento.js — Pestaña 3 de cubikar Arquitectura: Seguimiento de Entregables, Estatus y % Avance Ponderado
 
-import { state } from '../state/store.js?v=20261119_cf38';
-import { ESTATUS_OPTIONS, calcularAvancePonderado, updateEntregableSeguimiento } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf38';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf38';
-import { showToast } from '../ui/notifications.js?v=20261119_cf38';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf38';
+import { state } from '../state/store.js?v=20261119_cf39';
+import { ESTATUS_OPTIONS, calcularAvancePonderado, updateEntregableSeguimiento } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf39';
+import { showToast } from '../ui/notifications.js?v=20261119_cf39';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf39';
 
 let statusFilter = 'all';
 
@@ -126,11 +126,16 @@ export function renderMobileSeguimiento(container, { openSheet, closeSheet }) {
       document.getElementById('m-seg-form')?.addEventListener('submit', (ev) => {
         ev.preventDefault();
         const st = document.getElementById('m-sg-status').value;
-        const pct = parseFloat(document.getElementById('m-sg-pct').value) || 0;
+        const rawPct = parseFloat(document.getElementById('m-sg-pct').value);
+        const pct = Number.isFinite(rawPct) ? rawPct : 0;
+        const prevPct = Number(node.avancePorcentaje || 0);
+        const statusChanged = st !== (node.estatus || 'pendiente');
         const lnk = document.getElementById('m-sg-link').value.trim();
         updateEntregableSeguimiento(node.id, 'estatus', st);
-        updateEntregableSeguimiento(node.id, 'avancePorcentaje', pct);
-        if (lnk) updateEntregableSeguimiento(node.id, 'archivoLink', lnk);
+        if (!statusChanged || Math.abs(pct - prevPct) > 0.001) {
+          updateEntregableSeguimiento(node.id, 'avancePorcentaje', pct);
+        }
+        updateEntregableSeguimiento(node.id, 'archivoLink', lnk);
         closeSheet();
         showToast('Seguimiento actualizado.', 'success');
         renderMobileSeguimiento(container, { openSheet, closeSheet });

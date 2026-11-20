@@ -4,9 +4,9 @@
 // - El proyecto solo guarda la llave S3 (ligero, respaldable y consultable desde cualquier equipo).
 // - Sin conexión, el archivo se conserva temporalmente en base64 y se sube en cuanto sea posible.
 
-import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf38';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf38';
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf38';
+import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf39';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf39';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf39';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const inFlightUploads = new Set();
@@ -165,4 +165,37 @@ export function migrateInlineAttachmentsInBackground(node, onUploaded) {
       .catch((err) => console.warn('[CotizacionesS3] Migración pendiente:', err?.message || err))
       .finally(() => inFlightUploads.delete(key));
   });
+}
+
+/**
+ * Elimina de AWS S3 y marca como eliminado en archivos_almacen un adjunto de cotización.
+ * Acepta { s3Key } o el objeto de cotización completo ({ archivoS3Key, archivoId }).
+ */
+export async function deleteCotizacionAttachmentFromS3(refOrCot) {
+  const s3Key = String(refOrCot?.s3Key || refOrCot?.archivoS3Key || '').trim();
+  const archivoId = String(refOrCot?.archivoId || '').trim();
+  if (!s3Key) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  try {
+    const session = await getSession();
+    const token = session?.access_token;
+    if (!token) return false;
+    const res = await callPresign({ action: 'delete', s3Key }, token);
+    try {
+      const sb = getSupabaseClient();
+      if (sb) {
+        let q = sb.from('archivos_almacen').update({ deleted_at: new Date().toISOString() });
+        q = archivoId ? q.eq('id', archivoId) : q.eq('s3_key', s3Key);
+        await q;
+      }
+    } catch (_) {}
+    return Boolean(res.ok);
+  } catch (err) {
+    console.warn('[CotizacionesS3] No se pudo eliminar adjunto S3:', err?.message || err);
+    return false;
+  }
+}
+
+if (typeof window !== 'undefined' && typeof window.deleteManagedFile !== 'function') {
+  window.deleteManagedFile = deleteCotizacionAttachmentFromS3;
 }

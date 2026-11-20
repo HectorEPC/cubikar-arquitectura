@@ -6,8 +6,8 @@
 // Conectada con Partidas/Conceptos (/), Usuarios Asignados (@), Estimaciones (#),
 // Reportes (!), Notificaciones de Menciones y Formato Imprimible de Bitácora de Obra.
 
-import { state } from '../../state/store.js?v=20261119_cf38';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf38';
+import { state } from '../../state/store.js?v=20261119_cf39';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf39';
 import {
   getProjectById,
   getProjectsList,
@@ -22,16 +22,18 @@ import {
   saveStoredInvitations,
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
-  getDeletedProjectsList
-} from '../portal/projectService.js?v=20261119_cf38';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf38';
-import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261119_cf38';
-import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf38';
-import { openPrintWindow } from '../io/printService.js?v=20261119_cf38';
-import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261119_cf38';
-import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf38';
+  getDeletedProjectsList,
+  canCurrentUserEditProject,
+  getUserRoleInProject
+} from '../portal/projectService.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf39';
+import { loadEstimacionesData, setActiveEstimacionId } from '../estimaciones/estimacionesModel.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { getActiveUserConsumptionAlert } from '../admin/cubikarAdmin.js?v=20261119_cf39';
+import { openSubscriptionModal } from '../portal/subscriptionModal.js?v=20261119_cf39';
+import { openPrintWindow } from '../io/printService.js?v=20261119_cf39';
+import { broadcastChatMessage, broadcastChatDelete } from '../../core/realtimeSync.js?v=20261119_cf39';
+import { scheduleChatCloudSync } from '../../core/cloudModulesSyncService.js?v=20261119_cf39';
 
 let lastSentChatGuard = { text: '', ts: 0 };
 
@@ -1978,19 +1980,49 @@ export function clearProjectChatSearch() {
   updateChatMessagesListDOM();
 }
 
+function canUserDeleteChatMessage(msg, projectId = null) {
+  if (!canCurrentUserEditProject(projectId)) return false;
+  const pId = projectId || getActiveProjectId();
+  const proj = pId ? getProjectById(pId) : null;
+  const u = getCurrentUser() || getLastKnownUser();
+  const uEmail = String(u?.email || '').toLowerCase().trim();
+  const ownerEmail = String(proj?.ownerEmail || '').toLowerCase().trim();
+  if (!ownerEmail || (uEmail && uEmail === ownerEmail)) return true;
+
+  const role = String(getUserRoleInProject(pId, u) || '').toLowerCase().trim();
+  if (role === 'owner' || role === 'admin' || role === 'editar' || role === 'editor') return true;
+
+  const authorEmail = String(msg?.authorEmail || '').toLowerCase().trim();
+  if (uEmail && authorEmail && uEmail === authorEmail) return true;
+  if (u?.name && msg?.authorName && u.name.trim().toLowerCase() === msg.authorName.trim().toLowerCase() && !authorEmail) return true;
+  return false;
+}
+
 export function toggleMoveChatMessageMenu(msgId, event = null) {
   if (event && typeof event.stopPropagation === 'function') {
     event.stopPropagation();
+  }
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite reorganizar asientos de bitácora.', 'warning');
+    return;
   }
   moveMenuMessageId = (moveMenuMessageId === msgId) ? null : msgId;
   updateChatMessagesListDOM();
 }
 
 export function moveProjectChatMessageDivision(msgId, targetDivisionId) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite mover asientos de bitácora.', 'warning');
+    return;
+  }
   if (!CHAT_DIVISIONS.some(d => d.id === targetDivisionId)) return;
   const messages = loadProjectChatMessages();
   const target = messages.find(m => m.id === msgId);
   if (!target) return;
+  if (!canUserDeleteChatMessage(target)) {
+    showToast('Solo el autor, director o editor puede mover este asiento.', 'warning');
+    return;
+  }
   target.division = targetDivisionId;
   saveProjectChatMessages(messages);
   moveMenuMessageId = null;
@@ -2815,6 +2847,10 @@ export function removeProjectChatPendingTag(kind, val) {
 }
 
 export function sendProjectChatMessage() {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite enviar mensajes o asientos en la bitácora.', 'warning');
+    return;
+  }
   const inp = document.getElementById('project-chat-input');
   if (!inp) return;
   const text = inp.value.trim();
@@ -2903,8 +2939,18 @@ export function sendProjectChatMessage() {
 }
 
 export function deleteProjectChatMessage(msgId) {
+  if (!canCurrentUserEditProject()) {
+    showToast('🔒 Modo lectura: tu rol no permite eliminar mensajes de bitácora.', 'warning');
+    return;
+  }
   const cleanTargetId = normalizeChatMsgId(msgId);
   const messages = loadProjectChatMessages();
+  const targetMsg = messages.find(m => normalizeChatMsgId(m.id) === cleanTargetId);
+  if (!targetMsg) return;
+  if (!canUserDeleteChatMessage(targetMsg)) {
+    showToast('Solo el autor del mensaje, el director de proyecto o un Editor puede eliminarlo.', 'warning');
+    return;
+  }
   const next = messages.filter(m => normalizeChatMsgId(m.id) !== cleanTargetId);
   saveProjectChatMessages(next);
   broadcastChatDelete(getActiveProjectId(), cleanTargetId);
@@ -3029,16 +3075,18 @@ function buildChatMessagesListHtml(filteredMessages, partidas, activeDivMeta) {
           </div>
           <div class="flex items-center gap-1 shrink-0 ml-auto">
             <span class="text-[10px] font-mono text-slate-500">${escapeChatHtml(m.time || '')}</span>
-            <button type="button" onclick="toggleMoveChatMessageMenu('${safeMsgIdAttr}', event)"
-                    title="Mover asiento a otra división/pestaña"
-                    class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 text-[10px] px-1 cursor-pointer transition ${isMoveOpen ? 'opacity-100 text-indigo-600' : ''}">
-              <i class="fa-solid fa-right-left"></i>
-            </button>
-            <button type="button" onclick="deleteProjectChatMessage('${safeMsgIdAttr}')"
-                    title="Eliminar asiento de bitácora"
-                    class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 text-[10px] px-1 cursor-pointer transition">
-              <i class="fa-solid fa-trash-can"></i>
-            </button>
+            ${canUserDeleteChatMessage(m) ? `
+              <button type="button" onclick="toggleMoveChatMessageMenu('${safeMsgIdAttr}', event)"
+                      title="Mover asiento a otra división/pestaña"
+                      class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 text-[10px] px-1 cursor-pointer transition ${isMoveOpen ? 'opacity-100 text-indigo-600' : ''}">
+                <i class="fa-solid fa-right-left"></i>
+              </button>
+              <button type="button" onclick="deleteProjectChatMessage('${safeMsgIdAttr}')"
+                      title="Eliminar asiento de bitácora"
+                      class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 text-[10px] px-1 cursor-pointer transition">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            ` : ''}
           </div>
         </div>
 
@@ -3518,57 +3566,63 @@ export function renderProjectChatDock() {
       </div>
 
       <!-- Barra inferior para clasificar tipo de nota, etiquetar y asentar en bitácora -->
-      <div class="p-2.5 bg-slate-50 border-t border-slate-200 space-y-1.5">
-        <div class="flex flex-wrap items-center gap-1">
-          <select id="project-chat-entry-type"
-                  onchange="onProjectChatEntryTypeChange(this.value)"
-                  title="Tipo de asiento en Bitácora"
-                  class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-bold text-slate-800 outline-none cursor-pointer">
-            ${BITACORA_ENTRY_TYPES.map(t => `
-              <option value="${t.id}" ${t.id === pendingComposerEntryType ? 'selected' : ''}>📋 ${escapeChatHtml(t.label)}</option>
-            `).join('')}
-          </select>
+      ${canCurrentUserEditProject() ? `
+        <div class="p-2.5 bg-slate-50 border-t border-slate-200 space-y-1.5">
+          <div class="flex flex-wrap items-center gap-1">
+            <select id="project-chat-entry-type"
+                    onchange="onProjectChatEntryTypeChange(this.value)"
+                    title="Tipo de asiento en Bitácora"
+                    class="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[10.5px] font-bold text-slate-800 outline-none cursor-pointer">
+              ${BITACORA_ENTRY_TYPES.map(t => `
+                <option value="${t.id}" ${t.id === pendingComposerEntryType ? 'selected' : ''}>📋 ${escapeChatHtml(t.label)}</option>
+              `).join('')}
+            </select>
 
-          <button type="button" onclick="toggleProjectChatTagPicker('user')"
-                  class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 cursor-pointer">
-            @ Usuario
-          </button>
-          <button type="button" onclick="toggleProjectChatTagPicker('partida')"
-                  class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 cursor-pointer">
-            / Concepto
-          </button>
-          <button type="button" onclick="toggleProjectChatTagPicker('estimacion')"
-                  class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 cursor-pointer">
-            # Estimación
-          </button>
-          <button type="button" onclick="toggleProjectChatTagPicker('reporte')"
-                  class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer">
-            ! Reporte
-          </button>
-        </div>
-
-        ${tagPickerHtml}
-
-        ${activeTagChips.length > 0 ? `
-          <div class="flex flex-wrap items-center gap-1 pt-0.5">
-            ${activeTagChips.join('')}
+            <button type="button" onclick="toggleProjectChatTagPicker('user')"
+                    class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 cursor-pointer">
+              @ Usuario
+            </button>
+            <button type="button" onclick="toggleProjectChatTagPicker('partida')"
+                    class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 cursor-pointer">
+              / Concepto
+            </button>
+            <button type="button" onclick="toggleProjectChatTagPicker('estimacion')"
+                    class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 cursor-pointer">
+              # Estimación
+            </button>
+            <button type="button" onclick="toggleProjectChatTagPicker('reporte')"
+                    class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 cursor-pointer">
+              ! Reporte
+            </button>
           </div>
-        ` : ''}
 
-        <div class="flex items-end gap-1.5">
-          <textarea id="project-chat-input"
-                    rows="2"
-                    placeholder="${escapeChatAttr(placeholderByDiv[activeChatDivision] || 'Escribe un asiento de bitácora...')}"
-                    onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendProjectChatMessage(); }"
-                    class="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 resize-none leading-snug">${escapeChatHtml(draftText)}</textarea>
-          <button type="button"
-                  onclick="sendProjectChatMessage()"
-                  class="px-3 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition shrink-0 shadow-xs flex items-center gap-1.5">
-            <i class="fa-solid fa-paper-plane text-[10px]"></i>
-            <span>Enviar</span>
-          </button>
+          ${tagPickerHtml}
+
+          ${activeTagChips.length > 0 ? `
+            <div class="flex flex-wrap items-center gap-1 pt-0.5">
+              ${activeTagChips.join('')}
+            </div>
+          ` : ''}
+
+          <div class="flex items-end gap-1.5">
+            <textarea id="project-chat-input"
+                      rows="2"
+                      placeholder="${escapeChatAttr(placeholderByDiv[activeChatDivision] || 'Escribe un asiento de bitácora...')}"
+                      onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); sendProjectChatMessage(); }"
+                      class="flex-1 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500 resize-none leading-snug">${escapeChatHtml(draftText)}</textarea>
+            <button type="button"
+                    onclick="sendProjectChatMessage()"
+                    class="px-3 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white cursor-pointer transition shrink-0 shadow-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-paper-plane text-[10px]"></i>
+              <span>Enviar</span>
+            </button>
+          </div>
         </div>
-      </div>
+      ` : `
+        <div class="p-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 text-center font-medium">
+          🔒 Modo lectura: tu rol solo permite consultar e imprimir asientos de bitácora.
+        </div>
+      `}
 
     </div>
   `;

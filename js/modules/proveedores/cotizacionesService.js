@@ -1,12 +1,13 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { findNodeById } from '../catalog/treeService.js?v=20261119_cf38';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { formatMoney } from '../../core/formatters.js?v=20261119_cf38';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261119_cf38';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261119_cf38';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { findNodeById } from '../catalog/treeService.js?v=20261119_cf39';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { formatMoney } from '../../core/formatters.js?v=20261119_cf39';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261119_cf39';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261119_cf39';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf39';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf39';
+import { deleteCotizacionAttachmentFromS3 } from '../../services/cotizacionFilesS3.js?v=20261119_cf39';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -362,6 +363,9 @@ export function updateCotizacion(nodeId, cotId, data) {
   if (data.archivoNombre !== undefined) cot.archivoNombre = data.archivoNombre;
   if (data.archivoData !== undefined) cot.archivoData = data.archivoData;
   if (data.archivoSize !== undefined) cot.archivoSize = data.archivoSize;
+  if (data.archivoS3Key !== undefined) cot.archivoS3Key = data.archivoS3Key;
+  if (data.archivoId !== undefined) cot.archivoId = data.archivoId;
+  if (data.archivoMime !== undefined) cot.archivoMime = data.archivoMime;
   if (data.driveUrl !== undefined) cot.driveUrl = data.driveUrl;
 
   const isParent = Array.isArray(node.children) && node.children.length > 0;
@@ -381,6 +385,7 @@ export function updateCotizacion(nodeId, cotId, data) {
 
   finalizeCotizacionMutation(node, `cotización de ${node.clave || 'concepto'}`);
   showToast('Cotización actualizada.', 'success');
+  return cot;
 }
 
 /**
@@ -395,6 +400,10 @@ export function deleteCotizacion(nodeId, cotId) {
 
   const cot = node.cotizaciones.find(c => c.id === cotId);
   if (!cot) return;
+
+  if (cot.archivoS3Key) {
+    deleteCotizacionAttachmentFromS3(cot).catch(() => {});
+  }
 
   const wasWinner = cot.isGanador;
   node.cotizaciones = node.cotizaciones.filter(c => c.id !== cotId);

@@ -1,13 +1,13 @@
-import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261119_cf38';
-import { saveState } from '../../state/history.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf38';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
-import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261119_cf38';
-import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261119_cf38';
-import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf38';
-import { round5 } from '../../core/formatters.js?v=20261119_cf38';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf38';
+import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261119_cf39';
+import { saveState } from '../../state/history.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf39';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf39';
+import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261119_cf39';
+import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261119_cf39';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf39';
+import { round5 } from '../../core/formatters.js?v=20261119_cf39';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf39';
 
 // Extractor robusto de JSON para respuestas de Gemini
 export function extractJsonFromAiResponse(text) {
@@ -207,9 +207,12 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
     const totalCD = round2(node.insumos.reduce((acc, ins) => acc + (round5(ins.cantidad || 0) * round2(ins.costoUnitario || 0)), 0));
     const factorSobrecosto = getEjecutivoCostPlusFactor();
     const totalPU = round2(totalCD * factorSobrecosto);
+    const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c && c.isGanador));
 
-    node.costoDirecto = totalCD;
-    node.precioUnitario = totalPU;
+    if (!hasWinnerQuote) {
+      node.costoDirecto = totalCD;
+      node.precioUnitario = totalPU;
+    }
 
     persistLocalData();
 
@@ -449,9 +452,12 @@ Instrucciones prioritarias con Google Search:
         const totalCD = round2(node.insumos.reduce((acc, ins) => acc + (ins.cantidad * ins.costoUnitario), 0));
         const factorSobrecosto = getEjecutivoCostPlusFactor();
         const totalPU = round2(totalCD * factorSobrecosto);
+        const hasWinnerQuote = Array.isArray(node.cotizaciones) && node.cotizaciones.some(c => Boolean(c && c.isGanador));
 
-        node.costoDirecto = totalCD;
-        node.precioUnitario = totalPU;
+        if (!hasWinnerQuote) {
+          node.costoDirecto = totalCD;
+          node.precioUnitario = totalPU;
+        }
 
         return { success: true };
       }

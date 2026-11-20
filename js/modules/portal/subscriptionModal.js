@@ -11,10 +11,10 @@ import {
   addFeaturedProfile,
   getActiveWorkspaceData,
   getUserPlanId
-} from './projectService.js?v=20261119_cf38';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
-import { isNightMode } from '../../ui/themeController.js?v=20261119_cf38';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf38';
+} from './projectService.js?v=20261119_cf39';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+import { isNightMode } from '../../ui/themeController.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf39';
 
 export const STORAGE_KEY_SUBSCRIPTION = 'adm_arq_subscription';
 
@@ -92,7 +92,7 @@ export const SUBSCRIPTION_PLANS = [
     monthlyPrice: 199,
     annualPrice: 159,
     originalMonthlyPrice: 499,
-    originalAnnualPrice: 499,
+    originalAnnualPrice: 399,
     discountBadge: '60% OFF',
     currency: 'MXN',
     periodLabel: '/ mes',
@@ -135,7 +135,7 @@ export const SUBSCRIPTION_PLANS = [
     monthlyPrice: 499,
     annualPrice: 399,
     originalMonthlyPrice: 1099,
-    originalAnnualPrice: 1099,
+    originalAnnualPrice: 879,
     discountBadge: '55% OFF',
     currency: 'MXN',
     periodLabel: '/ mes',
