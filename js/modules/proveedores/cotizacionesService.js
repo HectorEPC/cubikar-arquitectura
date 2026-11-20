@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf37';
-import { findNodeById } from '../catalog/treeService.js?v=20261119_cf37';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf37';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf37';
-import { formatMoney } from '../../core/formatters.js?v=20261119_cf37';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261119_cf37';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261119_cf37';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf37';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf37';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf38';
+import { findNodeById } from '../catalog/treeService.js?v=20261119_cf38';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf38';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
+import { formatMoney } from '../../core/formatters.js?v=20261119_cf38';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261119_cf38';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261119_cf38';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf38';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf38';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -460,4 +460,21 @@ export function unsetCotizacionGanadora(nodeId, cotId) {
 
   finalizeCotizacionMutation(node, `selección de proveedor en ${node.clave || 'concepto'}`);
   showToast('Se retiró la selección de proveedor ganador.', 'info');
+}
+
+/**
+ * Registra que el adjunto de una cotización ya vive en AWS S3: guarda la llave y elimina el base64 del proyecto.
+ */
+export function attachCotizacionFileS3(nodeId, cotId, { s3Key, archivoId = '', mimeType = '' } = {}) {
+  if (!s3Key || !canCurrentUserEditProject()) return false;
+  const node = findNodeById(state.treeData, nodeId);
+  if (!node || !Array.isArray(node.cotizaciones)) return false;
+  const cot = node.cotizaciones.find(c => c.id === cotId);
+  if (!cot) return false;
+  cot.archivoS3Key = s3Key;
+  if (archivoId) cot.archivoId = archivoId;
+  if (mimeType) cot.archivoMime = mimeType;
+  cot.archivoData = '';
+  finalizeCotizacionMutation(node, `documento de cotización en ${node.clave || 'concepto'}`);
+  return true;
 }

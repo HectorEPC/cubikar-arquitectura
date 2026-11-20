@@ -1,14 +1,14 @@
 // js/modules/io/printService.js
 // Servicio de Impresión de Formatos Profesionales para TAB1-CAT-BASE y MATRIZ / INSUMOS UNITARIOS
 
-import { state } from '../../state/store.js?v=20261119_cf37';
-import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261119_cf37';
-import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261119_cf37';
-import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261119_cf37';
-import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261119_cf37';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf37';
-import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261119_cf37';
-import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261119_cf37';
+import { state } from '../../state/store.js?v=20261119_cf38';
+import { formatMoney, formatCurrency, formatQty, formatMatrixQty, getCurrencySymbol, getCurrencyCode, round2, round5 } from '../../core/formatters.js?v=20261119_cf38';
+import { getEjecutivoCostPlusFactor, calculateParentTotal, calculateParentDirectTotal, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261119_cf38';
+import { findNodeById, getNodeHierarchyPath } from '../catalog/treeService.js?v=20261119_cf38';
+import { getCotizacionHierarchyStatus } from '../proveedores/cotizacionesService.js?v=20261119_cf38';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf38';
+import { generateIntegratedMatrixForConcept } from '../../core/matrixGenerator.js?v=20261119_cf38';
+import { getConsolidatedDataMap } from '../insumosGenerales/insumosConsolidator.js?v=20261119_cf38';
 import {
   extractScheduleItems,
   getScheduleSettings,
@@ -23,9 +23,9 @@ import {
   getGanttTodayDate,
   getWorkdaysSettings,
   getDateWorkdayInfo
-} from '../calendario/calendarioModel.js?v=20261119_cf37';
-import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261119_cf37';
-import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261119_cf37';
+} from '../calendario/calendarioModel.js?v=20261119_cf38';
+import { getEstimacionesCalculatedData } from '../estimaciones/estimacionesModel.js?v=20261119_cf38';
+import { getFirmasPrintHtml } from '../../ui/firmasController.js?v=20261119_cf38';
 
 // Escapar caracteres especiales en texto HTML
 function escapeHtml(str) {

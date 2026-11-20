@@ -1,10 +1,10 @@
 // js/mobile/mobileShell.js — Cascarón móvil/tablet para cubikar Arquitectura (5 pestañas PC + Cuenta + Tema)
 
-import { getActiveProjectId, setActiveProjectId } from '../config/constants.js?v=20261119_cf37';
-import { state } from '../state/store.js?v=20261119_cf37';
-import { signOut } from '../core/authService.js?v=20261119_cf37';
-import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261119_cf37';
-import { unsubscribeFromProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf37';
+import { getActiveProjectId, setActiveProjectId } from '../config/constants.js?v=20261119_cf38';
+import { state } from '../state/store.js?v=20261119_cf38';
+import { signOut } from '../core/authService.js?v=20261119_cf38';
+import { appendSsoToUrlFromStorage } from '../core/ssoHelper.js?v=20261119_cf38';
+import { unsubscribeFromProjectRealtime } from '../core/realtimeSync.js?v=20261119_cf38';
 import {
   getCurrentUser,
   saveCurrentUser,
@@ -13,18 +13,18 @@ import {
   markSessionClosed,
   getPlanLimits,
   getUserPlanId
-} from '../modules/portal/projectService.js?v=20261119_cf37';
-import { isNightMode, toggleThemeMode } from '../ui/themeController.js?v=20261119_cf37';
-import { showToast } from '../ui/notifications.js?v=20261119_cf37';
-import { escapeHtml, syncThemeDataset, canAccessTab, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf37';
-import { renderMobileAuth } from './mobileAuth.js?v=20261119_cf37';
-import { renderMobileProjects, openMobileProjectById } from './mobileProjects.js?v=20261119_cf37';
-import { renderMobileAlcances } from './mobileAlcances.js?v=20261119_cf37';
-import { renderMobilePresupuestoArq } from './mobilePresupuestoArq.js?v=20261119_cf37';
-import { renderMobileSeguimiento } from './mobileSeguimiento.js?v=20261119_cf37';
+} from '../modules/portal/projectService.js?v=20261119_cf38';
+import { isNightMode, toggleThemeMode } from '../ui/themeController.js?v=20261119_cf38';
+import { showToast } from '../ui/notifications.js?v=20261119_cf38';
+import { escapeHtml, syncThemeDataset, canAccessTab, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf38';
+import { renderMobileAuth } from './mobileAuth.js?v=20261119_cf38';
+import { renderMobileProjects, openMobileProjectById } from './mobileProjects.js?v=20261119_cf38';
+import { renderMobileAlcances } from './mobileAlcances.js?v=20261119_cf38';
+import { renderMobilePresupuestoArq } from './mobilePresupuestoArq.js?v=20261119_cf38';
+import { renderMobileSeguimiento } from './mobileSeguimiento.js?v=20261119_cf38';
 import { renderMobileCalendarioArq } from './mobileCalendarioArq.js?v=20261118_c2';
-import { renderMobileEstimacionesArq } from './mobileEstimacionesArq.js?v=20261119_cf37';
-import { renderMobileChatArq, setArqChatConceptFilter, getUnreadArqChatCount } from './mobileChatArq.js?v=20261119_cf37';
+import { renderMobileEstimacionesArq } from './mobileEstimacionesArq.js?v=20261119_cf38';
+import { renderMobileChatArq, setArqChatConceptFilter, getUnreadArqChatCount } from './mobileChatArq.js?v=20261119_cf38';
 
 export const ARQ_TABS = [
   { id: 'alcances', label: 'Alcances', icon: 'fa-solid fa-layer-group' },
