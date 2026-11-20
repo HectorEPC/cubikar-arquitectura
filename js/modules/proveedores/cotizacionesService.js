@@ -1,12 +1,12 @@
-import { state, persistLocalData } from '../../state/store.js?v=20261117_cf30';
-import { findNodeById } from '../catalog/treeService.js?v=20261117_cf30';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf30';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf30';
-import { formatMoney } from '../../core/formatters.js?v=20261117_cf30';
-import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261117_cf30';
-import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261117_cf30';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf30';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261117_cf30';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf35';
+import { findNodeById } from '../catalog/treeService.js?v=20261119_cf35';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf35';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf35';
+import { formatMoney } from '../../core/formatters.js?v=20261119_cf35';
+import { round2, hasOwnCotizaciones, getOwnWinnerCotizacion, calculateParentTotal, calculateProrrateoCascade } from '../../core/calculations.js?v=20261119_cf35';
+import { renderCotizacionesSidePanel } from './proveedoresView.js?v=20261119_cf35';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf35';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf35';
 
 /**
  * Devuelve la ruta jerárquica de nodos desde Nivel 1 hasta el nodo objetivo.
@@ -128,6 +128,34 @@ export function getCotizacionBlockMessage(status) {
     return `No se pueden agregar cotizaciones a este subconcepto porque [${ancClave}] ya tiene cotizaciones registradas.`;
   }
   return 'No se pueden agregar cotizaciones directas en este concepto porque sus subconceptos ya tienen cotizaciones registradas.';
+}
+
+/**
+ * Traslada la cotización ganadora al concepto: el concepto es el resultado de su cotización.
+ * Importe del concepto = costo total cotizado; cantidad/unidad = las cotizadas;
+ * P.U. y costo directo unitario = costo / cantidad (cuadra exacto aun con costos capturados a mano).
+ */
+function applyWinnerToNode(node, cot) {
+  if (!node || !cot) return;
+  const isParent = Array.isArray(node.children) && node.children.length > 0;
+  const cotQty = Number(cot.cantidad) > 0 ? Number(cot.cantidad) : 0;
+  const cost = (cot.costo !== undefined && cot.costo !== null && cot.costo !== '')
+    ? round2(Number(cot.costo) || 0)
+    : round2((Number(cot.monto) || 0) * (cotQty > 0 ? cotQty : 1));
+  cot.costo = cost;
+  cot.total = cost;
+  node.proveedorElegidoId = cot.id;
+  node.proveedorElegidoNombre = cot.proveedor;
+  node.costo_proveedor = cost;
+  if (!isParent) {
+    if (cotQty > 0) node.cantidad = cotQty;
+    if (cot.unidad) node.unidad = cot.unidad;
+    node.importe_calculado = cost;
+  }
+  const qtyBase = Number(node.cantidad) > 0 ? Number(node.cantidad) : 1;
+  const unitCost = round2(cost / qtyBase);
+  node.precioUnitario = (!isParent && cotQty > 0 && round2(Number(cot.monto) * cotQty) === cost) ? round2(cot.monto) : unitCost;
+  node.costoDirecto = node.precioUnitario;
 }
 
 function clearNodeWinnerSelection(node) {
@@ -288,15 +316,7 @@ export function addCotizacion(nodeId, data) {
 
   if (isWinner) {
     node.cotizaciones.forEach(c => { c.isGanador = false; });
-    node.proveedorElegidoId = newCot.id;
-    node.proveedorElegidoNombre = newCot.proveedor;
-    node.costo_proveedor = newCot.costo;
-    node.precioUnitario = newCot.monto;
-    if (!isParent) {
-      if (newCot.cantidad > 0) node.cantidad = newCot.cantidad;
-      if (newCot.unidad) node.unidad = newCot.unidad;
-      node.importe_calculado = newCot.costo;
-    }
+    applyWinnerToNode(node, newCot);
   } else if (!node.cotizaciones.some(c => Boolean(c.isGanador))) {
     // Mientras no exista una cotización seleccionada como ganadora, el importe del concepto permanece en 0
     clearNodeWinnerSelection(node);
@@ -349,29 +369,14 @@ export function updateCotizacion(nodeId, cotId, data) {
   if (data.isGanador !== undefined) {
     if (data.isGanador) {
       node.cotizaciones.forEach(c => { c.isGanador = (c.id === cotId); });
-      node.proveedorElegidoId = cotId;
-      node.proveedorElegidoNombre = cot.proveedor;
-      node.costo_proveedor = cot.costo;
-      node.precioUnitario = cot.monto;
-      if (!isParent) {
-        if (cot.cantidad > 0) node.cantidad = cot.cantidad;
-        if (cot.unidad) node.unidad = cot.unidad;
-        node.importe_calculado = cot.costo;
-      }
+      applyWinnerToNode(node, cot);
     } else if (cot.isGanador) {
       cot.isGanador = false;
       clearNodeWinnerSelection(node);
     }
   } else if (cot.isGanador) {
     // Si ya era ganador y cambió el monto o cantidad, actualizar nodo
-    node.proveedorElegidoNombre = cot.proveedor;
-    node.costo_proveedor = cot.costo;
-    node.precioUnitario = cot.monto;
-    if (!isParent) {
-      if (cot.cantidad > 0) node.cantidad = cot.cantidad;
-      if (cot.unidad) node.unidad = cot.unidad;
-      node.importe_calculado = cot.costo;
-    }
+    applyWinnerToNode(node, cot);
   }
 
   finalizeCotizacionMutation(node, `cotización de ${node.clave || 'concepto'}`);
@@ -429,17 +434,7 @@ export function setCotizacionGanadora(nodeId, cotId) {
     c.isGanador = (c.id === cotId);
   });
 
-  node.proveedorElegidoId = cotId;
-  node.proveedorElegidoNombre = chosen.proveedor;
-  node.costo_proveedor = chosenCost;
-  node.precioUnitario = round2(chosen.monto);
-
-  const isParent = Array.isArray(node.children) && node.children.length > 0;
-  if (!isParent) {
-    if (chosen.cantidad > 0) node.cantidad = chosen.cantidad;
-    if (chosen.unidad) node.unidad = chosen.unidad;
-    node.importe_calculado = chosenCost;
-  }
+  applyWinnerToNode(node, chosen);
 
   finalizeCotizacionMutation(node, `proveedor ganador en ${node.clave || 'concepto'}`);
 

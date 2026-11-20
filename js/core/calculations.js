@@ -1,5 +1,5 @@
-import { state } from '../state/store.js?v=20261117_cf30';
-import { formatMoney, round2, round5 } from './formatters.js?v=20261117_cf30';
+import { state } from '../state/store.js?v=20261119_cf35';
+import { formatMoney, round2, round5 } from './formatters.js?v=20261119_cf35';
 
 export { round2, round5 };
 
@@ -320,11 +320,15 @@ export function calculateParentDirectTotal(node) {
 
   if (hasOwnCotizaciones(node)) {
     const winner = getOwnWinnerCotizacion(node);
-    if (!winner) return 0;
-    const cdVal = (node.costoDirecto !== undefined && node.costoDirecto > 0)
-      ? node.costoDirecto
-      : winner.monto;
-    return round2(cant * round2(cdVal || 0));
+    if (!winner) {
+      // Sin ganadora el concepto vale 0; si es agrupador, sus subconceptos conservan su propio costo
+      if (Array.isArray(node.children) && node.children.length > 0) {
+        return round2(node.children.reduce((acc, child) => acc + calculateParentDirectTotal(child), 0));
+      }
+      return 0;
+    }
+    // El costo directo de un concepto cotizado es exactamente el costo total de su cotización ganadora
+    return round2(resolveNodePackageBudget(node) ?? 0);
   }
 
   if (!node.children || !Array.isArray(node.children) || node.children.length === 0) {

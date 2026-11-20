@@ -1,12 +1,12 @@
-import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261117_cf30';
-import { saveState } from '../../state/history.js?v=20261117_cf30';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf30';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261117_cf30';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261117_cf30';
-import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261117_cf30';
-import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261117_cf30';
-import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261117_cf30';
-import { round5 } from '../../core/formatters.js?v=20261117_cf30';
+import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261119_cf35';
+import { saveState } from '../../state/history.js?v=20261119_cf35';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf35';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf35';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf35';
+import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261119_cf35';
+import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261119_cf35';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf35';
+import { round5 } from '../../core/formatters.js?v=20261119_cf35';
 
 // Extractor robusto de JSON para respuestas de Gemini
 export function extractJsonFromAiResponse(text) {

@@ -3,11 +3,11 @@
 // y por Estimación Individual en la pestaña Estimaciones.
 // Cuando está bloqueado, solo permite consultar e imprimir la información (sin cambiar, mover ni editar).
 
-import { getActiveProjectId } from '../config/constants.js?v=20261117_cf30';
-import { showToast } from './notifications.js?v=20261117_cf30';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261117_cf30';
-import { isEstimacionLocked, toggleActiveEstimacionLockState, setEstimacionLocked } from '../modules/estimaciones/estimacionesModel.js?v=20261117_cf30';
-import { scheduleCronogramaCloudSync } from '../core/cloudModulesSyncService.js?v=20261117_cf30';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf35';
+import { showToast } from './notifications.js?v=20261119_cf35';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf35';
+import { isEstimacionLocked, toggleActiveEstimacionLockState, setEstimacionLocked } from '../modules/estimaciones/estimacionesModel.js?v=20261119_cf35';
+import { scheduleCronogramaCloudSync } from '../core/cloudModulesSyncService.js?v=20261119_cf35';
 
 const STORAGE_KEY_TAB_LOCKS_PREFIX = 'adm_arq_tab_locks_';
 

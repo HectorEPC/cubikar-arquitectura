@@ -8,8 +8,8 @@ import {
   resetPasswordForEmail,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../core/authService.js?v=20261117_cf30';
-import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261117_cf30';
+} from '../core/authService.js?v=20261119_cf35';
+import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261119_cf35';
 import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
@@ -22,9 +22,9 @@ import {
   getSavedUserProfile,
   markSessionOpen,
   setActiveWorkspaceData
-} from '../modules/portal/projectService.js?v=20261117_cf30';
-import { showToast } from '../ui/notifications.js?v=20261117_cf30';
-import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261117_cf30';
+} from '../modules/portal/projectService.js?v=20261119_cf35';
+import { showToast } from '../ui/notifications.js?v=20261119_cf35';
+import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf35';
 
 let authTab = 'login';
 let regSexo = 'Masculino';

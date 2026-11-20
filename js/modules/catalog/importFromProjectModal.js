@@ -1,16 +1,16 @@
 // js/modules/catalog/importFromProjectModal.js
 // Asistente visual para explorar, seleccionar y copiar conceptos con sus matrices APU desde otro proyecto
 
-import { state, persistLocalData } from '../../state/store.js?v=20261117_cf30';
-import { saveState } from '../../state/history.js?v=20261117_cf30';
-import { showToast } from '../../ui/notifications.js?v=20261117_cf30';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261117_cf30';
-import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject } from '../portal/projectService.js?v=20261117_cf30';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261117_cf30';
-import { recalculateClaves } from './treeService.js?v=20261117_cf30';
-import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261117_cf30';
-import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261117_cf30';
-import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261117_cf30';
+import { state, persistLocalData } from '../../state/store.js?v=20261119_cf35';
+import { saveState } from '../../state/history.js?v=20261119_cf35';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf35';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../../config/constants.js?v=20261119_cf35';
+import { getProjectsList, getProjectById, getCurrentUser, getProjectsForUser, canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf35';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf35';
+import { recalculateClaves } from './treeService.js?v=20261119_cf35';
+import { renderTAB1, highlightCatalogRowInPlace } from './catalogView.js?v=20261119_cf35';
+import { getEjecutivoCostPlusFactor, getOwnWinnerCotizacion, round2 } from '../../core/calculations.js?v=20261119_cf35';
+import { formatMoney, getCurrencySymbol } from '../../core/formatters.js?v=20261119_cf35';
 
 let activeSourceProjectId = null;
 let activeSourceTreeData = [];
