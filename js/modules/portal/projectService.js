@@ -1,7 +1,7 @@
 // js/modules/portal/projectService.js
 // Servicio centralizado para usuarios, proyectos multi-obra y almacenamiento aislado
 
-import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf36';
+import { enforceLocalDataOwner } from '../../core/localDataIsolation.js?v=20261119_cf37';
 import {
   STORAGE_KEY_USER,
   STORAGE_KEY_PROJECTS,
@@ -14,16 +14,16 @@ import {
   getSettingsKey,
   DEFAULT_STORAGE_KEY,
   DEFAULT_SETTINGS_KEY
-} from '../../config/constants.js?v=20261119_cf36';
+} from '../../config/constants.js?v=20261119_cf37';
 
 export const STORAGE_KEY_DELETED_PROJECTS = 'cubikar_deleted_projects_v1';
 export const STORAGE_KEY_TRASHED_PROJECTS = 'cubikar_trashed_project_ids_v1';
-import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf36';
-import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf36';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf36';
-import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf36';
-import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf36';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf36';
+import { defaultTreeData, defaultSettings } from '../../config/defaultData.js?v=20261119_cf37';
+import { cleanMojibake } from '../../core/textSanitizer.js?v=20261119_cf37';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf37';
+import { deleteProjectFromCloud, invalidateCloudProjectsCache, fetchCloudProjects, generateUUID, isValidUUID } from '../../core/cloudProjectService.js?v=20261119_cf37';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf37';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf37';
 
 // Avatares temáticos según sexo (SVGs ultraligeros de arquitectos e ingenieros con casco)
 export const AVATARS_BY_SEX = {
@@ -1733,7 +1733,7 @@ export function getTabAssignedMembers(projectId, tabId) {
 // Enviar proyecto a la Papelera (retención 7 días - solo Anfitrión)
 export async function deleteProject(projectId) {
   if (!projectId) return { success: false, error: 'Proyecto no especificado' };
-  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf36');
+  const { moveProjectToTrash } = await import('./trashService.js?v=20261119_cf37');
   const res = await moveProjectToTrash(projectId);
   return (res && typeof res === 'object') ? res : { success: Boolean(res) };
 }

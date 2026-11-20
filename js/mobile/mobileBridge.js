@@ -1,10 +1,10 @@
 // js/mobile/mobileBridge.js — Puente paralelo entre módulos reales de cubikar Arquitectura y la UI móvil
 
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf36';
-import { getCurrentUser, getProjectById, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf36';
-import { isNightMode } from '../ui/themeController.js?v=20261119_cf36';
-import { isTabLocked } from '../ui/tabLockController.js?v=20261119_cf36';
-import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects, triggerDebouncedCloudStateSync } from '../core/collaborationCloudService.js?v=20261119_cf36';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf37';
+import { getCurrentUser, getProjectById, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf37';
+import { isNightMode } from '../ui/themeController.js?v=20261119_cf37';
+import { isTabLocked } from '../ui/tabLockController.js?v=20261119_cf37';
+import { autoSyncCollaborationOnStartup, syncHostWorkspaceProjects, triggerDebouncedCloudStateSync } from '../core/collaborationCloudService.js?v=20261119_cf37';
 
 export function escapeHtml(str) {
   if (str === null || str === undefined) return '';

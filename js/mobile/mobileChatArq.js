@@ -1,7 +1,7 @@
 // js/mobile/mobileChatArq.js — Bitácora / Chat en tiempo real de cubikar Arquitectura
 
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf36';
-import { getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf36';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf37';
+import { getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf37';
 import {
   getMessageDivision,
   loadProjectChatMessages,
@@ -9,9 +9,9 @@ import {
   markActiveProjectChatMessagesAsRead,
   deleteProjectChatMessage,
   isChatMessageReadForCurrentUser
-} from '../modules/chat/projectChat.js?v=20261119_cf36';
-import { broadcastChatMessage, hydrateProjectChatFromCloud } from '../core/realtimeSync.js?v=20261119_cf36';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf36';
+} from '../modules/chat/projectChat.js?v=20261119_cf37';
+import { broadcastChatMessage, hydrateProjectChatFromCloud } from '../core/realtimeSync.js?v=20261119_cf37';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf37';
 
 const DIVISIONS = [
   { id: 'alcance_presupuesto', label: 'Alcances y Presupuesto' },
