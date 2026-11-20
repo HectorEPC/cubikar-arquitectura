@@ -1,6 +1,6 @@
 // js/mobile/mobileEstimacionesArq.js — Pestaña 5 de cubikar Arquitectura: Estimaciones (% Avance), Anticipo, IVA y Fotos
 
-import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf39';
+import { formatMoney, round2 } from '../core/formatters.js?v=20261119_cf40';
 import {
   getEstimacionesCalculatedData,
   createNewEstimacion,
@@ -10,10 +10,10 @@ import {
   setConceptoAvancePct,
   getConceptoFotosEstimacion,
   setConceptoFotosEstimacion
-} from '../modules/estimaciones/estimacionesModel.js?v=20261119_cf39';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
-import { showToast } from '../ui/notifications.js?v=20261119_cf39';
-import { escapeHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf39';
+} from '../modules/estimaciones/estimacionesModel.js?v=20261119_cf40';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf40';
+import { showToast } from '../ui/notifications.js?v=20261119_cf40';
+import { escapeHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261119_cf40';
 
 export function renderMobileEstimacionesArq(container, { openSheet, closeSheet }) {
   if (!container) return;

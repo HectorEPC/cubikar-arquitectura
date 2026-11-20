@@ -3,10 +3,10 @@
 // Analiza el Tipo de Obra, partidas, volúmenes, matrices APU y días inhábiles para proponer
 // duraciones realistas, dependencias Fin-a-Inicio libres de ciclos y frentes simultáneos.
 
-import { state, persistSettings } from '../../state/store.js?v=20261119_cf39';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf39';
-import { getProjectById } from '../portal/projectService.js?v=20261119_cf39';
-import { extractJsonFromAiResponse } from '../ai/geminiClient.js?v=20261119_cf39';
+import { state, persistSettings } from '../../state/store.js?v=20261119_cf40';
+import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf40';
+import { getProjectById } from '../portal/projectService.js?v=20261119_cf40';
+import { extractJsonFromAiResponse } from '../ai/geminiClient.js?v=20261119_cf40';
 import {
   extractScheduleItems,
   getScheduleSettings,
@@ -19,7 +19,7 @@ import {
   formatDate,
   addDays,
   diffDays
-} from './calendarioModel.js?v=20261119_cf39';
+} from './calendarioModel.js?v=20261119_cf40';
 
 export const WORK_TYPE_PROFILES = {
   edificacion: {

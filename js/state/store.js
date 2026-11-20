@@ -1,10 +1,10 @@
-import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261119_cf39';
-import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261119_cf39';
-import { syncActiveProjectSummary, getProjectById, getProjectsList, saveProjectsList, isProjectMarkedDeleted, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf39';
-import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261119_cf39';
-import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261119_cf39';
-import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261119_cf39';
-import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261119_cf39';
+import { getStorageKey, getSettingsKey, getActiveProjectId, STORAGE_KEY_CLIPBOARD } from '../config/constants.js?v=20261119_cf40';
+import { defaultTreeData, defaultSettings } from '../config/defaultData.js?v=20261119_cf40';
+import { syncActiveProjectSummary, getProjectById, getProjectsList, saveProjectsList, isProjectMarkedDeleted, canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf40';
+import { syncProjectToCloud, loadProjectTreeFromCloud } from '../core/cloudProjectService.js?v=20261119_cf40';
+import { broadcastProjectMutation } from '../core/realtimeSync.js?v=20261119_cf40';
+import { sanitizeCatalogNodes } from '../core/textSanitizer.js?v=20261119_cf40';
+import { CASA_LAURA_PROJECT } from '../modules/io/casaLauraData.js?v=20261119_cf40';
 
 // Estado global reactivo y centralizado de la aplicación
 export const state = {
@@ -177,6 +177,7 @@ export function initStore() {
     // Si el proyecto está activo, sincronizar con Supabase SIN pisar mutaciones locales concurrentes durante la carga
     if (activePId) {
       const bootMutationSeq = localTreeMutationSeq;
+      const prevSettingsRaw = typeof localStorage !== 'undefined' ? (localStorage.getItem(getSettingsKey(activePId)) || '') : '';
       loadProjectTreeFromCloud(activePId).then(cloudTree => {
         if (localTreeMutationSeq !== bootMutationSeq) {
           triggerDebouncedCloudSync();
@@ -184,46 +185,66 @@ export function initStore() {
         }
         let hasPendingInitial = false;
         try { hasPendingInitial = sessionStorage.getItem(`cubikar_pending_initial_upload_${activePId}`) === '1'; } catch (_) {}
+        let didSettingsChange = false;
+        try {
+          const rawS = localStorage.getItem(getSettingsKey(activePId));
+          if (rawS && rawS !== prevSettingsRaw) {
+            const parsedS = JSON.parse(rawS);
+            state.settings = Object.assign({}, defaultSettings, parsedS);
+            didSettingsChange = true;
+          }
+        } catch (_) {}
+
         if (Array.isArray(cloudTree)) {
           const currentProjMeta = getProjectById(activePId);
           const localHasNodes = savedData && Array.isArray(state.treeData) && state.treeData.length > 0;
           if (localHasNodes && isCloudDirty(activePId)) {
+            if (didSettingsChange && typeof window !== 'undefined') {
+              if (typeof window.renderBrandingUI === 'function') window.renderBrandingUI();
+              if (typeof window.updateSobrecostoBadge === 'function') window.updateSobrecostoBadge();
+            }
             triggerDebouncedCloudSync();
             return;
           }
           if ((hasPendingInitial || !currentProjMeta?.isCloudSynced) && localHasNodes && cloudTree.length < state.treeData.length) {
+            if (didSettingsChange && typeof window !== 'undefined') {
+              if (typeof window.renderBrandingUI === 'function') window.renderBrandingUI();
+              if (typeof window.updateSobrecostoBadge === 'function') window.updateSobrecostoBadge();
+            }
             triggerDebouncedCloudSync();
             return;
           }
           if (cloudTree.length > 0) {
             clearLegacyUnquotedDefaultPrices(cloudTree);
           }
-          try {
-            const rawS = localStorage.getItem(getSettingsKey(activePId));
-            if (rawS) {
-              const parsedS = JSON.parse(rawS);
-              if (parsedS?.presupuestoArq) {
-                state.settings.presupuestoArq = parsedS.presupuestoArq;
-              }
-            }
-          } catch (_) {}
           const currentJson = JSON.stringify(state.treeData || []);
           const incomingJson = JSON.stringify(cloudTree);
-          if (currentJson !== incomingJson && (cloudTree.length > 0 || !savedData)) {
+          const treeChanged = currentJson !== incomingJson && (cloudTree.length > 0 || !savedData);
+          if (treeChanged) {
             state.treeData = cloudTree;
             localStorage.setItem(getStorageKey(activePId), incomingJson);
             if (currentProjMeta?.isCloudSynced && !hasPendingInitial) {
               markCatalogTreeSynced(activePId, state.treeData);
-            }
-            if (typeof window !== 'undefined') {
-              if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
-              if (typeof window.renderTAB1 === 'function') window.renderTAB1();
             }
           } else if (cloudTree.length === 0 && Array.isArray(state.treeData) && state.treeData.length > 0) {
             triggerDebouncedCloudSync();
           } else if (currentJson === incomingJson && currentProjMeta?.isCloudSynced && !hasPendingInitial) {
             markCatalogTreeSynced(activePId, state.treeData);
           }
+          if ((treeChanged || didSettingsChange) && typeof window !== 'undefined') {
+            if (typeof window.calculateProrrateoCascade === 'function') {
+              try { window.calculateProrrateoCascade(state.treeData); } catch (_) {}
+            }
+            if (typeof window.renderBrandingUI === 'function') window.renderBrandingUI();
+            if (typeof window.updateSobrecostoBadge === 'function') window.updateSobrecostoBadge();
+            if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
+            if (typeof window.renderTAB1 === 'function') window.renderTAB1();
+          }
+        } else if (didSettingsChange && typeof window !== 'undefined') {
+          if (typeof window.renderBrandingUI === 'function') window.renderBrandingUI();
+          if (typeof window.updateSobrecostoBadge === 'function') window.updateSobrecostoBadge();
+          if (typeof window.updateGrandTotal === 'function') window.updateGrandTotal();
+          if (typeof window.renderTAB1 === 'function') window.renderTAB1();
         }
       }).catch(err => console.warn('[CloudSync] Fallo al refrescar árbol desde la nube:', err));
     }

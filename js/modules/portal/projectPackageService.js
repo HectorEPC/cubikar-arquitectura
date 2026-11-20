@@ -9,9 +9,9 @@
 import {
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261119_cf39';
-import { defaultSettings } from '../../config/defaultData.js?v=20261119_cf39';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf39';
+} from '../../config/constants.js?v=20261119_cf40';
+import { defaultSettings } from '../../config/defaultData.js?v=20261119_cf40';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf40';
 import {
   generateUUID,
   isValidUUID,
@@ -19,7 +19,7 @@ import {
   loadProjectTreeFromCloud,
   syncProjectToCloud,
   invalidateCloudProjectsCache
-} from '../../core/cloudProjectService.js?v=20261119_cf39';
+} from '../../core/cloudProjectService.js?v=20261119_cf40';
 import {
   hydrateProjectModulesFromCloud,
   syncBitacoraNow,
@@ -27,7 +27,7 @@ import {
   syncEstimacionesNow,
   syncCronogramaNow,
   syncChatNow
-} from '../../core/cloudModulesSyncService.js?v=20261119_cf39';
+} from '../../core/cloudModulesSyncService.js?v=20261119_cf40';
 import {
   AVATARS_BY_SEX,
   getCurrentUser,
@@ -40,8 +40,8 @@ import {
   calculateTreeTotal,
   countTreeConcepts,
   countTreePartidas
-} from './projectService.js?v=20261119_cf39';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf39';
+} from './projectService.js?v=20261119_cf40';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf40';
 
 const PACKAGE_SCHEMA = 'cubikar.project.package';
 const PACKAGE_FORMAT_VERSION = 1;

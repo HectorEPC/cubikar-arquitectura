@@ -1,8 +1,8 @@
 // js/core/realtimeSync.js
 // Sincronización en tiempo real vía WebSockets (Supabase Realtime) y Colaboración en vivo
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf39';
-import { state } from '../state/store.js?v=20261119_cf39';
+import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf40';
+import { state } from '../state/store.js?v=20261119_cf40';
 import {
   getCurrentUser,
   getStoredInvitations,
@@ -21,10 +21,10 @@ import {
   unmarkProjectTrashedLocal,
   isProjectTrashedLocal,
   saveCurrentUser
-} from '../modules/portal/projectService.js?v=20261119_cf39';
-import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf39';
-import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261119_cf39';
-import { showToast } from '../ui/notifications.js?v=20261119_cf39';
+} from '../modules/portal/projectService.js?v=20261119_cf40';
+import { getActiveProjectId, getStorageKey, getSettingsKey } from '../config/constants.js?v=20261119_cf40';
+import { findNodeById, recalculateClaves } from '../modules/catalog/treeService.js?v=20261119_cf40';
+import { showToast } from '../ui/notifications.js?v=20261119_cf40';
 
 let activeChannel = null;
 let currentSubscribedProjectId = null;
@@ -930,6 +930,14 @@ export function handleIncomingProjectUpdate(data) {
     } catch (_) {}
     if (isCurrentActive) {
       state.settings = Object.assign({}, state.settings, data.settings);
+      if (typeof window !== 'undefined') {
+        if (typeof window.renderBrandingUI === 'function') {
+          try { window.renderBrandingUI(); } catch (_) {}
+        }
+        if (typeof window.updateSobrecostoBadge === 'function') {
+          try { window.updateSobrecostoBadge(); } catch (_) {}
+        }
+      }
     }
   }
 
@@ -2967,19 +2975,75 @@ export function broadcastChatDelete(projectId, messageId) {
 }
 
 const CHAT_MENSAJES_BASE_COLS = ['id', 'proyecto_id', 'autor_nombre', 'autor_email', 'mensaje', 'created_at'];
+const CHAT_MENSAJES_OPTIONAL_COLS = [
+  'canal', 'etiquetas', 'partida_id', 'payload_json',
+  'canal_tipo', 'canal_id', 'canal_label', 'menciones', 'mentions',
+  'leido_por', 'adjuntos', 'metadata', 'updated_at', 'autor_avatar', 'autor_color'
+];
+const CHAT_MISSING_COLS_STORAGE_KEY = 'cubikar_chat_missing_cols_v1';
 const missingChatMensajeColumns = new Set();
 const inFlightChatHydrateByProject = new Map();
 const lastChatHydrateAtByProject = new Map();
 let inFlightAllChatHydratePromise = null;
 
+function loadPersistedMissingChatCols() {
+  try {
+    const raw = localStorage.getItem(CHAT_MISSING_COLS_STORAGE_KEY);
+    if (!raw) return missingChatMensajeColumns;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      parsed.forEach((col) => {
+        if (col && typeof col === 'string' && !CHAT_MENSAJES_BASE_COLS.includes(col)) {
+          missingChatMensajeColumns.add(col);
+        }
+      });
+    }
+  } catch (_) {}
+  return missingChatMensajeColumns;
+}
+
+function savePersistedMissingChatCol(col) {
+  if (!col || typeof col !== 'string' || CHAT_MENSAJES_BASE_COLS.includes(col)) return;
+  loadPersistedMissingChatCols();
+  missingChatMensajeColumns.add(col);
+  try {
+    localStorage.setItem(CHAT_MISSING_COLS_STORAGE_KEY, JSON.stringify([...missingChatMensajeColumns]));
+  } catch (_) {}
+}
+
+function reconcileChatSchemaFromRow(sampleRow) {
+  if (!sampleRow || typeof sampleRow !== 'object') return;
+  loadPersistedMissingChatCols();
+  let changed = false;
+  CHAT_MENSAJES_OPTIONAL_COLS.forEach((col) => {
+    const existsInRow = Object.prototype.hasOwnProperty.call(sampleRow, col);
+    if (existsInRow) {
+      if (missingChatMensajeColumns.delete(col)) changed = true;
+    } else if (!missingChatMensajeColumns.has(col)) {
+      missingChatMensajeColumns.add(col);
+      changed = true;
+    }
+  });
+  if (changed) {
+    try {
+      localStorage.setItem(CHAT_MISSING_COLS_STORAGE_KEY, JSON.stringify([...missingChatMensajeColumns]));
+    } catch (_) {}
+  }
+}
+
+loadPersistedMissingChatCols();
+
 async function upsertChatRowsResilient(sb, rowOrRows) {
   const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
   if (!sb || typeof sb.from !== 'function' || rows.length === 0) return { error: null };
-  const stripMissing = (list) => list.map((r) => {
-    const clean = { ...r };
-    missingChatMensajeColumns.forEach((col) => { delete clean[col]; });
-    return clean;
-  });
+  const stripMissing = (list) => {
+    loadPersistedMissingChatCols();
+    return list.map((r) => {
+      const clean = { ...r };
+      missingChatMensajeColumns.forEach((col) => { delete clean[col]; });
+      return clean;
+    });
+  };
   let payload = stripMissing(rows);
   for (let attempt = 0; attempt < 8; attempt++) {
     const body = (!Array.isArray(rowOrRows) && payload.length === 1) ? payload[0] : payload;
@@ -2989,7 +3053,7 @@ async function upsertChatRowsResilient(sb, rowOrRows) {
     const m = msg.match(/Could not find the ['"]([^'"]+)['"] column/i)
       || msg.match(/column\s+["']?([a-z0-9_]+)["']?(?:\s+of\s+relation)?\s+does not exist/i);
     if (m && m[1] && !CHAT_MENSAJES_BASE_COLS.includes(m[1])) {
-      missingChatMensajeColumns.add(m[1]);
+      savePersistedMissingChatCol(m[1]);
       payload = stripMissing(payload);
       continue;
     }
@@ -3108,6 +3172,7 @@ export async function hydrateProjectChatFromCloud(projectId, opts = {}) {
       }
 
       if (Array.isArray(data) && data.length > 0) {
+        reconcileChatSchemaFromRow(data[0]);
         const chatKey = resolveChatStorageKey(effectivePid);
         let localMessages = [];
         try {
@@ -3222,6 +3287,7 @@ export async function hydrateAllUserProjectsChatFromCloud(force = false) {
 
       if (error || !Array.isArray(data) || data.length === 0) return false;
 
+      reconcileChatSchemaFromRow(data[0]);
       const rowsByProj = new Map();
       data.forEach(row => {
         if (!row || !row.proyecto_id || String(row.proyecto_id).startsWith('__')) return;
