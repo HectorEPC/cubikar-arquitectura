@@ -133,6 +133,30 @@ export default async function handler(req, res) {
     });
   }
 
+  // 3B. La llave de la plataforma solo se usa con una sesión válida de Cubikar (evita consumo anónimo)
+  if (!userProvidedKey) {
+    const authHeader = String(req.headers.authorization || '');
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    const sbUrl = String(process.env.SUPABASE_URL || 'https://hxyzvxueoqvvjyehfpym.supabase.co').replace(/\/+$/, '');
+    const sbAnon = String(process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4eXp2eHVlb3F2dmp5ZWhmcHltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQxMTYwODAsImV4cCI6MjEwOTY5MjA4MH0.q3P-_HZ11PP5dgCkAX7o5TZGqVAoqVv438W6coZiYeA').trim();
+    let sessionOk = false;
+    if (bearer && sbAnon) {
+      try {
+        const uRes = await fetch(`${sbUrl}/auth/v1/user`, { headers: { apikey: sbAnon, Authorization: `Bearer ${bearer}` } });
+        sessionOk = uRes.ok;
+      } catch (_) {
+        sessionOk = false;
+      }
+    }
+    if (!sessionOk) {
+      return res.status(401).json({
+        success: false,
+        errorCode: 'AUTH_REQUIRED_FOR_PLATFORM_AI',
+        error: 'Inicia sesión en tu cuenta o ingresa tu propia Gemini API Key para usar el servicio de IA.'
+      });
+    }
+  }
+
   // 4. Validación y Sanitización del Input
   const node = body.node || {};
   const descripcion = String(node.descripcion || body.descripcion || '').trim().slice(0, 500);

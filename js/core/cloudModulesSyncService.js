@@ -3,10 +3,75 @@
 // Seguimiento/Bitácora, Compras/Proveedores, Estimaciones, Cronograma/Calendario y Chat de Obra.
 // Alineado 100% al esquema real PostgreSQL de Cubikar.
 
-import { getActiveProjectId } from '../config/constants.js?v=20261119_cf35';
-import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf35';
-import { isValidUUID } from './cloudProjectService.js?v=20261119_cf35';
-import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf35';
+import { getActiveProjectId } from '../config/constants.js?v=20261119_cf36';
+import { supabase, isSupabaseConfigured } from './supabaseClient.js?v=20261119_cf36';
+import { isValidUUID } from './cloudProjectService.js?v=20261119_cf36';
+import { getProjectById, getCurrentUser } from '../modules/portal/projectService.js?v=20261119_cf36';
+
+// ============================================================================
+// GUARDIA DE HIDRATACIÓN (protección contra borrado en espejo de datos de la nube)
+// ============================================================================
+const MODULE_HYDRATED_PREFIX = 'cubikar_hydrated_';
+const IGNORABLE_HYDRATE_ERROR_CODES = new Set(['PGRST116', 'PGRST205', '42P01', '42703', 'PGRST204']);
+
+export function isProjectModulesHydrated(...ids) {
+  try {
+    return ids.some(id => id && localStorage.getItem(MODULE_HYDRATED_PREFIX + id));
+  } catch (_) {
+    return false;
+  }
+}
+
+function markProjectModulesHydrated(...ids) {
+  const stamp = String(Date.now());
+  ids.filter(Boolean).forEach(id => { try { localStorage.setItem(MODULE_HYDRATED_PREFIX + id, stamp); } catch (_) {} });
+}
+
+function isBlockingHydrateError(err) {
+  if (!err) return false;
+  const code = String(err.code || '');
+  return !IGNORABLE_HYDRATE_ERROR_CODES.has(code);
+}
+
+// Envuelve el cliente para detectar respuestas con error durante la hidratación (Supabase no lanza excepciones)
+function trackSupabaseErrors(client, onError) {
+  if (!client || typeof client.from !== 'function') return client;
+  const wrapBuilder = (b) => new Proxy(b, {
+    get(t, p) {
+      if (p === 'then') {
+        return (res, rej) => t.then((r) => { if (r && r.error) onError(r.error); return r; }).then(res, rej);
+      }
+      const v = t[p];
+      if (typeof v === 'function') {
+        return (...args) => {
+          const out = v.apply(t, args);
+          return (out && typeof out === 'object' && typeof out.then === 'function') ? wrapBuilder(out) : out;
+        };
+      }
+      return v;
+    }
+  });
+  return new Proxy(client, {
+    get(t, p) {
+      if (p === 'from') return (...a) => wrapBuilder(t.from(...a));
+      const v = t[p];
+      return typeof v === 'function' ? v.bind(t) : v;
+    }
+  });
+}
+
+const pendingHydrationResync = new Set();
+function deferSyncUntilHydrated(projectId) {
+  const pid = String(projectId || '').trim();
+  if (!pid || pendingHydrationResync.has(pid)) return;
+  pendingHydrationResync.add(pid);
+  setTimeout(() => {
+    Promise.resolve()
+      .then(() => hydrateProjectModulesFromCloud(pid, { force: true }))
+      .catch(() => {})
+      .finally(() => pendingHydrationResync.delete(pid));
+  }, 0);
+}
 
 const syncTimers = {
   bitacora: null,
@@ -146,6 +211,10 @@ export async function syncBitacoraNow(projectId = null) {
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
+  if (!isProjectModulesHydrated(pid, cloudId)) {
+    deferSyncUntilHydrated(pid);
+    return false;
+  }
 
   const raw = localStorage.getItem(`adm_arq_seguimiento_${pid}`)
     || localStorage.getItem(`adm_arq_bitacora_${pid}`)
@@ -250,6 +319,10 @@ export async function syncExpensesNow(projectId = null) {
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
+  if (!isProjectModulesHydrated(pid, cloudId)) {
+    deferSyncUntilHydrated(pid);
+    return false;
+  }
 
   const rawCompras = localStorage.getItem(`adm_arq_compras_${pid}`);
   const rawProveedores = localStorage.getItem(`adm_arq_proveedores_${pid}`);
@@ -381,6 +454,10 @@ export async function syncEstimacionesNow(projectId = null) {
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
+  if (!isProjectModulesHydrated(pid, cloudId)) {
+    deferSyncUntilHydrated(pid);
+    return false;
+  }
 
   const raw = localStorage.getItem(`estimaciones_arq_data_${pid}`)
     || localStorage.getItem(`estimaciones_data_${pid}`);
@@ -497,6 +574,10 @@ export async function syncCronogramaNow(projectId = null) {
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
+  if (!isProjectModulesHydrated(pid, cloudId)) {
+    deferSyncUntilHydrated(pid);
+    return false;
+  }
 
   let scheduleCfg = {};
   let workdaysCfg = {};
@@ -553,6 +634,10 @@ export async function syncChatNow(projectId = null) {
   const pid = projectId || getActiveProjectId();
   const cloudId = resolveCloudProjectUuid(pid);
   if (!cloudId) return false;
+  if (!isProjectModulesHydrated(pid, cloudId)) {
+    deferSyncUntilHydrated(pid);
+    return false;
+  }
 
   const raw = localStorage.getItem(`adm_arq_project_chat_${pid}`);
   if (!raw) return false;
@@ -621,6 +706,7 @@ export async function hydrateProjectModulesFromCloud(projectId = null, opts = {}
 
   const runPromise = (async () => {
     try {
+    const wasHydratedBefore = isProjectModulesHydrated(pid, cloudId);
     const [
       bitCfgRes,
       bitNotasRes,
@@ -938,6 +1024,20 @@ export async function hydrateProjectModulesFromCloud(projectId = null, opts = {}
 
     if (changed && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('cubikar:cloud-modules-hydrated', { detail: { projectId: pid, cloudId } }));
+    }
+
+    const hydrateErrors = [bitCfgRes, bitNotasRes, expRes, provRes, estRes, cronoRes, chatRes]
+      .filter(r => r && r.error && isBlockingHydrateError(r.error)).length;
+    if (hydrateErrors === 0) {
+      markProjectModulesHydrated(pid, cloudId);
+      if (!wasHydratedBefore) {
+        [scheduleBitacoraCloudSync, scheduleExpensesCloudSync, scheduleEstimacionesCloudSync,
+          scheduleCronogramaCloudSync, scheduleChatCloudSync]
+          .forEach(fn => { try { fn(pid); } catch (_) {} });
+      }
+    } else {
+      console.warn(`[CloudModulesSync] Hidratación incompleta (${hydrateErrors} errores): sincronización de módulos en pausa para proteger la nube.`);
+      lastModuleHydrateAtByProject.delete(cacheKey);
     }
 
     return changed;

@@ -165,10 +165,10 @@ async function isVerifiedAdmin(callerEmail, sbUrl, serviceRoleKey, callerToken, 
   if (!serviceRoleKey && (!sbAnonKey || !callerToken)) return false;
 
   try {
-    const safeEmail = sanitizePostgrestFilterTerm(email);
+    const safeEmail = String(email || '').trim().toLowerCase();
     if (!safeEmail) return false;
     const res = await fetch(
-      `${sbUrl}/rest/v1/cubikar_registros?email=ilike.${encodeURIComponent(safeEmail)}&select=email,metadata&limit=1`,
+      `${sbUrl}/rest/v1/cubikar_registros?email=eq.${encodeURIComponent(String(safeEmail || '').toLowerCase().trim())}&select=email,metadata&limit=1`,
       {
         headers: buildSupabaseReadHeaders(serviceRoleKey, sbAnonKey, callerToken)
       }
@@ -813,9 +813,9 @@ export default async function handler(req, res) {
       let targetEmpresaId = null;
       if (serviceRoleKey) {
         try {
-          const safeEmail = sanitizePostgrestFilterTerm(rawEmail);
+          const safeEmail = String(rawEmail || '').trim().toLowerCase();
           const perfRes = await fetch(
-            `${sbUrl}/rest/v1/perfiles?email=ilike.${encodeURIComponent(safeEmail)}&select=empresa_id,empresas(id,plan)&limit=1`,
+            `${sbUrl}/rest/v1/perfiles?email=eq.${encodeURIComponent(String(safeEmail || '').toLowerCase().trim())}&select=empresa_id,empresas(id,plan)&limit=1`,
             {
               headers: buildSupabaseAdminHeaders(serviceRoleKey)
             }
@@ -896,7 +896,7 @@ export default async function handler(req, res) {
       if (!serviceRoleKey) {
         return res.status(503).json({ error: 'SUPABASE_SERVICE_ROLE_KEY no configurada en el servidor.' });
       }
-      const targetEmail = sanitizePostgrestFilterTerm(String(body.email || '').trim().toLowerCase());
+      const targetEmail = String(body.email || '').trim().toLowerCase();
       if (!targetEmail || targetEmail === MASTER_ADMIN_EMAIL.toLowerCase()) {
         return res.status(400).json({ error: 'Correo inválido o protegido.' });
       }
@@ -913,7 +913,7 @@ export default async function handler(req, res) {
 
       try {
         const perfRes = await fetch(
-          `${sbUrl}/rest/v1/perfiles?email=ilike.${encodeURIComponent(targetEmail)}&select=id,empresa_id&limit=1`,
+          `${sbUrl}/rest/v1/perfiles?email=eq.${encodeURIComponent(String(targetEmail || '').toLowerCase().trim())}&select=id,empresa_id&limit=1`,
           { headers: buildSupabaseAdminHeaders(serviceRoleKey) }
         );
         const rows = perfRes.ok ? await perfRes.json() : [];
@@ -1021,13 +1021,13 @@ export default async function handler(req, res) {
 
       for (const targetEmail of targets) {
         try {
-          const safeTarget = sanitizePostgrestFilterTerm(targetEmail);
+          const safeTarget = String(targetEmail || '').trim().toLowerCase();
           if (!safeTarget) continue;
-          await fetch(`${sbUrl}/rest/v1/perfiles?email=ilike.${encodeURIComponent(safeTarget)}`, {
+          await fetch(`${sbUrl}/rest/v1/perfiles?email=eq.${encodeURIComponent(String(safeTarget || '').toLowerCase().trim())}`, {
             method: 'DELETE',
             headers: buildSupabaseAdminHeaders(serviceRoleKey)
           });
-          await fetch(`${sbUrl}/rest/v1/cubikar_registros?email=ilike.${encodeURIComponent(safeTarget)}`, {
+          await fetch(`${sbUrl}/rest/v1/cubikar_registros?email=eq.${encodeURIComponent(String(safeTarget || '').toLowerCase().trim())}`, {
             method: 'DELETE',
             headers: buildSupabaseAdminHeaders(serviceRoleKey)
           });
@@ -1048,7 +1048,7 @@ export default async function handler(req, res) {
       if (!callerIsAdmin) {
         return res.status(403).json({ error: 'Acceso denegado. Solo administradores autorizados.' });
       }
-      const targetEmail = sanitizePostgrestFilterTerm(String(body.email || '').trim().toLowerCase());
+      const targetEmail = String(body.email || '').trim().toLowerCase();
       if (!targetEmail || !targetEmail.includes('@')) {
         return res.status(400).json({ error: 'Correo de co-administrador inválido.' });
       }
@@ -1094,7 +1094,7 @@ export default async function handler(req, res) {
         let existingRow = null;
 
         const checkRes = await fetch(
-          `${sbUrl}/rest/v1/cubikar_registros?email=ilike.${encodeURIComponent(targetEmail)}&select=email,nombre,metadata&limit=1`,
+          `${sbUrl}/rest/v1/cubikar_registros?email=eq.${encodeURIComponent(String(targetEmail || '').toLowerCase().trim())}&select=email,nombre,metadata&limit=1`,
           { headers: buildSupabaseReadHeaders(serviceRoleKey, sbAnonKey, caller.token) }
         );
         if (checkRes.ok) {

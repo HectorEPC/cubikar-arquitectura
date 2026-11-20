@@ -1,12 +1,13 @@
-import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261119_cf35';
-import { saveState } from '../../state/history.js?v=20261119_cf35';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf35';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf35';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf35';
-import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261119_cf35';
-import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261119_cf35';
-import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf35';
-import { round5 } from '../../core/formatters.js?v=20261119_cf35';
+import { state, persistSettings, persistLocalData } from '../../state/store.js?v=20261119_cf36';
+import { saveState } from '../../state/history.js?v=20261119_cf36';
+import { showToast } from '../../ui/notifications.js?v=20261119_cf36';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf36';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf36';
+import { renderAPUInsumos, renderInsumosUnitarios } from '../apu/apuView.js?v=20261119_cf36';
+import { closeAiGeneratorModal, openAiGeneratorModal, aiModalTargetMode, aiModalSingleNodeId } from '../../ui/modalController.js?v=20261119_cf36';
+import { round2, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf36';
+import { round5 } from '../../core/formatters.js?v=20261119_cf36';
+import { getSupabaseClient } from '../../core/supabaseClient.js?v=20261119_cf36';
 
 // Extractor robusto de JSON para respuestas de Gemini
 export function extractJsonFromAiResponse(text) {
@@ -147,6 +148,13 @@ export async function generarMatrizConceptoActivoGoogleIA(targetNodeId = null) {
     if (state.settings?.apiKey) {
       headers['X-Gemini-Key'] = state.settings.apiKey;
     }
+    // Sesión de Cubikar: requerida por el servidor para usar la llave de IA de la plataforma
+    try {
+      const sbc = getSupabaseClient();
+      const sess = sbc ? await sbc.auth.getSession() : null;
+      const accessToken = sess?.data?.session?.access_token;
+      if (accessToken) headers.Authorization = 'Bearer ' + accessToken;
+    } catch (_) {}
 
     const serializedBody = JSON.stringify(payload);
     let response = null;

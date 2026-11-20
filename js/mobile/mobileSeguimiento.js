@@ -1,11 +1,11 @@
 // js/mobile/mobileSeguimiento.js — Pestaña 3 de cubikar Arquitectura: Seguimiento de Entregables, Estatus y % Avance Ponderado
 
-import { state } from '../state/store.js?v=20261119_cf35';
-import { ESTATUS_OPTIONS, calcularAvancePonderado, updateEntregableSeguimiento } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf35';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf35';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf35';
-import { showToast } from '../ui/notifications.js?v=20261119_cf35';
-import { escapeHtml } from './mobileBridge.js?v=20261119_cf35';
+import { state } from '../state/store.js?v=20261119_cf36';
+import { ESTATUS_OPTIONS, calcularAvancePonderado, updateEntregableSeguimiento } from '../modules/seguimiento/seguimientoView.js?v=20261119_cf36';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261119_cf36';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261119_cf36';
+import { showToast } from '../ui/notifications.js?v=20261119_cf36';
+import { escapeHtml } from './mobileBridge.js?v=20261119_cf36';
 
 let statusFilter = 'all';
 
