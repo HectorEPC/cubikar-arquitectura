@@ -5,7 +5,7 @@
 // cursor virtual animado con clic ripple sobre elementos reales,
 // narración fluida por voz natural en español con oraciones completas y subtítulos sincronizados.
 
-import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261119_cf43';
+import { renderModuleVisualScene } from './realisticSimulatorShell.js?v=20261121_cf44';
 
 let isVideoModalOpen = false;
 let currentModuleId = 1;

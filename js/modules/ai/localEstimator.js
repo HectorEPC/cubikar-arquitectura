@@ -9,30 +9,30 @@
 //         descomponiendo analíticamente todas las piezas, materiales, cuadrillas de mano de obra,
 //         equipos/maquinaria y herramienta menor (3% MO), cotizándolos con los catálogos locales.
 
-import { state, persistLocalData } from '../../state/store.js?v=20261119_cf43';
-import { saveState } from '../../state/history.js?v=20261119_cf43';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
-import { formatMoney, round2, round5 } from '../../core/formatters.js?v=20261119_cf43';
-import { getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261119_cf43';
-import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261119_cf43';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261119_cf43';
-import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from '../apu/apuView.js?v=20261119_cf43';
-import { closeAiGeneratorModal } from '../../ui/modalController.js?v=20261119_cf43';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf43';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261119_cf43';
+import { state, persistLocalData } from '../../state/store.js?v=20261121_cf44';
+import { saveState } from '../../state/history.js?v=20261121_cf44';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
+import { formatMoney, round2, round5 } from '../../core/formatters.js?v=20261121_cf44';
+import { getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261121_cf44';
+import { findNodeById, getNodeHierarchyPath, getSelectedLeafConcepts } from '../catalog/treeService.js?v=20261121_cf44';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261121_cf44';
+import { renderAPUInsumos, renderInsumosUnitarios, toggleApuSection } from '../apu/apuView.js?v=20261121_cf44';
+import { closeAiGeneratorModal } from '../../ui/modalController.js?v=20261121_cf44';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf44';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261121_cf44';
 import {
   getReferenceDatabaseStats,
   listReferenceCatalogs,
   getItemsByCatalogIds
-} from '../reference/referenceDb.js?v=20261119_cf43';
-import { installPresetCatalog } from '../reference/presetCatalogs.js?v=20261119_cf43';
+} from '../reference/referenceDb.js?v=20261121_cf44';
+import { installPresetCatalog } from '../reference/presetCatalogs.js?v=20261121_cf44';
 import {
   generateLocalMatrix,
   buildSupplyIndex,
   flattenPresetData,
   matrixDirectCost
-} from './localMatrixEngine.js?v=20261119_cf43';
-import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261119_cf43';
+} from './localMatrixEngine.js?v=20261121_cf44';
+import { CASA_LAURA_PROJECT } from '../io/casaLauraData.js?v=20261121_cf44';
 
 // Modo de destino del modal: 'single' (solo concepto activo en matriz) o 'batch' (conceptos con casilla)
 export let localModalTargetMode = 'single';

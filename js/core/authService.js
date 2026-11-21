@@ -1,12 +1,12 @@
 // js/core/authService.js
 // Servicio de Autenticación integrado con Supabase Auth y tabla public.perfiles
 
-import { STORAGE_KEY_USER } from '../config/constants.js?v=20261119_cf43';
-import { getSupabaseClient, isSupabaseConfigured, getSupabaseConfig } from './supabaseClient.js?v=20261119_cf43';
-import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261119_cf43';
+import { STORAGE_KEY_USER } from '../config/constants.js?v=20261121_cf44';
+import { getSupabaseClient, isSupabaseConfigured, getSupabaseConfig } from './supabaseClient.js?v=20261121_cf44';
+import { getCurrentUser, saveCurrentUser, markSessionOpen, markSessionClosed, getClosedSessionsList, saveRegisteredUserAccount, enforceGlobalSessionRevocation } from '../modules/portal/projectService.js?v=20261121_cf44';
 
 export { enforceGlobalSessionRevocation };
-import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261119_cf43';
+import { restoreUserCollaborationFromCloud, autoSyncCollaborationOnStartup, isRecentInternalCloudAuthUpdate } from './collaborationCloudService.js?v=20261121_cf44';
 import {
   writeSharedSsoCookie,
   clearSharedSsoCookie,
@@ -16,7 +16,7 @@ import {
   scrubSsoHashParams,
   hasPendingIncomingSso,
   getLastSignOutTimestamp
-} from './ssoHelper.js?v=20261119_cf43';
+} from './ssoHelper.js?v=20261121_cf44';
 
 const GOOGLE_CLIENT_ID = '1097638023851-36b44hlrj7fgslfcmqlvf77dk89h7eus.apps.googleusercontent.com';
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';

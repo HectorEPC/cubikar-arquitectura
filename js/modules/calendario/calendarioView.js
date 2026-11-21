@@ -1,17 +1,18 @@
-﻿import { printCalendarioObraFormat } from '../io/printService.js?v=20261119_cf43';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261119_cf43';
+﻿import { printCalendarioObraFormat } from '../io/printService.js?v=20261121_cf44';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261121_cf44';
 // js/modules/calendario/calendarioView.js
 // Renderizador y controlador de la pestaña CALENDARIO DE OBRA
 // Diseño ejecutivo de alta fidelidad, interactivo y sincronizado 100% con Catálogo Base
 
-import { state } from '../../state/store.js?v=20261119_cf43';
-import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261119_cf43';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
-import { isNightMode } from '../../ui/themeController.js?v=20261119_cf43';
-import { isTabLocked, guardTabUnlocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261119_cf43';
-import { getActiveProjectId } from '../../config/constants.js?v=20261119_cf43';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261119_cf43';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261119_cf43';
+import { state } from '../../state/store.js?v=20261121_cf44';
+import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261121_cf44';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
+import { isNightMode } from '../../ui/themeController.js?v=20261121_cf44';
+import { isTabLocked, guardTabUnlocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261121_cf44';
+import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf44';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf44';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261121_cf44';
+import { openAutoProgramModal } from './calendarioAutoProgramView.js?v=20261121_cf44';
 import {
   extractScheduleItems,
   ensureInitialDates,
@@ -52,14 +53,14 @@ import {
   hasScheduleRedoSnapshot,
   undoLastScheduleChange,
   redoLastScheduleChange
-} from './calendarioModel.js?v=20261119_cf43';
+} from './calendarioModel.js?v=20261121_cf44';
 import {
   WORK_TYPE_PROFILES,
   detectProjectWorkType,
   generateLocalConstructiveProposal,
   generateGeminiConstructiveProposal
-} from './calendarioAiService.js?v=20261119_cf43';
-import { exportScheduleToExcel } from './calendarioExporter.js?v=20261119_cf43';
+} from './calendarioAiService.js?v=20261121_cf44';
+import { exportScheduleToExcel } from './calendarioExporter.js?v=20261121_cf44';
 
 let currentScheduleData = null;
 let calendarioLinkClickMode = false;
@@ -240,9 +241,9 @@ export function renderCalendarioObra() {
             `).join('')}
           </select>
 
-          <!-- 5. "%" Auto-Programar -->
-          <button type="button" onclick="triggerAutoDistributeSchedule()" id="btn-calendario-auto-pct" ${isCalLocked ? 'disabled' : ''} class="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] p-1.5 rounded flex items-center justify-center font-medium shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0" title="${isCalLocked ? 'Calendario bloqueado (Solo consulta e impresión)' : 'Auto-Programar conceptos secuencialmente (%)'}">
-            <i class="fa-solid fa-percent text-xs text-amber-600"></i>
+          <!-- 5. ✨ Auto-Programar (Base de Procesos Constructivos) -->
+          <button type="button" onclick="triggerAutoDistributeSchedule()" id="btn-calendario-auto-pct" ${isCalLocked ? 'disabled' : ''} class="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] p-1.5 rounded flex items-center justify-center font-medium shadow-sm transition active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0" title="${isCalLocked ? 'Calendario bloqueado (Solo consulta e impresión)' : 'Auto-Programar: propuesta automática por proceso constructivo (después puedes ajustar barras y fechas)'}">
+            <i class="fa-solid fa-wand-magic-sparkles text-xs text-amber-600"></i>
           </button>
 
           <!-- 6. Solo icono Deshacer -->
@@ -1700,10 +1701,8 @@ export function onFinancialCellEdit(conceptId, periodKey, field, value) {
 
 export function triggerAutoDistributeSchedule() {
   if (!guardTabUnlocked('calendario')) return;
-  const cfg = getScheduleSettings();
-  autoDistributeAllSchedule(cfg.startDate);
-  showToast('Cronograma re-programado secuencialmente con éxito.');
-  renderCalendarioObra();
+  // ✨ Auto-Programar: abre la vista previa por proceso constructivo; al aplicar se re-renderiza el Gantt
+  openAutoProgramModal({ onApplied: () => renderCalendarioObra() });
 }
 
 export function exportCurrentScheduleExcel() {

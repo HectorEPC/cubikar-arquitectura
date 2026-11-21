@@ -2,14 +2,14 @@
 // Flujo completo de Invitaciones por Correo Electrónico con Tokens 256-bit (SHA-256 en servidor)
 // Compartido entre Desktop (portalController.js) y Móvil (mobileApp.js / mobileAuth.js / mobileProjects.js)
 
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261119_cf43';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261121_cf44';
 import {
   isValidUUID,
   resolveCloudProjectId,
   syncProjectToCloud,
   invalidateCloudProjectsCache,
   fetchCloudProjects
-} from '../../core/cloudProjectService.js?v=20261119_cf43';
+} from '../../core/cloudProjectService.js?v=20261121_cf44';
 import {
   getCurrentUser,
   getProjectsList,
@@ -19,8 +19,8 @@ import {
   createProjectInvitation,
   rejectProjectInvitation,
   isProjectMarkedDeleted
-} from './projectService.js?v=20261119_cf43';
-import { showToast } from '../../ui/notifications.js?v=20261119_cf43';
+} from './projectService.js?v=20261121_cf44';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
 
 const APP_ORIGIN = 'arq';
 export const INVITE_TOKEN_STORAGE_KEY = 'cubikar_pending_invite_token_v1';
