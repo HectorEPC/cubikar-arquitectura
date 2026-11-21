@@ -6,7 +6,7 @@ import {
   getActiveProjectId,
   getStorageKey,
   getSettingsKey
-} from '../../config/constants.js?v=20261121_cf44';
+} from '../../config/constants.js?v=20261121_cf45';
 import {
   getCurrentUser,
   getLastKnownUser,
@@ -72,7 +72,7 @@ import {
   getStoredPlanInvitations,
   saveStoredPlanInvitations,
   getProjectCompanyLogo
-} from './projectService.js?v=20261121_cf44';
+} from './projectService.js?v=20261121_cf45';
 import {
   INVITE_TOKEN_STORAGE_KEY,
   captureInviteTokenFromUrl,
@@ -86,8 +86,8 @@ import {
   processPendingInviteFlow,
   showAwaitEmailConfirmationOverlay,
   renderProjectInviteStatusesInto
-} from './inviteTokenService.js?v=20261121_cf44';
-import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
+} from './inviteTokenService.js?v=20261121_cf45';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf45';
 import {
   persistLocalData,
   state,
@@ -96,13 +96,13 @@ import {
   resolveSettingsForCloudSync,
   markCatalogTreeSynced,
   markSettingsSynced
-} from '../../state/store.js?v=20261121_cf44';
-import { renderBrandingUI } from '../../ui/brandingController.js?v=20261121_cf44';
-import { renderTAB1 } from '../catalog/catalogView.js?v=20261121_cf44';
-import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261121_cf44';
-import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261121_cf44';
-import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261121_cf44';
-import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261121_cf44';
+} from '../../state/store.js?v=20261121_cf45';
+import { renderBrandingUI } from '../../ui/brandingController.js?v=20261121_cf45';
+import { renderTAB1 } from '../catalog/catalogView.js?v=20261121_cf45';
+import { updateSobrecostoBadge, updateGrandTotal, getEffectivePrecioUnitario, calculateParentTotal, getEjecutivoCostPlusFactor } from '../../core/calculations.js?v=20261121_cf45';
+import { updateSubscriptionBadgesUI, closeSubscriptionModal, syncSubscriptionFromCloud } from './subscriptionModal.js?v=20261121_cf45';
+import { calculateProjectTotalEstimacionesSummary } from '../estimaciones/estimacionesModel.js?v=20261121_cf45';
+import { renderSidebarNotificationsUI, clearAllChatHistory } from '../chat/projectChat.js?v=20261121_cf45';
 import {
   signUp,
   signInWithPassword,
@@ -113,24 +113,24 @@ import {
   clearLocalSupabaseTokens,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../../core/authService.js?v=20261121_cf44';
-import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261121_cf44';
-import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261121_cf44';
-import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261121_cf44';
+} from '../../core/authService.js?v=20261121_cf45';
+import { appendSsoToUrlFromStorage } from '../../core/ssoHelper.js?v=20261121_cf45';
+import { initAppSwitcher } from '../../ui/appSwitcher.js?v=20261121_cf45';
+import { getSupabaseClient, isSupabaseConfigured } from '../../core/supabaseClient.js?v=20261121_cf45';
 import {
   isUserAdmin,
   showAdminDualLoginModal,
   openCubikarAdminModal
-} from '../admin/cubikarAdmin.js?v=20261121_cf44';
-import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261121_cf44';
-import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261121_cf44';
+} from '../admin/cubikarAdmin.js?v=20261121_cf45';
+import { syncProjectToCloud, fetchCloudProjects, getTrashedCloudProjectIds } from '../../core/cloudProjectService.js?v=20261121_cf45';
+import { compressImageForPdf } from '../../core/imageCompressor.js?v=20261121_cf45';
 import {
   isProjectHostOwner,
   fetchTrashedProjectsForHost,
   getCachedTrashCount,
   updateTrashBadgeUI,
   openTrashModal
-} from './trashService.js?v=20261121_cf44';
+} from './trashService.js?v=20261121_cf45';
 
 let customPhotoTemp = null;
 let wizardData = {

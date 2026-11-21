@@ -1,38 +1,33 @@
 // js/modules/calendario/calendarioAutoProgramService.js
 // ✨ Auto-Programar: genera una propuesta de Programa de Obra a partir de la Base de Procesos Constructivos
-// (procesosConstructivosDB.js) y la traduce al modelo de Cubikar (predecesoras Fin-a-Inicio + lagDays por concepto).
-//
-// Traducción de enlaces de la base al modelo:
-//  - FI (FS) + espera  -> predecesora normal; lagDays = mayor espera de sus enlaces FI.
-//  - II (SS) + desfase -> el modelo solo maneja Fin-a-Inicio, así que el inicio se ancla:
-//      * si el concepto además tiene predecesoras FI: se ajusta lagDays para respetar el desfase II;
-//      * si no tiene predecesoras FI: se fija su fecha de inicio (el usuario puede moverla después).
+// (procesosConstructivosDB.js) y la traduce al modelo vivo de Cubikar:
+//  - FI (FS) + espera/traslape -> enlace Fin-a-Inicio { id, type: 'FS', lag }
+//  - II (SS) + desfase        -> enlace Inicio-a-Inicio en paralelo { id, type: 'SS', lag }
 //  - Se conservan las duraciones capturadas y los avances (periods) de cada concepto.
 
-import { state, persistLocalData } from '../../state/store.js?v=20261121_cf44';
-import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf44';
-import { getProjectById } from '../portal/projectService.js?v=20261121_cf44';
+import { state, persistLocalData } from '../../state/store.js?v=20261121_cf45';
+import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf45';
+import { getProjectById } from '../portal/projectService.js?v=20261121_cf45';
 import {
   extractScheduleItems,
   recalculateScheduleCPM,
+  normalizeScheduleLinks,
   getScheduleSettings,
   saveScheduleSettings,
   getWorkdaysSettings,
   getNextWorkingDate,
   getProjectCreationDate,
   saveScheduleUndoSnapshot,
-  parseDate,
   formatDate,
-  addDays,
-  diffDays
-} from './calendarioModel.js?v=20261121_cf44';
-import { estimateConceptDuration } from './calendarioAiService.js?v=20261121_cf44';
+  addDays
+} from './calendarioModel.js?v=20261121_cf45';
+import { estimateConceptDuration } from './calendarioAiService.js?v=20261121_cf45';
 import {
   TIPOS_OBRA,
   normalizarTexto,
   detectarTipoPorConceptos,
   generarPropuesta
-} from './procesosConstructivosDB.js?v=20261121_cf44';
+} from './procesosConstructivosDB.js?v=20261121_cf45';
 
 export { TIPOS_OBRA };
 
@@ -98,13 +93,17 @@ function computeAutoProgram(tipoId, apply = false) {
   const byId = new Map(concepts.map(c => [String(c.id), c]));
   const filaById = new Map(propuesta.filas.map(f => [String(f.id), f]));
 
-  // 1. Estructura base: predecesoras FI + espera máxima
+  // 1. Asignar enlaces vivos FI (Fin-a-Inicio) e II (En paralelo Inicio-a-Inicio) con sus desfases
   propuesta.filas.forEach(f => {
     const it = byId.get(String(f.id));
     if (!it) return;
-    const fs = f.links.filter(l => l.type === 'FS');
-    const preds = [...new Set(fs.map(l => String(l.id)))];
-    const lag = fs.reduce((m, l) => Math.max(m, parseInt(l.lag, 10) || 0), 0);
+    const links = normalizeScheduleLinks(
+      (f.links || []).map(l => ({
+        id: String(l.id),
+        type: l.type === 'SS' ? 'SS' : 'FS',
+        lag: parseInt(l.lag, 10) || 0
+      }))
+    );
     const dur = f.concepto.durationDays;
     const prev = it.node.schedule || {};
     it.node.schedule = {
@@ -112,43 +111,15 @@ function computeAutoProgram(tipoId, apply = false) {
       startDate: baseStartStr,
       endDate: formatDate(addDays(baseStartDt, dur - 1)),
       durationDays: dur,
-      predecessors: preds,
-      lagDays: lag,
+      predecessors: links,
+      lagDays: 0,
       isManual: false,
       periods: prev.periods || {}
     };
   });
 
-  // 2. Respetar los enlaces en paralelo (II + desfase) iterando con el motor CPM real de Cubikar
-  let summary = recalculateScheduleCPM(items, { respectWorkdays, workdaysCfg });
-  const maxPasses = Math.max(4, concepts.length + 2);
-  for (let pass = 0; pass < maxPasses; pass++) {
-    let changed = false;
-    propuesta.filas.forEach(f => {
-      const ss = f.links.filter(l => l.type === 'SS');
-      if (ss.length === 0) return;
-      const it = byId.get(String(f.id));
-      if (!it) return;
-      let requiredDt = null;
-      ss.forEach(l => {
-        const pred = byId.get(String(l.id));
-        if (!pred || !pred.startDate) return;
-        const cand = getNextWorkingDate(addDays(pred.startDate, parseInt(l.lag, 10) || 0), workdaysCfg, respectWorkdays);
-        if (!requiredDt || cand > requiredDt) requiredDt = cand;
-      });
-      if (!requiredDt || parseDate(it.startDate) >= requiredDt) return;
-      const hasFsPreds = (it.node.schedule.predecessors || []).length > 0;
-      if (hasFsPreds && it.minAllowedStartDate) {
-        it.node.schedule.lagDays = Math.max(0, diffDays(it.minAllowedStartDate, requiredDt));
-      } else {
-        it.node.schedule.startDate = formatDate(requiredDt);
-        it.node.schedule.endDate = formatDate(addDays(requiredDt, f.concepto.durationDays - 1));
-      }
-      changed = true;
-    });
-    if (!changed) break;
-    summary = recalculateScheduleCPM(items, { respectWorkdays, workdaysCfg });
-  }
+  // 2. Resolver cascada CPM completa (FI, II y desfases respetando días hábiles/inhábiles configurados)
+  const summary = recalculateScheduleCPM(items, { respectWorkdays, workdaysCfg });
 
   const filas = propuesta.filas.map(f => {
     const it = byId.get(String(f.id));

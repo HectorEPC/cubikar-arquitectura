@@ -2,12 +2,12 @@
 // Modelo y cálculos del Calendario de Obra (Gantt, Flujo Financiero y Curva S)
 // Sincronizado 100% con state.treeData del Catálogo Base
 
-import { state, persistLocalData } from '../../state/store.js?v=20261121_cf44';
-import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261121_cf44';
-import { getHierarchyColor } from '../../core/colors.js?v=20261121_cf44';
-import { hasOwnCotizaciones, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261121_cf44';
-import { getProjectById } from '../portal/projectService.js?v=20261121_cf44';
-import { scheduleCronogramaCloudSync } from '../../core/cloudModulesSyncService.js?v=20261121_cf44';
+import { state, persistLocalData } from '../../state/store.js?v=20261121_cf45';
+import { getActiveProjectId, getStorageKey } from '../../config/constants.js?v=20261121_cf45';
+import { getHierarchyColor } from '../../core/colors.js?v=20261121_cf45';
+import { hasOwnCotizaciones, getEffectivePrecioUnitario } from '../../core/calculations.js?v=20261121_cf45';
+import { getProjectById } from '../portal/projectService.js?v=20261121_cf45';
+import { scheduleCronogramaCloudSync } from '../../core/cloudModulesSyncService.js?v=20261121_cf45';
 
 // Colores modernos por partida para las barras del cronograma Gantt
 export const PARTIDA_COLORS = [
@@ -101,7 +101,9 @@ export function getScheduleSettings(projectId = null) {
     panelWidth: 510,
     showCriticalPath: true,
     respectWorkdays: true,
-    justifyConcepts: false
+    justifyConcepts: false,
+    rowViewMode: null,
+    cursorLensEnabled: true
   };
   const arqKey = 'calendario_arq_cfg_' + pid;
   const key = 'calendario_cfg_' + pid;
@@ -114,11 +116,19 @@ export function getScheduleSettings(projectId = null) {
         if (!merged.userCustomStartDate && (merged.startDate === '2026-05-01' || !merged.startDate)) {
           merged.startDate = creationDate;
         }
+        if (!merged.rowViewMode || !['normal', 'justified', 'compact'].includes(merged.rowViewMode)) {
+          merged.rowViewMode = merged.justifyConcepts ? 'justified' : 'normal';
+        }
+        merged.justifyConcepts = (merged.rowViewMode === 'justified');
+        if (typeof merged.cursorLensEnabled !== 'boolean') {
+          merged.cursorLensEnabled = true;
+        }
         return merged;
       }
     }
   } catch (e) {}
 
+  defaults.rowViewMode = defaults.justifyConcepts ? 'justified' : 'normal';
   return defaults;
 }
 
@@ -149,7 +159,13 @@ export function saveScheduleSettings(cfg) {
   const key = 'calendario_cfg_' + pid;
   try {
     const current = getScheduleSettings(pid);
-    const updated = Object.assign({}, current, cfg);
+    const incoming = Object.assign({}, cfg || {});
+    if (incoming.rowViewMode && incoming.justifyConcepts === undefined) {
+      incoming.justifyConcepts = (incoming.rowViewMode === 'justified');
+    } else if (incoming.justifyConcepts !== undefined && !incoming.rowViewMode) {
+      incoming.rowViewMode = incoming.justifyConcepts ? 'justified' : 'normal';
+    }
+    const updated = Object.assign({}, current, incoming);
     const json = JSON.stringify(updated);
     localStorage.setItem(arqKey, json);
     localStorage.setItem(key, json);
@@ -333,6 +349,90 @@ export function calculateWorkdaysSummary(startDate, endDate, workdaysCfg = null)
 }
 
 // ==========================================
+// NORMALIZACIÓN Y CÁLCULO DE ENLACES (FI / II / TRASLAPES)
+// ==========================================
+export function normalizeScheduleLinks(rawPreds) {
+  if (!Array.isArray(rawPreds)) return [];
+  const out = [];
+  const seenIdx = new Map();
+
+  rawPreds.forEach(entry => {
+    let id = '';
+    let type = 'FS';
+    let lag = 0;
+
+    if (entry && typeof entry === 'object') {
+      id = entry.id !== undefined && entry.id !== null ? String(entry.id).trim() : '';
+      type = entry.type === 'SS' ? 'SS' : 'FS';
+      const parsedLag = parseInt(entry.lag, 10);
+      lag = Number.isFinite(parsedLag) ? Math.max(-90, Math.min(365, parsedLag)) : 0;
+    } else if (entry !== null && entry !== undefined) {
+      id = String(entry).trim();
+    }
+
+    if (!id || id === '[object Object]') return;
+    if (seenIdx.has(id)) {
+      const idx = seenIdx.get(id);
+      if (out[idx].type === 'FS' && out[idx].lag === 0 && (type !== 'FS' || lag !== 0)) {
+        out[idx] = { id, type, lag };
+      }
+      return;
+    }
+    seenIdx.set(id, out.length);
+    out.push({ id, type, lag });
+  });
+
+  return out;
+}
+
+export function getPredecessorIds(rawPreds) {
+  return normalizeScheduleLinks(rawPreds).map(lk => lk.id);
+}
+
+export function formatScheduleLinkTag(link, clave = '') {
+  const lk = (link && typeof link === 'object')
+    ? { type: link.type === 'SS' ? 'SS' : 'FS', lag: parseInt(link.lag, 10) || 0 }
+    : { type: 'FS', lag: 0 };
+  const labelClave = String(clave || link?.id || '').trim();
+  const lagTxt = lk.lag > 0 ? `+${lk.lag}d` : (lk.lag < 0 ? `${lk.lag}d` : '');
+  return lk.type === 'SS' ? `II:${labelClave}${lagTxt}` : `${labelClave}${lagTxt}`;
+}
+
+export function computeLinkMinStartDate(predItem, link, options = {}) {
+  const respectWorkdays = options.respectWorkdays !== undefined ? Boolean(options.respectWorkdays) : true;
+  const workdaysCfg = options.workdaysCfg || getWorkdaysSettings();
+  const projectStartDt = options.projectStartDateStr ? parseDate(options.projectStartDateStr) : null;
+
+  if (!predItem || !predItem.startDate) {
+    const baseDt = projectStartDt || new Date();
+    return getNextWorkingDate(baseDt, workdaysCfg, respectWorkdays);
+  }
+
+  const lkType = (link && link.type === 'SS') ? 'SS' : 'FS';
+  const lag = (link && Number.isFinite(parseInt(link.lag, 10))) ? parseInt(link.lag, 10) : 0;
+  const predStartDt = parseDate(predItem.startDate);
+  const predEndDt = parseDate(predItem.endDate || predItem.startDate);
+
+  let rawDt;
+  if (lkType === 'SS') {
+    rawDt = addDays(predStartDt, lag);
+    if (projectStartDt && rawDt < projectStartDt) {
+      rawDt = new Date(projectStartDt.getFullYear(), projectStartDt.getMonth(), projectStartDt.getDate());
+    }
+  } else {
+    rawDt = addDays(predEndDt, 1 + lag);
+    if (rawDt < predStartDt) {
+      rawDt = new Date(predStartDt.getFullYear(), predStartDt.getMonth(), predStartDt.getDate());
+    }
+    if (projectStartDt && rawDt < projectStartDt) {
+      rawDt = new Date(projectStartDt.getFullYear(), projectStartDt.getMonth(), projectStartDt.getDate());
+    }
+  }
+
+  return getNextWorkingDate(rawDt, workdaysCfg, respectWorkdays);
+}
+
+// ==========================================
 // EXTRACCIÓN Y SINCRONIZACIÓN DE CONCEPTOS
 // ==========================================
 export function extractScheduleItems(tree = state.treeData) {
@@ -383,9 +483,7 @@ export function extractScheduleItems(tree = state.treeData) {
       const ancestorIds = parentItem ? [...parentItem.ancestorIds, parentItem.id] : [];
       const parentPartidaName = level === 1 ? node.descripcion : (parentItem ? parentItem.parentPartidaName : '');
 
-      const rawPreds = Array.isArray(node.schedule?.predecessors)
-        ? node.schedule.predecessors.map(p => String(p)).filter(Boolean)
-        : [];
+      const rawPreds = hasChildren ? [] : normalizeScheduleLinks(node.schedule?.predecessors);
 
       const item = {
         node,
@@ -504,16 +602,21 @@ export function wouldCreateScheduleCycle(targetId, candidatePredId, items = null
     visited.add(currId);
     const nodeItem = byId.get(currId);
     const preds = nodeItem
-      ? (Array.isArray(nodeItem.predecessors) ? nodeItem.predecessors : (nodeItem.node?.schedule?.predecessors || []))
+      ? normalizeScheduleLinks(
+          Array.isArray(nodeItem.predecessors) && nodeItem.predecessors.length > 0
+            ? nodeItem.predecessors
+            : (nodeItem.node?.schedule?.predecessors || [])
+        )
       : [];
-    preds.forEach(nextPred => stack.push(String(nextPred)));
+    preds.forEach(nextPred => stack.push(String(nextPred.id)));
   }
   return false;
 }
 
-// Recalcula cascada Fin-a-Inicio (Forward Pass) y Ruta Crítica / Holguras (Backward Pass)
+// Recalcula cascada Fin-a-Inicio / Inicio-a-Inicio / Traslapes (Forward Pass) y Ruta Crítica / Holguras (Backward Pass)
 export function recalculateScheduleCPM(items, options = {}) {
   const cfg = getScheduleSettings();
+  const projectStartStr = cfg.startDate || getProjectCreationDate();
   const respectWorkdays = options.respectWorkdays !== undefined
     ? Boolean(options.respectWorkdays)
     : (cfg.respectWorkdays !== false);
@@ -532,18 +635,23 @@ export function recalculateScheduleCPM(items, options = {}) {
     if (c.clave) byClave.set(String(c.clave), c);
   });
 
-  // Normalizar predecesoras válidas y sin auto-referencias ni ciclos
+  // Normalizar predecesoras válidas ({ id, type: 'FS'|'SS', lag }) sin auto-referencias
   const sanitizedMap = new Map();
   concepts.forEach(c => {
-    const rawPreds = Array.isArray(c.node?.schedule?.predecessors)
-      ? c.node.schedule.predecessors
-      : (Array.isArray(c.predecessors) ? c.predecessors : []);
+    const rawPreds = normalizeScheduleLinks(
+      Array.isArray(c.node?.schedule?.predecessors)
+        ? c.node.schedule.predecessors
+        : (Array.isArray(c.predecessors) ? c.predecessors : [])
+    );
     const clean = [];
-    rawPreds.forEach(rawId => {
-      const target = byId.get(String(rawId)) || byClave.get(String(rawId));
+    const seen = new Set();
+    rawPreds.forEach(lk => {
+      const target = byId.get(String(lk.id)) || byClave.get(String(lk.id));
       if (!target || String(target.id) === String(c.id)) return;
-      if (clean.includes(String(target.id))) return;
-      clean.push(String(target.id));
+      const tid = String(target.id);
+      if (seen.has(tid)) return;
+      seen.add(tid);
+      clean.push({ id: tid, type: lk.type === 'SS' ? 'SS' : 'FS', lag: parseInt(lk.lag, 10) || 0 });
     });
     sanitizedMap.set(String(c.id), clean);
   });
@@ -561,7 +669,7 @@ export function recalculateScheduleCPM(items, options = {}) {
       if (cur === targetId) return true;
       if (vis.has(cur)) continue;
       vis.add(cur);
-      (activeGraph.get(cur) || []).forEach(p => st.push(p));
+      (activeGraph.get(cur) || []).forEach(lk => st.push(lk.id));
     }
     return false;
   }
@@ -570,18 +678,18 @@ export function recalculateScheduleCPM(items, options = {}) {
     const cid = String(c.id);
     const candidateList = sanitizedMap.get(cid) || [];
     const safeList = [];
-    candidateList.forEach(pid => {
-      if (!createsCycleInActiveGraph(cid, pid)) {
-        safeList.push(pid);
+    candidateList.forEach(lk => {
+      if (!createsCycleInActiveGraph(cid, lk.id)) {
+        safeList.push(lk);
         activeGraph.set(cid, [...safeList]);
       }
     });
-    c.predecessors = safeList;
+    c.predecessors = safeList.map(lk => ({ ...lk }));
     if (!c.node.schedule) c.node.schedule = {};
-    c.node.schedule.predecessors = [...safeList];
+    c.node.schedule.predecessors = safeList.map(lk => ({ ...lk }));
   });
 
-  // 1. FORWARD PASS: Empuje automático Fin-a-Inicio en cascada
+  // 1. FORWARD PASS: Empuje automático en cascada (FI, II y traslapes)
   const resolvedEarly = new Set();
   const visitingEarly = new Set();
   let cascadedChanges = 0;
@@ -592,37 +700,41 @@ export function recalculateScheduleCPM(items, options = {}) {
     visitingEarly.add(cid);
 
     const dur = Math.max(3, parseInt(c.node.schedule?.durationDays || c.durationDays, 10) || 3);
-    const preds = c.predecessors || [];
+    const links = c.predecessors || [];
 
-    if (preds.length > 0) {
-      let maxPredEndDt = null;
-      preds.forEach(pid => {
-        const pItem = byId.get(pid);
+    if (links.length > 0) {
+      let maxMinStartDt = null;
+      const candPairs = [];
+
+      links.forEach(lk => {
+        const pItem = byId.get(String(lk.id));
         if (pItem) {
           resolveEarly(pItem);
-          const pEnd = parseDate(pItem.endDate);
-          if (!maxPredEndDt || pEnd > maxPredEndDt) {
-            maxPredEndDt = pEnd;
+          const candDt = computeLinkMinStartDate(pItem, lk, {
+            projectStartDateStr: projectStartStr,
+            workdaysCfg,
+            respectWorkdays
+          });
+          candPairs.push({ pItem, candDt, candStr: formatDate(candDt) });
+          if (!maxMinStartDt || candDt > maxMinStartDt) {
+            maxMinStartDt = candDt;
           }
         }
       });
 
-      if (maxPredEndDt) {
-        const maxPredEndStr = formatDate(maxPredEndDt);
-        const blockingClaves = preds
-          .map(pid => byId.get(pid))
-          .filter(p => p && p.endDate === maxPredEndStr)
-          .map(p => p.clave || 'CONC');
+      if (maxMinStartDt) {
+        const minStartStr = formatDate(maxMinStartDt);
+        const blockingClaves = candPairs
+          .filter(x => x.candStr === minStartStr)
+          .map(x => x.pItem.clave || 'CONC');
 
-        const minStartDt = getNextWorkingDate(addDays(maxPredEndDt, 1), workdaysCfg, respectWorkdays);
-        const minStartStr = formatDate(minStartDt);
         c.minAllowedStartDate = minStartStr;
         c.blockingClaves = blockingClaves;
 
         const lagDays = Math.max(0, parseInt(c.node.schedule?.lagDays, 10) || 0);
         const effectiveStartDt = lagDays > 0
-          ? getNextWorkingDate(addDays(minStartDt, lagDays), workdaysCfg, respectWorkdays)
-          : minStartDt;
+          ? getNextWorkingDate(addDays(maxMinStartDt, lagDays), workdaysCfg, respectWorkdays)
+          : maxMinStartDt;
         const effectiveStartStr = formatDate(effectiveStartDt);
         const effectiveEndStr = formatDate(addDays(effectiveStartDt, dur - 1));
 
@@ -640,7 +752,7 @@ export function recalculateScheduleCPM(items, options = {}) {
     } else {
       c.minAllowedStartDate = '';
       c.blockingClaves = [];
-      const sDt = parseDate(c.node.schedule.startDate || cfg.startDate || getProjectCreationDate());
+      const sDt = parseDate(c.node.schedule.startDate || projectStartStr);
       const eDt = addDays(sDt, dur - 1);
       c.node.schedule.startDate = formatDate(sDt);
       c.node.schedule.endDate = formatDate(eDt);
@@ -665,21 +777,25 @@ export function recalculateScheduleCPM(items, options = {}) {
       projectMaxEndDt = eDt;
     }
   });
-  if (!projectMaxEndDt) projectMaxEndDt = parseDate(cfg.startDate || getProjectCreationDate());
+  if (!projectMaxEndDt) projectMaxEndDt = parseDate(projectStartStr);
 
   const succMap = new Map();
   concepts.forEach(c => succMap.set(String(c.id), []));
   concepts.forEach(c => {
-    (c.predecessors || []).forEach(pid => {
-      if (succMap.has(pid)) succMap.get(pid).push(c);
+    (c.predecessors || []).forEach(lk => {
+      if (succMap.has(lk.id)) succMap.get(lk.id).push({ succ: c, link: lk });
     });
   });
 
-  function getLinkFreeFloatDays(predEndStr, succStartStr) {
-    const gapStart = addDays(predEndStr, 1);
-    const gapEnd = addDays(succStartStr, -1);
-    if (gapStart > gapEnd) return 0;
-    return countWorkingDaysInclusive(gapStart, gapEnd, workdaysCfg, respectWorkdays);
+  function getEdgeFreeFloatDays(predConcept, succConcept, link) {
+    const edgeMinStartDt = computeLinkMinStartDate(predConcept, link, {
+      projectStartDateStr: projectStartStr,
+      workdaysCfg,
+      respectWorkdays
+    });
+    const gapEnd = addDays(succConcept.startDate, -1);
+    if (edgeMinStartDt > gapEnd) return 0;
+    return countWorkingDaysInclusive(edgeMinStartDt, gapEnd, workdaysCfg, respectWorkdays);
   }
 
   const resolvedLate = new Set();
@@ -702,10 +818,10 @@ export function recalculateScheduleCPM(items, options = {}) {
       c.criticalSuccIds = [];
     } else {
       let minTotalFloat = Infinity;
-      succs.forEach(s => {
-        resolveLate(s);
-        const linkFloat = getLinkFreeFloatDays(c.endDate, s.startDate);
-        const candidateFloat = linkFloat + (s.slackDays || 0);
+      succs.forEach(({ succ, link }) => {
+        resolveLate(succ);
+        const linkFloat = getEdgeFreeFloatDays(c, succ, link);
+        const candidateFloat = linkFloat + (succ.slackDays || 0);
         if (candidateFloat < minTotalFloat) {
           minTotalFloat = candidateFloat;
         }
@@ -725,8 +841,8 @@ export function recalculateScheduleCPM(items, options = {}) {
   concepts.forEach(c => {
     const succs = succMap.get(String(c.id)) || [];
     c.criticalSuccIds = succs
-      .filter(s => c.isCritical && s.isCritical && getLinkFreeFloatDays(c.endDate, s.startDate) === 0)
-      .map(s => String(s.id));
+      .filter(({ succ, link }) => c.isCritical && succ.isCritical && getEdgeFreeFloatDays(c, succ, link) === 0)
+      .map(({ succ }) => String(succ.id));
   });
 
   // Actualizar fechas agregadas y bandera crítica en partidas padre
@@ -777,13 +893,15 @@ export function ensureInitialDates(items, projectStartDateStr = null) {
         conceptIndex++;
       } else {
         const s = parseDate(node.schedule.startDate);
-        const e = parseDate(node.schedule.endDate || node.schedule.startDate);
-        let dur = Math.max(3, diffDays(s, e) + 1);
+        const savedDur = parseInt(node.schedule.durationDays, 10);
+        let dur = (Number.isFinite(savedDur) && savedDur >= 3)
+          ? savedDur
+          : Math.max(3, diffDays(s, parseDate(node.schedule.endDate || node.schedule.startDate)) + 1);
         node.schedule.durationDays = dur;
         node.schedule.endDate = formatDate(addDays(s, dur - 1));
       }
 
-      item.predecessors = [...node.schedule.predecessors];
+      item.predecessors = normalizeScheduleLinks(node.schedule.predecessors);
       item.startDate = node.schedule.startDate;
       item.endDate = node.schedule.endDate;
       item.durationDays = node.schedule.durationDays;
@@ -1023,16 +1141,14 @@ export function generateGanttTimeScale(minDate, maxDate, scale = 'dias', baseDay
 
   const totalDays = Math.max(1, diffDays(timelineStart, timelineEnd) + 1);
 
-  // Proporción de píxeles por día según escala seleccionada
+  // Proporción de píxeles por día según escala seleccionada (permite fit hasta ~1.5px/d en vistas panorámicas)
   let pxPerDay;
   if (scale === 'dias') {
-    pxPerDay = Math.max(16, baseDayWidth || 34);
+    pxPerDay = Math.max(1.5, baseDayWidth || 34);
   } else if (scale === 'semanas') {
-    // Escala semanas: cada semana de 7 días mide ~90-120px para ser legible con "Semana 1, 2, 3, 4"
-    pxPerDay = Math.max(10, Math.round((baseDayWidth || 34) * 0.45));
+    pxPerDay = Math.max(1.5, (baseDayWidth || 34) * 0.45);
   } else {
-    // Escala meses: cada mes mide ~120-180px para ver el horizonte completo con nombre de mes
-    pxPerDay = Math.max(3, Math.round((baseDayWidth || 34) * 0.16));
+    pxPerDay = Math.max(1.2, (baseDayWidth || 34) * 0.16);
   }
 
   const totalTimelineWidth = Math.max(800, totalDays * pxPerDay);
@@ -1523,8 +1639,8 @@ export function updateConceptDatesInModel(conceptId, startDateStr, durationDays)
   };
 }
 
-// Establecer lista de predecesoras (Fin-a-Inicio) para un concepto validando que no existan ciclos
-export function setConceptPredecessorsInModel(conceptId, predecessorIds = []) {
+// Establecer lista de predecesoras (FI o en paralelo II con lag/traslape) para un concepto validando que no existan ciclos
+export function setConceptPredecessorsInModel(conceptId, predecessorLinksOrIds = []) {
   const cfg = getScheduleSettings();
   const items = extractScheduleItems(state.treeData);
   ensureInitialDates(items, cfg.startDate);
@@ -1534,30 +1650,34 @@ export function setConceptPredecessorsInModel(conceptId, predecessorIds = []) {
     return { ok: false, error: 'Concepto no encontrado.' };
   }
 
-  const cleanIds = [];
-  for (const rawId of (Array.isArray(predecessorIds) ? predecessorIds : [])) {
-    if (!rawId) continue;
-    const predItem = items.find(it => it.tipo === 'concepto' && (String(it.id) === String(rawId) || String(it.clave) === String(rawId)));
+  const normalizedInputs = normalizeScheduleLinks(predecessorLinksOrIds);
+  const cleanLinks = [];
+  const seenIds = new Set();
+
+  for (const lk of normalizedInputs) {
+    const predItem = items.find(it => it.tipo === 'concepto' && (String(it.id) === String(lk.id) || String(it.clave) === String(lk.id)));
     if (!predItem) continue;
-    if (String(predItem.id) === String(targetItem.id)) {
+    const pid = String(predItem.id);
+    if (pid === String(targetItem.id)) {
       return { ok: false, cycleError: true, error: 'Un concepto no puede depender de sí mismo.' };
     }
-    if (wouldCreateScheduleCycle(targetItem.id, predItem.id, items)) {
+    if (wouldCreateScheduleCycle(targetItem.id, pid, items)) {
       return {
         ok: false,
         cycleError: true,
         error: `Enlace inválido: "${predItem.clave}" ya depende directa o indirectamente de "${targetItem.clave}" (evita ciclos infinitos).`
       };
     }
-    if (!cleanIds.includes(String(predItem.id))) {
-      cleanIds.push(String(predItem.id));
+    if (!seenIds.has(pid)) {
+      seenIds.add(pid);
+      cleanLinks.push({ id: pid, type: lk.type === 'SS' ? 'SS' : 'FS', lag: parseInt(lk.lag, 10) || 0 });
     }
   }
 
   saveScheduleUndoSnapshot('Cambio de predecesoras');
 
   if (!targetItem.node.schedule) targetItem.node.schedule = {};
-  targetItem.node.schedule.predecessors = cleanIds;
+  targetItem.node.schedule.predecessors = cleanLinks;
   targetItem.node.schedule.lagDays = 0;
   targetItem.node.schedule.isManual = false;
   targetItem.node.schedule.periods = {};
@@ -1571,7 +1691,7 @@ export function setConceptPredecessorsInModel(conceptId, predecessorIds = []) {
     ok: true,
     conceptId: targetItem.id,
     clave: targetItem.clave,
-    predecessors: cleanIds,
+    predecessors: cleanLinks,
     startDate: updatedTarget?.startDate || targetItem.startDate,
     endDate: updatedTarget?.endDate || targetItem.endDate,
     cpmSummary
@@ -1579,24 +1699,29 @@ export function setConceptPredecessorsInModel(conceptId, predecessorIds = []) {
 }
 
 // Alternar (agregar o quitar) una predecesora específica (útil al vincular con clic en barras)
-export function toggleConceptPredecessorInModel(targetConceptId, predConceptId) {
+export function toggleConceptPredecessorInModel(targetConceptId, predConceptId, linkOptions = {}) {
   const items = extractScheduleItems(state.treeData);
   const targetItem = items.find(it => it.tipo === 'concepto' && String(it.id) === String(targetConceptId));
   const predItem = items.find(it => it.tipo === 'concepto' && String(it.id) === String(predConceptId));
   if (!targetItem || !predItem) {
     return { ok: false, error: 'Concepto no encontrado.' };
   }
-  const current = Array.isArray(targetItem.node?.schedule?.predecessors)
-    ? [...targetItem.node.schedule.predecessors.map(String)]
-    : [];
+  const current = normalizeScheduleLinks(targetItem.node?.schedule?.predecessors);
   const pid = String(predItem.id);
   let action = 'added';
   let nextPreds;
-  if (current.includes(pid)) {
-    nextPreds = current.filter(x => x !== pid);
+  if (current.some(lk => lk.id === pid)) {
+    nextPreds = current.filter(lk => lk.id !== pid);
     action = 'removed';
   } else {
-    nextPreds = [...current, pid];
+    nextPreds = [
+      ...current,
+      {
+        id: pid,
+        type: linkOptions.type === 'SS' ? 'SS' : 'FS',
+        lag: parseInt(linkOptions.lag, 10) || 0
+      }
+    ];
   }
   const res = setConceptPredecessorsInModel(targetItem.id, nextPreds);
   return Object.assign({}, res, { action, predClave: predItem.clave, targetClave: targetItem.clave });
@@ -1648,7 +1773,7 @@ export function applyScheduleProposalToModel(proposalTasks = [], projectStartDat
     if (!prop) return;
 
     const dur = Math.max(3, parseInt(prop.durationDays, 10) || 3);
-    const preds = Array.isArray(prop.predecessors) ? prop.predecessors.map(String) : [];
+    const preds = normalizeScheduleLinks(prop.predecessors);
     const sDt = prop.startDate ? parseDate(prop.startDate) : baseStartDt;
 
     it.node.schedule = {

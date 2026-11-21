@@ -1,18 +1,33 @@
-﻿import { printCalendarioObraFormat } from '../io/printService.js?v=20261121_cf44';
-import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261121_cf44';
+﻿import { printCalendarioObraFormat } from '../io/printService.js?v=20261121_cf45';
+import { renderTabAssignedAvatars } from '../portal/portalController.js?v=20261121_cf45';
 // js/modules/calendario/calendarioView.js
 // Renderizador y controlador de la pestaña CALENDARIO DE OBRA
 // Diseño ejecutivo de alta fidelidad, interactivo y sincronizado 100% con Catálogo Base
 
-import { state } from '../../state/store.js?v=20261121_cf44';
-import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261121_cf44';
-import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
-import { isNightMode } from '../../ui/themeController.js?v=20261121_cf44';
-import { isTabLocked, guardTabUnlocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261121_cf44';
-import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf44';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf44';
-import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261121_cf44';
-import { openAutoProgramModal } from './calendarioAutoProgramView.js?v=20261121_cf44';
+import { state } from '../../state/store.js?v=20261121_cf45';
+import { formatCurrency, formatNumber } from '../../core/formatters.js?v=20261121_cf45';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf45';
+import { isNightMode } from '../../ui/themeController.js?v=20261121_cf45';
+import { isTabLocked, guardTabUnlocked, applyTabLocksToDOM } from '../../ui/tabLockController.js?v=20261121_cf45';
+import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf45';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf45';
+import { renderPartidaNivel1ChatButton, renderProjectChatDock } from '../chat/projectChat.js?v=20261121_cf45';
+import { openAutoProgramModal } from './calendarioAutoProgramView.js?v=20261121_cf45';
+
+function escapeCalHtml(val) {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isAdvancedCalendarioAllowed() {
+  return true;
+}
+
 import {
   extractScheduleItems,
   ensureInitialDates,
@@ -48,19 +63,22 @@ import {
   clearAllScheduleDependenciesInModel,
   applyScheduleProposalToModel,
   shiftProjectScheduleStart,
+  normalizeScheduleLinks,
+  formatScheduleLinkTag,
+  computeLinkMinStartDate,
   saveScheduleUndoSnapshot,
   hasScheduleUndoSnapshot,
   hasScheduleRedoSnapshot,
   undoLastScheduleChange,
   redoLastScheduleChange
-} from './calendarioModel.js?v=20261121_cf44';
+} from './calendarioModel.js?v=20261121_cf45';
 import {
   WORK_TYPE_PROFILES,
   detectProjectWorkType,
   generateLocalConstructiveProposal,
   generateGeminiConstructiveProposal
-} from './calendarioAiService.js?v=20261121_cf44';
-import { exportScheduleToExcel } from './calendarioExporter.js?v=20261121_cf44';
+} from './calendarioAiService.js?v=20261121_cf45';
+import { exportScheduleToExcel } from './calendarioExporter.js?v=20261121_cf45';
 
 let currentScheduleData = null;
 let calendarioLinkClickMode = false;
@@ -70,10 +88,46 @@ let currentDepModalConceptId = null;
 let calendarioInitTimer = null;
 let isPremiereResizeListenerAttached = false;
 let selectedCalendarioRowId = null;
+let lastRenderedCalendarioProjectId = null;
 
-// Seleccionar y pintar fila en Calendario de Obra (Vista Gantt, Programa Financiero y Curva S) igual que en Catálogo Base
+// Estado UI de popover calendario, modal predecesoras y lupa de barras
+let openDatePickerConceptId = null;
+let datePickerViewYear = null;
+let datePickerViewMonth = null;
+let lastDatePickerAnchorRect = null;
+let isCalendarioGlobalListenersAttached = false;
+let isDraggingGanttBar = false;
+let barDraggedRecently = false;
+let depModalDraftLinks = [];
+let depModalFilterPartida = 'all';
+let depModalSearch = '';
+
+const MONTH_NAMES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+// Seleccionar y pintar fila en Calendario de Obra (Vista Gantt expande detalle en sitio; Financiero/Curva S resaltan fila)
 export function selectCalendarioRow(rowId, event = null) {
-  selectedCalendarioRowId = String(rowId);
+  if (event && event.target && event.target.closest) {
+    if (event.target.closest('button, input, select, a, [data-pick-date], [data-open-predec], .gantt-bar-concept')) {
+      return;
+    }
+  }
+  if (barDraggedRecently) return;
+
+  const nextId = String(rowId);
+  const cfg = getScheduleSettings();
+  const isGanttActive = (cfg.viewMode || 'gantt') === 'gantt';
+
+  if (isGanttActive && event) {
+    closeCalendarioDatePickerPopover();
+    selectedCalendarioRowId = (String(selectedCalendarioRowId) === nextId) ? null : nextId;
+    renderCalendarioObra();
+    return;
+  }
+
+  selectedCalendarioRowId = nextId;
   if (typeof document === 'undefined') return;
 
   // Vista Gantt (panel izquierdo y derecho sincronizados)
@@ -129,6 +183,20 @@ if (typeof window !== 'undefined') {
 export function renderCalendarioObra() {
   const container = document.getElementById('view-calendario');
   if (!container) return;
+
+  const activeProjId = getActiveProjectId() || 'default';
+  const sameProject = (lastRenderedCalendarioProjectId === activeProjId);
+  if (!sameProject) {
+    lastRenderedCalendarioProjectId = activeProjId;
+    selectedCalendarioRowId = null;
+    closeCalendarioDatePickerPopover();
+  }
+
+  const prevLeftScroll = document.getElementById('gantt-left-scroll') || document.getElementById('gantt-left-panel');
+  const prevRightPanel = document.getElementById('gantt-timeline-panel');
+  const preservedLeftTop = sameProject && prevLeftScroll ? prevLeftScroll.scrollTop : 0;
+  const preservedRightTop = sameProject && prevRightPanel ? prevRightPanel.scrollTop : 0;
+  const preservedRightLeft = sameProject && prevRightPanel ? prevRightPanel.scrollLeft : 0;
 
   const cfg = getScheduleSettings();
   const rawItems = extractScheduleItems(state.treeData);
@@ -205,7 +273,23 @@ export function renderCalendarioObra() {
     ? allConcepts.find(it => String(it.id) === String(pendingLinkPredecessorId))
     : null;
   const isCalLocked = isTabLocked('calendario');
-  const isJustifyConcepts = Boolean(cfg.justifyConcepts);
+  const rowViewMode = cfg.rowViewMode || (cfg.justifyConcepts ? 'justified' : 'normal');
+  const isJustifyConcepts = (rowViewMode === 'justified');
+  const allParentGroups = scheduleData.items.filter(it => it.isParent);
+  const allGroupsCollapsed = allParentGroups.length > 0 && allParentGroups.every(p => p.expanded === false);
+  const rowModeBtnClass = rowViewMode === 'justified'
+    ? 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-700 font-bold'
+    : (rowViewMode === 'compact'
+      ? 'bg-slate-700 hover:bg-slate-600 text-white border border-slate-800 font-bold'
+      : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-medium');
+  const rowModeBtnTitle = rowViewMode === 'justified'
+    ? 'Texto completo (Justificado) activo — Clic para Filas compactas'
+    : (rowViewMode === 'compact'
+      ? 'Filas compactas activo (1 línea) — Clic para volver a Vista normal'
+      : 'Vista de filas: Normal — Clic para Texto completo / Filas compactas');
+  const rowModeBtnIconHtml = rowViewMode === 'compact'
+    ? `<svg viewBox="0 0 16 16" fill="none" class="w-3.5 h-3.5 text-white" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2v3M3 3.5L4.5 5 6 3.5M4.5 14v-3M3 12.5L4.5 11 6 12.5M8.5 5.5h5M8.5 8h5M8.5 10.5h5"/></svg>`
+    : `<i class="fa-solid fa-align-justify ${isJustifyConcepts ? 'text-white' : 'text-slate-600'} text-xs"></i>`;
   applyTabLocksToDOM();
 
   container.innerHTML = `
@@ -237,7 +321,7 @@ export function renderCalendarioObra() {
           <select id="calendario-partida-select" onchange="filterCalendarioPartida(this.value)" class="bg-white border border-slate-300 text-slate-700 text-[11px] font-medium rounded px-2 py-1 outline-none focus:border-blue-500 cursor-pointer max-w-[155px] truncate shadow-sm shrink-0">
             <option value="all">Todas las partidas (${partidasList.length})</option>
             ${partidasList.map(p => `
-              <option value="${p.descripcion}" ${cfg.selectedPartida === p.descripcion ? 'selected' : ''}>${p.descripcion}</option>
+              <option value="${escapeCalHtml(p.descripcion)}" ${cfg.selectedPartida === p.descripcion ? 'selected' : ''}>${escapeCalHtml(p.descripcion)}</option>
             `).join('')}
           </select>
 
@@ -260,32 +344,26 @@ export function renderCalendarioObra() {
             <i class="fa-solid fa-rotate-right text-xs"></i>
           </button>
 
-          <!-- Botón Justificar Textos de la columna Conceptos de Obra (Al lado izquierdo del candado) -->
-          <button type="button" onclick="toggleCalendarioJustifyText()" id="btn-calendario-justify"
-                  class="${isJustifyConcepts ? 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-700 font-bold' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-medium'} text-[11px] p-1.5 rounded flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer shrink-0"
-                  title="${isJustifyConcepts ? 'Justificar textos activo en Conceptos de Obra — Haz clic para contraer a 1 línea' : 'Justificar textos de la columna Conceptos de Obra'}">
-            <i class="fa-solid fa-align-justify ${isJustifyConcepts ? 'text-white' : 'text-slate-600'} text-xs"></i>
+          <!-- Botón unificado Vista de Filas: Normal → Justificado (Texto completo) → Filas compactas -->
+          <button type="button" onclick="cycleCalendarioRowViewMode()" id="btn-calendario-justify"
+                  class="${rowModeBtnClass} text-[11px] p-1.5 rounded flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer shrink-0"
+                  title="${rowModeBtnTitle}" aria-label="Vista de filas (Justificar / Compactar)">
+            ${rowModeBtnIconHtml}
           </button>
 
-          <!-- Botón Candado de Bloqueo (Al lado izquierdo de Agrupar) -->
+          <!-- Botón Candado de Bloqueo (Al lado izquierdo de Agrupar / Desagrupar) -->
           <button type="button" onclick="toggleTabLock('calendario')" id="btn-lock-calendario"
                   class="${isCalLocked ? 'bg-amber-600 hover:bg-amber-500 text-white border border-amber-700 font-bold' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-medium'} text-[11px] p-1.5 rounded flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer shrink-0"
                   title="${isCalLocked ? '🔒 Calendario de Obra bloqueado (Solo consulta e impresión) — Haz clic para desbloquear' : 'Bloquear Calendario de Obra (Permitir solo consulta e impresión)'}">
             <i class="fa-solid ${isCalLocked ? 'fa-lock text-white' : 'fa-lock-open text-slate-600'} text-xs"></i>
           </button>
 
-          <!-- 8. Agrupar -->
-          <button type="button" onclick="collapseAllCalendarioGroups()" id="btn-agrupar-calendario" 
-                  class="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] p-1.5 rounded flex items-center justify-center font-medium shadow-sm transition active:scale-95 cursor-pointer shrink-0" 
-                  title="Agrupar Todo (Colapsar partidas)">
-            <i class="fa-solid fa-layer-group text-xs text-amber-600"></i>
-          </button>
-
-          <!-- 9. Desagrupar -->
-          <button type="button" onclick="expandAllCalendarioGroups()" id="btn-desagrupar-calendario" 
-                  class="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] p-1.5 rounded flex items-center justify-center font-medium shadow-sm transition active:scale-95 cursor-pointer shrink-0" 
-                  title="Desagrupar Todo (Mostrar todos los conceptos)">
-            <i class="fa-solid fa-arrows-split-up-and-left text-xs text-blue-600"></i>
+          <!-- 8. Botón único Agrupar / Desagrupar partidas -->
+          <button type="button" onclick="toggleAllCalendarioGroups()" id="btn-toggle-all-calendario-groups"
+                  class="${allGroupsCollapsed ? 'bg-blue-600 hover:bg-blue-500 text-white border border-blue-700 font-bold' : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-medium'} text-[11px] p-1.5 rounded flex items-center justify-center shadow-sm transition active:scale-95 cursor-pointer shrink-0"
+                  title="${allGroupsCollapsed ? 'Desagrupar Todo (Mostrar todos los conceptos)' : 'Agrupar Todo (Colapsar partidas para vista macro)'}"
+                  aria-label="${allGroupsCollapsed ? 'Desagrupar partidas' : 'Agrupar partidas'}">
+            <i class="fa-solid ${allGroupsCollapsed ? 'fa-arrows-split-up-and-left text-white' : 'fa-layer-group text-amber-600'} text-xs"></i>
           </button>
 
           <!-- 10. Imprimir -->
@@ -409,14 +487,23 @@ export function renderCalendarioObra() {
     </div>
   `;
 
-  // Inicializar resizer arrastrable manual, scroll sincronizado, arrastre de barras, zoom estilo Premiere Pro y líneas de corte (evitando acumulación de timers)
+  // Inicializar resizer arrastrable manual, alturas sincronizadas + SVG, scroll, barras, lupa de cursor, zoom Premiere y líneas de corte
   if (calendarioInitTimer) clearTimeout(calendarioInitTimer);
   calendarioInitTimer = setTimeout(() => {
     calendarioInitTimer = null;
+    ensureCalendarioGlobalListeners();
     initGanttResizer();
     syncGanttJustifiedRowHeights();
+    const curLeftScroll = document.getElementById('gantt-left-scroll') || document.getElementById('gantt-left-panel');
+    const curRightPanel = document.getElementById('gantt-timeline-panel');
+    if (sameProject && curLeftScroll && curRightPanel) {
+      curLeftScroll.scrollTop = preservedLeftTop;
+      curRightPanel.scrollTop = preservedRightTop;
+      curRightPanel.scrollLeft = preservedRightLeft;
+    }
     syncGanttScroll();
     initGanttBarDrag();
+    initGanttCursorBarLens();
     initPremiereZoomBar();
     initGanttTodayLineDrag();
     initFinancialTodayLineDrag();
@@ -438,22 +525,46 @@ function renderActiveCalendarioView(mode, items, periods, scheduleData, currency
   }
 }
 
+// Construye ruta SVG ortogonal para flechas FI (solid) e II (dashed paralelo)
+function buildGanttSvgPathD(linkType, x1, y1, x2, y2, succRowH = 44) {
+  const targetX = Math.max(0, x2 - 2);
+  if (linkType === 'SS') {
+    const leftX = Math.max(2, Math.min(x1, x2) - 9);
+    return `M ${x1} ${y1} L ${leftX} ${y1} L ${leftX} ${y2} L ${targetX} ${y2}`;
+  }
+  if (x2 >= x1 + 12) {
+    const midX = Math.round(x1 + Math.min(16, (x2 - x1) / 2));
+    return `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${targetX} ${y2}`;
+  }
+  const dir = y2 >= y1 ? 1 : -1;
+  const turnY = y1 + dir * Math.max(14, Math.round((succRowH || 40) / 2));
+  const outX = x1 + 8;
+  const inX = Math.max(2, x2 - 9);
+  return `M ${x1} ${y1} L ${outX} ${y1} L ${outX} ${turnY} L ${inX} ${turnY} L ${inX} ${y2} L ${targetX} ${y2}`;
+}
+
 // ==========================================
 // 1. VISTA DIAGRAMA DE GANTT (ESTILO EJECUTIVO)
 // ==========================================
 function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDate) {
-  const cfg = getScheduleSettings();
-  if (!minDate) minDate = parseDate(cfg.startDate || getProjectCreationDate());
+  if (!minDate) minDate = parseDate(getScheduleSettings()?.startDate || getProjectCreationDate());
   if (!maxDate || maxDate <= minDate) maxDate = addDays(minDate, 180);
-  const isJustifyConcepts = Boolean(cfg.justifyConcepts);
-  const savedPanelWidth = cfg.panelWidth || parseInt(localStorage.getItem('calendario_gantt_split_w'), 10) || 510;
-  const showCpm = true;
+
+  const cfg = getScheduleSettings();
+  const rowViewMode = cfg.rowViewMode || (cfg.justifyConcepts ? 'justified' : 'normal');
+  const isJustifyConcepts = (rowViewMode === 'justified');
+  const compactRows = (rowViewMode === 'compact');
+  const lensEnabled = (cfg.cursorLensEnabled !== false);
+  const isCalLocked = isTabLocked('calendario') || !canCurrentUserEditProject(getActiveProjectId());
+
+  const savedPanelWidth = cfg.panelWidth || parseInt(localStorage.getItem('calendario_gantt_split_w'), 10) || 500;
+  const showCpm = isAdvancedCalendarioAllowed() && (cfg.showCriticalPath !== false);
   const allItemsSource = currentScheduleData?.items || items;
   const allConceptItems = allItemsSource.filter(it => it.tipo === 'concepto');
   const conceptById = new Map();
   allConceptItems.forEach(c => conceptById.set(String(c.id), c));
 
-  // Generar escala según modo seleccionado: Días (3 niveles), Semanas (Semana 1..4 + Mes arriba) o Meses (Nombre del Mes)
+  // Generar escala según modo seleccionado: Días, Semanas o Meses (soportando zoom panorámico)
   const scaleData = generateGanttTimeScale(minDate, maxDate, cfg.scale, cfg.dayWidth);
   const { timelineStart, scale, pxPerDay, totalTimelineWidth, monthGroups, days } = scaleData;
 
@@ -466,27 +577,28 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
 
   const night = isNightMode();
   const gridLineRgb = night ? '51, 65, 85' : '203, 213, 225';
-  const gridBackgroundStyle = scale === 'dias'
-    ? `background-size: ${pxPerDay}px 100%; background-image: linear-gradient(to right, rgba(${gridLineRgb}, 0.55) 1px, transparent 1px);`
-    : (scale === 'semanas'
-      ? `background-size: ${7 * pxPerDay}px 100%; background-image: linear-gradient(to right, rgba(${gridLineRgb}, 0.65) 1px, transparent 1px);`
-      : `background-size: ${30 * pxPerDay}px 100%; background-image: linear-gradient(to right, rgba(${gridLineRgb}, 0.75) 1px, transparent 1px);`);
+  const stepGridPx = (scale === 'dias' && pxPerDay >= 10)
+    ? pxPerDay
+    : ((scale === 'semanas' && pxPerDay >= 3.5) || pxPerDay >= 4 ? 7 * pxPerDay : 30 * pxPerDay);
+  const gridBackgroundStyle = `background-size: ${stepGridPx}px 100%; background-image: linear-gradient(to right, rgba(${gridLineRgb}, ${scale === 'meses' || pxPerDay < 4 ? '0.72' : '0.55'}) 1px, transparent 1px);`;
 
-  // Precalcular altura de cada fila y geometría exacta (x, y) para trazar flechas SVG Fin-a-Inicio
+  // Precalcular altura inicial estimada y geometría (x, y) para flechas SVG (FI + II en paralelo)
   const visibleGeomMap = new Map();
   const rowHeightsMap = new Map();
-  const descColWidthPx = Math.max(110, savedPanelWidth - 255);
-  const charsPerLine = Math.max(16, Math.floor(descColWidthPx / 6.3));
+  const descColWidthPx = Math.max(120, savedPanelWidth - 150);
+  const charsPerLine = Math.max(18, Math.floor(descColWidthPx / 6.3));
   let cumulativeRowY = 0;
 
   items.forEach((it, rowIdx) => {
-    let rowH = 40;
-    if (isJustifyConcepts) {
+    const isSel = String(selectedCalendarioRowId) === String(it.id);
+    const baseH = compactRows ? 24 : (it.isParent ? 40 : 46);
+    let rowH = baseH;
+    if (isSel || (isJustifyConcepts && !compactRows)) {
       const descLen = String(it.descripcion || '').length;
       const lines = Math.max(1, Math.ceil(descLen / charsPerLine));
       rowH = it.isParent
-        ? Math.max(40, lines * 16 + 16)
-        : Math.max(44, lines * 15 + 24);
+        ? Math.max(baseH, lines * 16 + (isSel ? 28 : 14))
+        : Math.max(baseH, lines * 15 + (isSel ? 46 : 24));
     }
     rowHeightsMap.set(String(it.id), rowH);
 
@@ -496,11 +608,12 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
       const offD = Math.max(0, diffDays(timelineStart, sD));
       const bDays = Math.max(3, it.durationDays || (diffDays(sD, eD) + 1));
       const lPx = offD * pxPerDay;
-      const wPx = Math.max(3 * pxPerDay, bDays * pxPerDay);
+      const wPx = Math.max(6, bDays * pxPerDay);
       visibleGeomMap.set(String(it.id), {
         rowIdx,
         leftPx: lPx,
         rightPx: lPx + wPx,
+        widthPx: wPx,
         centerY: cumulativeRowY + (rowH / 2),
         rowHeight: rowH,
         item: it
@@ -510,42 +623,40 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
   });
   const totalRowsHeightPx = Math.max(40, cumulativeRowY);
 
-  // Construir rutas ortogonales SVG para cada enlace Fin-a-Inicio visible
+  // Construir rutas ortogonales SVG para cada enlace FI (FS) e II (SS) visible
   const svgPaths = [];
   items.forEach(succItem => {
-    if (succItem.isParent || !Array.isArray(succItem.predecessors) || succItem.predecessors.length === 0) return;
+    if (succItem.isParent) return;
+    const succLinks = normalizeScheduleLinks(succItem.predecessors);
+    if (succLinks.length === 0) return;
     const succGeom = visibleGeomMap.get(String(succItem.id));
     if (!succGeom) return;
 
-    succItem.predecessors.forEach(predId => {
-      const predGeom = visibleGeomMap.get(String(predId));
+    succLinks.forEach(lk => {
+      const predGeom = visibleGeomMap.get(String(lk.id));
       if (!predGeom) return;
-      const predConcept = conceptById.get(String(predId));
+      const predConcept = conceptById.get(String(lk.id));
+      const isSS = (lk.type === 'SS');
       const isCritLink = showCpm &&
         predConcept &&
         Array.isArray(predConcept.criticalSuccIds) &&
         predConcept.criticalSuccIds.includes(String(succItem.id));
 
-      const x1 = Math.round(predGeom.rightPx);
+      const x1 = Math.round(isSS ? predGeom.leftPx : predGeom.rightPx);
       const y1 = Math.round(predGeom.centerY);
       const x2 = Math.round(succGeom.leftPx);
       const y2 = Math.round(succGeom.centerY);
-      const targetX = Math.max(0, x2 - 2);
-
-      let pathD = '';
-      if (x2 >= x1 + 16) {
-        const midX = Math.round(x1 + Math.min(18, (x2 - x1) / 2));
-        pathD = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${targetX} ${y2}`;
-      } else {
-        const dir = y2 >= y1 ? 1 : -1;
-        const turnY = y1 + dir * 20;
-        const outX = x1 + 9;
-        const inX = Math.max(2, x2 - 10);
-        pathD = `M ${x1} ${y1} L ${outX} ${y1} L ${outX} ${turnY} L ${inX} ${turnY} L ${inX} ${y2} L ${targetX} ${y2}`;
-      }
+      const pathD = buildGanttSvgPathD(lk.type, x1, y1, x2, y2, succGeom.rowHeight);
 
       svgPaths.push({
         d: pathD,
+        predId: String(lk.id),
+        succId: String(succItem.id),
+        type: lk.type,
+        x1,
+        x2,
+        rowH: Math.round(succGeom.rowHeight),
+        isSS,
         isCritLink,
         fromClave: predConcept?.clave || '',
         toClave: succItem.clave || ''
@@ -555,135 +666,190 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
 
   const visibleConceptsCount = items.filter(it => !it.isParent).length;
   const visibleCriticalCount = items.filter(it => !it.isParent && it.isCritical).length;
-  const visibleLinksCount = items.filter(it => !it.isParent && it.predecessors && it.predecessors.length > 0).length;
+  const visibleLinksCount = items.filter(it => !it.isParent && normalizeScheduleLinks(it.predecessors).length > 0).length;
+
+  const isSingleCompactHeader = !(scale === 'dias' && pxPerDay >= 10) && !(scale === 'semanas' && pxPerDay >= 3.5);
+  const fmtHeaderMonthLabel = (m) => {
+    if (m.widthPx < 48) return m.short3 || m.monthName.slice(0, 3).toUpperCase();
+    if (m.widthPx < 90) return m.shortWithYear || `${m.monthName.slice(0, 3).toUpperCase()} '${String(m.year).slice(-2)}`;
+    if (m.widthPx < 135) return m.shortLabel || `${m.monthName.slice(0, 3).toUpperCase()} ${m.year}`;
+    return `${m.monthName.toUpperCase()} ${m.year}`;
+  };
 
   return `
     <div class="flex flex-1 overflow-hidden h-full relative bg-white" id="gantt-root-container">
       
-      <!-- Panel Izquierdo: Conceptos, Predecesoras, Fechas y Holgura (Ancho Ajustable Manualmente mediante Divisor, estilo Catálogo Base) -->
+      <!-- Panel Izquierdo Streamlined (Clave + Concepto amplio con Predec. e Inicio en 2° renglón + Días) -->
       <div id="gantt-left-panel" 
-           class="shrink-0 flex flex-col bg-white z-10 overflow-y-auto overflow-x-hidden custom-scroll border-r border-slate-200"
-           style="width: ${savedPanelWidth}px; min-width: 260px; max-width: 80%;">
+           class="shrink-0 flex flex-col bg-white z-10 overflow-hidden border-r border-slate-200 relative"
+           style="width: ${savedPanelWidth}px; min-width: 240px; max-width: 78%;">
         
-        <!-- Encabezado de la tabla izquierda (Idéntico a Catálogo Base: bg-slate-100 text-slate-600 uppercase text-[10px] font-semibold) -->
-        <div class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase text-[10px] font-semibold px-2.5 flex items-center sticky top-0 z-20 h-16 shrink-0 shadow-2xs">
-          <span class="w-14 shrink-0">Clave</span>
-          <span class="flex-1 min-w-0 px-1.5">Concepto de Obra / Unidad</span>
-          <span class="w-24 shrink-0 text-center" title="Concepto(s) predecesores que deben terminar antes de poder iniciar éste (Fin a Inicio)">Predec.</span>
-          <span class="w-24 shrink-0 text-center">Inicio</span>
-          <span class="w-12 shrink-0 text-center">Días</span>
-        </div>
+        <div id="gantt-left-scroll" class="flex-1 overflow-y-auto overflow-x-hidden custom-scroll relative">
+          <!-- Encabezado de la tabla izquierda -->
+          <div class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase text-[10px] font-semibold px-2.5 flex items-center justify-between sticky top-0 z-20 h-16 shrink-0 shadow-2xs">
+            <div class="flex items-center min-w-0 flex-1 mr-1.5">
+              <span class="w-[58px] shrink-0">Clave</span>
+              <span class="flex-1 min-w-0 px-1 truncate" title="Concepto de Obra con selector interactivo de Inicio y Predecesoras (FI / II)">Concepto de Obra / Inicio y Predecesora</span>
+            </div>
+            <div class="flex items-center shrink-0">
+              <span class="w-12 shrink-0 text-center">Días</span>
+            </div>
+          </div>
 
-        <!-- Renglones de conceptos y partidas (Formato y colores de Catálogo Base) -->
-        <div class="divide-y divide-slate-100 font-mono text-xs flex-1">
-          ${items.map(item => {
-            const rowH = rowHeightsMap.get(String(item.id)) || 40;
-            const isSelectedRow = String(selectedCalendarioRowId) === String(item.id);
-            if (item.isParent) {
-              const isLevel1 = item.level === 1;
-              const indentPx = (item.level - 1) * 14 + 8;
-              const defaultParentBg = isLevel1 ? 'bg-slate-50 font-bold text-slate-800 border-y border-slate-200' : 'bg-slate-50/60 font-semibold text-slate-800 border-y border-slate-200/70';
-              return `
-                <div data-gantt-left-row="${item.id}" onclick="selectCalendarioRow('${item.id}', event)" onfocusin="selectCalendarioRow('${item.id}', event)" class="${isJustifyConcepts ? 'min-h-[40px]' : 'h-10'} ${item.rowBgColor ? 'font-bold text-slate-800 border-y border-slate-200' : defaultParentBg} ${isSelectedRow ? 'selected-row' : 'hover:bg-slate-100/80'} py-1.5 px-2 flex items-center justify-between cursor-pointer transition select-none" style="padding-left: ${indentPx}px; ${isJustifyConcepts ? `min-height: ${rowH}px;` : ''} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''}">
-                  <div class="flex items-center min-w-0 flex-1 mr-1.5">
-                    <button type="button" onclick="toggleCalendarioNodeGroup('${item.id}', event)" 
-                            class="mr-1.5 w-5 h-5 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 inline-flex items-center justify-center transition cursor-pointer shrink-0" 
-                            title="${item.expanded ? 'Agrupar partida (colapsar)' : 'Desagrupar partida (expandir)'}">
-                      <i class="fa-solid fa-chevron-${item.expanded ? 'down' : 'right'} text-[10px]"></i>
-                    </button>
-                    <span class="w-12 text-blue-700 font-mono text-[11px] font-bold shrink-0 truncate">${item.clave || 'PART'}</span>
-                    <span class="${isJustifyConcepts ? 'whitespace-normal break-words text-justify leading-snug' : 'truncate'} font-sans ${isLevel1 ? 'uppercase text-xs tracking-wide font-extrabold text-slate-900' : 'text-xs font-bold text-slate-800'}">${item.descripcion}</span>
-                    <span class="ml-1.5 shrink-0">${renderPartidaNivel1ChatButton(item.id, item.clave, item.descripcion)}</span>
-                    ${!item.expanded ? `<span class="ml-1.5 px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-mono border border-blue-200 shrink-0 font-normal">Agrupado (${item.descendantConceptCount})</span>` : ''}
-                  </div>
-                  <div class="flex items-center shrink-0">
-                    <span class="w-24 text-center text-[9.5px]">
-                      ${showCpm && item.hasCriticalChildren ? `<span class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 font-sans font-bold" title="Contiene actividades en Ruta Crítica">🔥 Crítica</span>` : `<span class="text-slate-400">—</span>`}
-                    </span>
-                    <span class="w-24 text-center text-[11px] text-slate-600 font-mono">${item.startDate || ''}</span>
-                    <span class="w-12 text-center text-[11px] text-slate-800 font-bold">${item.durationDays || 0}d</span>
-                  </div>
-                </div>
-              `;
-            } else {
-              const indentPx = (item.level - 1) * 14 + 12;
-              const curDur = Math.max(3, item.durationDays || 3);
-              const barColorHex = item.customColor || item.color.bar;
-              const isCrit = showCpm && item.isCritical;
-              const dotHex = isCrit ? '#dc2626' : barColorHex;
-              const preds = Array.isArray(item.predecessors) ? item.predecessors : [];
-              const predConcepts = preds.map(pid => conceptById.get(String(pid))).filter(Boolean);
-              const predClaves = predConcepts.map(pc => pc.clave || 'CONC');
-              const singlePredId = preds.length === 1 ? String(preds[0]) : '';
+          <!-- Renglones de conceptos y partidas -->
+          <div id="gantt-left-rows" class="divide-y divide-slate-100 font-mono text-xs">
+            ${items.map(item => {
+              const isSelectedRow = String(selectedCalendarioRowId) === String(item.id);
+              const wrapText = isSelectedRow || (isJustifyConcepts && !compactRows);
+              const baseH = compactRows ? 24 : (item.isParent ? 40 : 46);
+              const sizeStyle = wrapText ? `min-height: ${baseH}px;` : `height: ${baseH}px;`;
 
-              let predControlHtml = '';
-              if (preds.length >= 2) {
-                const shortBadges = predClaves.slice(0, 2).join(', ') + (predClaves.length > 2 ? ` +${predClaves.length - 2}` : '');
-                predControlHtml = `
-                  <button type="button" onclick="openConceptDependenciesModal('${item.id}')"
-                          class="w-full max-w-[90px] px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[10px] font-mono font-bold truncate cursor-pointer transition flex items-center justify-center gap-1"
-                          title="Depende de terminar: ${predConcepts.map(pc => `${pc.clave} (${pc.descripcion})`).join(' | ')} — Clic para editar">
-                    <i class="fa-solid fa-link text-[8px] shrink-0"></i>
-                    <span class="truncate">${shortBadges}</span>
-                  </button>
+              if (item.isParent) {
+                const isLevel1 = item.level === 1;
+                const indentPx = (item.level - 1) * 12 + 6;
+                const defaultParentBg = isLevel1 ? 'bg-slate-50 font-bold text-slate-800 border-y border-slate-200' : 'bg-slate-50/60 font-semibold text-slate-800 border-y border-slate-200/70';
+                return `
+                  <div data-gantt-left-row="${escapeCalHtml(item.id)}" data-base-h="${baseH}" onclick="selectCalendarioRow('${escapeCalHtml(item.id)}', event)" onfocusin="selectCalendarioRow('${escapeCalHtml(item.id)}', null)" class="${item.rowBgColor ? 'font-bold text-slate-800 border-y border-slate-200' : defaultParentBg} ${isSelectedRow ? 'selected-row py-2' : 'hover:bg-slate-100/80'} px-2 flex items-center justify-between cursor-pointer transition select-none" style="padding-left: ${indentPx}px; ${sizeStyle} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''}">
+                    <div class="flex ${isSelectedRow ? 'items-start' : 'items-center'} min-w-0 flex-1 mr-1.5">
+                      <button type="button" onclick="toggleCalendarioNodeGroup('${escapeCalHtml(item.id)}', event)" 
+                              class="mr-1 w-5 h-5 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 inline-flex items-center justify-center transition cursor-pointer shrink-0 ${isSelectedRow ? 'mt-0.5' : ''}" 
+                              title="${item.expanded ? 'Agrupar partida (colapsar)' : 'Desagrupar partida (expandir)'}">
+                        <i class="fa-solid fa-chevron-${item.expanded ? 'down' : 'right'} text-[10px]"></i>
+                      </button>
+                      <span class="w-[44px] mr-1 text-blue-700 font-mono text-[11px] font-bold shrink-0 truncate ${isSelectedRow ? 'mt-0.5' : ''}">${escapeCalHtml(item.clave || 'PART')}</span>
+                      <div class="min-w-0 flex-1 font-sans">
+                        <div class="flex items-center gap-1 min-w-0">
+                          <span class="${wrapText ? 'whitespace-normal break-words text-justify leading-snug' : 'truncate'} ${isLevel1 ? 'uppercase text-xs tracking-wide font-extrabold text-slate-900' : 'text-xs font-bold text-slate-800'} ${compactRows && !isSelectedRow ? 'text-[11px]' : ''}">${escapeCalHtml(item.descripcion)}</span>
+                          <span class="shrink-0">${renderPartidaNivel1ChatButton(item.id, item.clave, item.descripcion)}</span>
+                          ${showCpm && item.hasCriticalChildren ? `<span class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-sans font-bold shrink-0" title="Contiene actividades en Ruta Crítica">🔥 Crítica</span>` : ''}
+                          ${!item.expanded ? `<span class="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-mono border border-blue-200 shrink-0 font-normal">Agrup. (${item.descendantConceptCount})</span>` : ''}
+                        </div>
+                        ${isSelectedRow ? `<span class="block text-[10px] font-mono font-semibold text-blue-800 mt-0.5">📅 ${escapeCalHtml(item.startDate)} → ${escapeCalHtml(item.endDate)} • Total: ${formatCurrency(item.totalImporte, currencySymbol)}</span>` : ''}
+                      </div>
+                    </div>
+                    <div class="flex items-center shrink-0">
+                      <span class="w-12 text-center text-[11px] text-slate-800 font-bold">${item.durationDays || 0}d</span>
+                    </div>
+                  </div>
                 `;
               } else {
-                predControlHtml = `
-                  <select onchange="onGanttPredecessorSelect('${item.id}', this.value)"
-                          class="w-full max-w-[90px] text-[10px] font-mono rounded border ${singlePredId ? 'bg-blue-50/80 border-blue-200 text-blue-800 font-bold' : 'bg-transparent hover:bg-slate-50 border-slate-200 text-slate-500'} px-1 py-0.5 outline-none focus:border-blue-500 cursor-pointer truncate"
-                          title="${singlePredId ? `Depende de terminar ${predClaves[0]} antes de iniciar` : 'Sin dependencia (inicio libre). Selecciona un concepto predecesor'}">
-                    <option value="">— Libre —</option>
-                    ${allConceptItems
-                      .filter(cand => String(cand.id) !== String(item.id) && (String(cand.id) === singlePredId || !wouldCreateScheduleCycle(item.id, cand.id, allConceptItems)))
-                      .map(cand => `<option value="${cand.id}" ${String(cand.id) === singlePredId ? 'selected' : ''}>${cand.clave} • ${cand.descripcion.slice(0, 24)}</option>`)
-                      .join('')}
-                    <option value="__MULTI__">⚙️ Múltiples...</option>
-                  </select>
+                const indentPx = (item.level - 1) * 12 + 10;
+                const curDur = Math.max(3, item.durationDays || 3);
+                const barColorHex = item.customColor || item.color.bar;
+                const isCrit = showCpm && item.isCritical;
+                const dotHex = isCrit ? '#dc2626' : barColorHex;
+                const predLinks = normalizeScheduleLinks(item.predecessors);
+                const predDetails = predLinks.map(lk => ({ lk, c: conceptById.get(String(lk.id)) })).filter(x => x.c);
+                const predClaves = predDetails.map(x => x.c.clave || 'CONC');
+                const hasLock = predLinks.length > 0 && Boolean(item.minAllowedStartDate);
+                const hasParallelLink = predLinks.some(lk => lk.type === 'SS' || lk.lag < 0);
+
+                let predPillHtml = '';
+                if (predDetails.length === 0) {
+                  predPillHtml = `
+                    <button type="button" data-open-predec="${escapeCalHtml(item.id)}"
+                            onclick="event.stopPropagation(); openConceptDependenciesModal('${escapeCalHtml(item.id)}')"
+                            class="h-[18px] px-1.5 rounded border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-500 hover:text-blue-700 text-[9.5px] font-mono inline-flex items-center gap-1 cursor-pointer transition shrink-0"
+                            title="Sin dependencia (inicio libre). Clic para configurar predecesoras (FI o en paralelo II)">
+                      <span class="pointer-events-none">🔗 Libre</span>
+                    </button>
+                  `;
+                } else if (predDetails.length === 1) {
+                  const { lk, c } = predDetails[0];
+                  const isSS = lk.type === 'SS';
+                  predPillHtml = `
+                    <button type="button" data-open-predec="${escapeCalHtml(item.id)}"
+                            onclick="event.stopPropagation(); openConceptDependenciesModal('${escapeCalHtml(item.id)}')"
+                            class="h-[18px] px-1.5 rounded border ${isSS ? 'border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800' : 'border-blue-200 bg-blue-50/90 hover:bg-blue-100 text-blue-800'} text-[9.5px] font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition shrink-0"
+                            title="${isSS ? 'En paralelo desde inicio de' : 'Al terminar'} ${escapeCalHtml(c.clave)} (${escapeCalHtml(c.descripcion)}) — Clic para editar">
+                      <span class="pointer-events-none">${isSS ? '∥' : '🔗'} ${escapeCalHtml(formatScheduleLinkTag(lk, c.clave))}</span>
+                    </button>
+                  `;
+                } else {
+                  predPillHtml = `
+                    <button type="button" data-open-predec="${escapeCalHtml(item.id)}"
+                            onclick="event.stopPropagation(); openConceptDependenciesModal('${escapeCalHtml(item.id)}')"
+                            class="h-[18px] px-1.5 rounded border ${hasParallelLink ? 'border-sky-300 bg-sky-50 hover:bg-sky-100 text-sky-800' : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700'} text-[9.5px] font-mono font-bold inline-flex items-center gap-1 cursor-pointer transition shrink-0"
+                            title="${escapeCalHtml(predDetails.map(x => `${formatScheduleLinkTag(x.lk, x.c.clave)}: ${x.c.descripcion}`).join(' | '))} — Clic para editar">
+                      <span class="pointer-events-none">🔗 ${predDetails.length} enlac.</span>
+                    </button>
+                  `;
+                }
+
+                const isDatePickerOpen = (String(openDatePickerConceptId) === String(item.id));
+                const inicioPillHtml = `
+                  <button type="button" data-pick-date="${escapeCalHtml(item.id)}"
+                          onclick="event.stopPropagation(); openCalendarioDatePickerPopover('${escapeCalHtml(item.id)}', this)"
+                          class="h-[20px] px-1.5 rounded border ${isDatePickerOpen ? 'ring-2 ring-blue-500 border-blue-500 ' : ''}${hasLock ? 'bg-amber-50/90 border-amber-200 text-amber-900 hover:bg-amber-100' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-blue-50 hover:border-blue-300'} text-[9.5px] font-mono font-semibold inline-flex items-center gap-1 cursor-pointer transition shrink-0"
+                          title="${hasLock ? `Inicio: ${escapeCalHtml(item.startDate)} (mín. ${escapeCalHtml(item.minAllowedStartDate)} por ${escapeCalHtml(predClaves.join(', '))}) — Clic para elegir fecha` : `Inicio: ${escapeCalHtml(item.startDate)} — Clic para abrir calendario`}">
+                    <span class="pointer-events-none inline-flex items-center gap-1">
+                      <i class="fa-regular fa-calendar text-[9px] ${hasLock ? 'text-amber-600' : 'text-blue-600'}"></i>
+                      <span>${escapeCalHtml(item.startDate)}</span>
+                      ${hasLock ? `<i class="fa-solid fa-lock text-[8px] text-amber-600"></i>` : ''}
+                    </span>
+                  </button>
+                `;
+
+                return `
+                  <div data-gantt-left-row="${escapeCalHtml(item.id)}" data-base-h="${baseH}" onclick="selectCalendarioRow('${escapeCalHtml(item.id)}', event)" onfocusin="selectCalendarioRow('${escapeCalHtml(item.id)}', null)" class="${item.rowBgColor ? '' : (isCrit ? 'bg-rose-50/35 hover:bg-rose-50/65' : 'bg-white hover:bg-slate-50')} ${isSelectedRow ? 'selected-row py-2' : ''} px-2 flex items-center justify-between group cursor-pointer transition select-none" style="padding-left: ${indentPx}px; ${sizeStyle} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''}">
+                    <div class="flex ${isSelectedRow ? 'items-start' : 'items-center'} min-w-0 flex-1 mr-1.5">
+                      <span class="w-2 h-2 rounded-full mr-1.5 shrink-0 border ${isSelectedRow ? 'mt-1.5' : ''}" style="background-color: ${dotHex}44; border-color: ${dotHex};"></span>
+                      <span class="w-[50px] mr-1.5 font-mono ${isCrit ? 'text-rose-700 font-bold' : 'text-blue-700 font-semibold'} truncate text-[11px] shrink-0 ${isSelectedRow ? 'mt-0.5' : ''}" title="${escapeCalHtml(item.clave)}">${escapeCalHtml(item.clave)}</span>
+                      <div class="min-w-0 flex-1 font-sans">
+                        <div class="flex items-start justify-between gap-1 min-w-0">
+                          <span class="block min-w-0 flex-1 ${wrapText ? 'whitespace-normal break-words text-justify leading-snug' : 'truncate'} text-slate-800 ${compactRows && !isSelectedRow ? 'text-[11px]' : 'text-xs'} ${isSelectedRow ? 'font-semibold text-slate-900' : 'font-medium'}" title="${escapeCalHtml(item.descripcion)}">${escapeCalHtml(item.descripcion)}</span>
+                          <span class="ml-1 shrink-0">${renderPartidaNivel1ChatButton(item.id, item.clave, item.descripcion)}</span>
+                        </div>
+                        ${isSelectedRow ? `
+                          <div class="mt-1.5 space-y-1">
+                            <div class="flex flex-wrap items-center justify-between gap-1.5">
+                              <span class="text-[10px] text-slate-600 font-mono">${formatNumber(item.cantidad, 2)} ${escapeCalHtml(item.unidad)} • <strong class="text-emerald-700">${formatCurrency(item.importe, currencySymbol)}</strong></span>
+                              <div class="flex flex-wrap items-center gap-1">
+                                ${predPillHtml}
+                                ${inicioPillHtml}
+                                <span class="text-[10px] font-mono text-blue-800 font-bold">→ ${escapeCalHtml(item.endDate)}</span>
+                                ${showCpm ? `<span class="text-[10px] font-mono ${isCrit ? 'text-rose-700 font-bold' : 'text-emerald-700 font-bold'}">${isCrit ? '🔥 Crítica' : `✓ +${item.slackDays || 0}d`}</span>` : ''}
+                              </div>
+                            </div>
+                            ${predDetails.length > 0 ? `<div class="text-[10.5px] text-indigo-800 font-medium leading-snug whitespace-normal break-words">${predDetails.map(x => {
+                              const modeTxt = x.lk.type === 'SS'
+                                ? (x.lk.lag === 0 ? '∥ Paralela al inicio de' : `∥ ${x.lk.lag > 0 ? `+${x.lk.lag}d` : `${x.lk.lag}d`} desde inicio de`)
+                                : (x.lk.lag === 0 ? '🔗 Tras terminar' : (x.lk.lag > 0 ? `🔗 +${x.lk.lag}d tras terminar` : `🔗 Traslape ${x.lk.lag}d de`));
+                              return `${modeTxt} <strong>${escapeCalHtml(x.c.clave)}</strong> (${escapeCalHtml(x.c.descripcion)})`;
+                            }).join(' <span class="text-slate-400">•</span> ')}</div>` : ''}
+                          </div>
+                        ` : (!compactRows ? `
+                          <div class="flex items-center justify-between gap-1.5 mt-0.5 min-w-0">
+                            <span class="text-[10px] text-slate-500 font-mono truncate">${formatNumber(item.cantidad, 2)} ${escapeCalHtml(item.unidad)} • ${formatCurrency(item.importe, currencySymbol)}</span>
+                            <div class="flex items-center gap-1 shrink-0">
+                              ${predPillHtml}
+                              ${inicioPillHtml}
+                            </div>
+                          </div>
+                        ` : '')}
+                      </div>
+                    </div>
+                    <!-- Input de Duración sin flechas spinner (Mínimo 3 días) -->
+                    <div class="w-12 text-center shrink-0">
+                      <input type="number" min="3" max="999" value="${curDur}" ${isCalLocked ? 'disabled' : ''}
+                             onclick="event.stopPropagation()"
+                             onchange="onGanttDurationInput('${escapeCalHtml(item.id)}', '${escapeCalHtml(item.startDate)}', this.value)"
+                             class="calendario-dur-input text-[11px] bg-transparent hover:bg-white focus:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 rounded-xs px-0.5 py-0.5 outline-none font-mono text-slate-800 font-bold w-10 text-center transition disabled:opacity-60 disabled:cursor-not-allowed"
+                             title="${isCalLocked ? 'Calendario bloqueado (solo consulta)' : 'Duración en días (mínimo 3 días). Al cambiar empuja conceptos dependientes.'}">
+                    </div>
+                  </div>
                 `;
               }
-
-              const hasLock = preds.length > 0 && Boolean(item.minAllowedStartDate);
-
-              return `
-                <div data-gantt-left-row="${item.id}" onclick="selectCalendarioRow('${item.id}', event)" onfocusin="selectCalendarioRow('${item.id}', event)" class="${isJustifyConcepts ? 'min-h-[40px]' : 'h-10'} py-1.5 px-2 ${item.rowBgColor ? '' : (isCrit ? 'bg-rose-50/35 hover:bg-rose-50/65' : 'bg-white hover:bg-slate-50')} ${isSelectedRow ? 'selected-row' : ''} flex items-center justify-between group cursor-pointer transition select-none" style="padding-left: ${indentPx}px; ${isJustifyConcepts ? `min-height: ${rowH}px;` : ''} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''}">
-                  <div class="flex items-center min-w-0 flex-1 mr-1.5">
-                    <span class="w-2 h-2 rounded-full mr-1.5 shrink-0 border" style="background-color: ${dotHex}44; border-color: ${dotHex};"></span>
-                    <span class="w-13 font-mono ${isCrit ? 'text-rose-700 font-bold' : 'text-blue-700 font-semibold'} truncate text-[11px] shrink-0" title="${item.clave}">${item.clave}</span>
-                    <div class="min-w-0 flex-1 font-sans">
-                      <div class="flex items-start gap-1.5 min-w-0">
-                        <span class="flex-1 min-w-0 ${isJustifyConcepts ? 'whitespace-normal break-words text-justify leading-snug' : 'truncate'} text-slate-800 text-xs font-medium" title="${item.descripcion}">${item.descripcion}</span>
-                        <span class="shrink-0">${renderPartidaNivel1ChatButton(item.id, item.clave, item.descripcion)}</span>
-                      </div>
-                      <span class="text-[10px] text-slate-500 font-mono truncate block">${formatNumber(item.cantidad, 2)} ${item.unidad} • ${formatCurrency(item.importe, currencySymbol)}</span>
-                    </div>
-                  </div>
-                  <div class="flex items-center shrink-0">
-                    <!-- Selector de Predecesoras Fin-a-Inicio -->
-                    <div class="w-24 px-0.5 flex items-center justify-center">
-                      ${predControlHtml}
-                    </div>
-                    <!-- Input de Fecha Inicio Editable con Candado si tiene Predecesora -->
-                    <div class="w-24 text-center px-0.5 flex items-center justify-center">
-                      ${hasLock ? `<i class="fa-solid fa-lock text-[8.5px] text-amber-600 mr-0.5 shrink-0" title="Inicio condicionado Fin-a-Inicio: requiere terminar ${predClaves.join(', ')} (mínimo ${item.minAllowedStartDate})"></i>` : ''}
-                      <input type="date" value="${item.startDate}" ${hasLock ? `min="${item.minAllowedStartDate}"` : ''} onchange="onGanttDateInput('${item.id}', this.value, ${curDur})" class="calendario-date-input text-[10.5px] bg-transparent hover:bg-white focus:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 rounded-xs px-0.5 py-0.5 outline-none font-mono ${hasLock ? 'text-amber-900 font-semibold' : 'text-slate-800'} w-full text-center cursor-pointer transition" title="${hasLock ? `No puede iniciar antes de ${item.minAllowedStartDate} (depende de ${predClaves.join(', ')})` : 'Fecha de inicio del concepto'}">
-                    </div>
-                    <!-- Input de Duración Editable (Mínimo 3 días, Estilo Catálogo Base) -->
-                    <div class="w-12 text-center">
-                      <input type="number" min="3" max="999" value="${curDur}" onchange="onGanttDurationInput('${item.id}', '${item.startDate}', this.value)" class="text-[11px] bg-transparent hover:bg-white focus:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 rounded-xs px-0.5 py-0.5 outline-none font-mono text-slate-800 font-bold w-10 text-center transition" title="Duración en días (mínimo 3 días). Al cambiar empuja conceptos dependientes.">
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-          }).join('')}
+            }).join('')}
+          </div>
         </div>
 
         <!-- Pie del panel izquierdo sincronizado con la barra de navegación -->
-        <div class="h-8 bg-slate-100 border-t border-slate-200 px-3 flex items-center justify-between text-[10.5px] text-slate-600 font-mono shrink-0">
+        <div id="gantt-left-footer" class="h-8 bg-slate-100 border-t border-slate-200 px-3 flex items-center justify-between text-[10.5px] text-slate-600 font-mono shrink-0 relative z-10">
           <span class="flex items-center gap-1.5 font-semibold text-slate-700"><i class="fa-solid fa-list-check text-blue-600 text-[10px]"></i> ${visibleConceptsCount} conc.</span>
           <span class="flex items-center gap-2">
             <span class="text-rose-700 font-bold" title="Conceptos en Ruta Crítica"><i class="fa-solid fa-fire-flame-curved text-[9px]"></i> ${visibleCriticalCount} crít.</span>
-            <span class="text-indigo-700 font-semibold" title="Conceptos con dependencia Fin-a-Inicio"><i class="fa-solid fa-link text-[9px]"></i> ${visibleLinksCount} enl.</span>
+            <span class="text-indigo-700 font-semibold" title="Conceptos con dependencia (FI / II)"><i class="fa-solid fa-link text-[9px]"></i> ${visibleLinksCount} enl.</span>
           </span>
         </div>
 
@@ -702,32 +868,20 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
         <!-- Timeline Gráfico Gantt -->
         <div id="gantt-timeline-panel" class="flex-1 overflow-x-hidden overflow-y-auto bg-white custom-scroll relative">
         
-        <!-- Encabezado según Escala: Días (3 niveles), Semanas (2 niveles), Meses (Nombre del Mes) en estilo Catálogo Base -->
-        <div class="sticky top-0 z-20 min-w-max bg-slate-100 shadow-2xs">
-          ${scale === 'dias' ? `
+        <!-- Encabezado según Escala: Días (3 niveles), Semanas (2 niveles), Meses o Panorámico (cuando pxPerDay está alejado) -->
+        <div id="gantt-timeline-header" class="sticky top-0 z-20 min-w-max bg-slate-100 shadow-2xs" style="width: ${totalTimelineWidth}px;">
+          ${(scale === 'dias' && pxPerDay >= 10) ? `
             <!-- ESCALA DÍAS (3 NIVELES: Mes arriba, día del mes en medio, letra L-D abajo) -->
-            <!-- NIVEL 1 (Arriba): Nombre del Mes Abreviado Inteligentemente según Ancho de Columna -->
             <div class="flex border-b border-slate-200 min-w-max h-7">
-              ${monthGroups.map(m => {
-                let displayLabel = `${m.monthName.toUpperCase()} ${m.year}`;
-                if (m.widthPx < 48) {
-                  displayLabel = m.short3 || m.monthName.slice(0, 3).toUpperCase();
-                } else if (m.widthPx < 90) {
-                  displayLabel = m.shortWithYear || `${m.monthName.slice(0, 3).toUpperCase()} '${String(m.year).slice(-2)}`;
-                } else if (m.widthPx < 130) {
-                  displayLabel = m.shortLabel || `${m.monthName.slice(0, 3).toUpperCase()} ${m.year}`;
-                }
-                return `
-                  <div class="border-r border-slate-200 text-center py-1 px-1 bg-slate-100 font-extrabold text-[11px] text-slate-700 uppercase tracking-wider shrink-0 truncate flex items-center justify-center overflow-hidden"
-                       style="width: ${m.widthPx}px;"
-                       title="${m.label} (${m.daysCount} días)">
-                    <span class="truncate">${displayLabel}</span>
-                  </div>
-                `;
-              }).join('')}
+              ${monthGroups.map(m => `
+                <div class="border-r border-slate-200 text-center py-1 px-1 bg-slate-100 font-extrabold text-[11px] text-slate-700 uppercase tracking-wider shrink-0 truncate flex items-center justify-center overflow-hidden"
+                     style="width: ${m.widthPx}px;"
+                     title="${escapeCalHtml(m.label)} (${m.daysCount} días)">
+                  <span class="truncate">${fmtHeaderMonthLabel(m)}</span>
+                </div>
+              `).join('')}
             </div>
 
-            <!-- NIVELES 2 y 3 (En medio: Número de día del mes / Abajo: Primer letra del día L, M, M, J, V, S, D) -->
             <div class="flex border-b border-slate-200 min-w-max h-9">
               ${days.map(d => {
                 let cellBgClass = 'bg-slate-50 text-slate-700';
@@ -753,7 +907,7 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
                 return `
                   <div class="border-r border-slate-200 text-center flex flex-col justify-between shrink-0 select-none py-0.5 overflow-hidden transition-colors ${cellBgClass}"
                        style="width: ${pxPerDay}px;"
-                       title="${dayTitle}">
+                       title="${escapeCalHtml(dayTitle)}">
                     <div class="flex items-center justify-center gap-0.5 leading-none">
                       <span class="text-[10px] font-mono font-bold leading-none truncate">${d.dayNum}</span>
                       ${badgeIcon}
@@ -763,30 +917,18 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
                 `;
               }).join('')}
             </div>
-          ` : scale === 'semanas' ? `
+          ` : (scale === 'semanas' && pxPerDay >= 3.5) ? `
             <!-- ESCALA SEMANAS: Mes arriba y Semana 1, 2, 3, 4 abajo -->
-            <!-- NIVEL 1 (Arriba): Nombre del Mes -->
             <div class="flex border-b border-slate-200 min-w-max h-7">
-              ${monthGroups.map(m => {
-                let displayLabel = `${m.monthName.toUpperCase()} ${m.year}`;
-                if (m.widthPx < 55) {
-                  displayLabel = m.short3 || m.monthName.slice(0, 3).toUpperCase();
-                } else if (m.widthPx < 100) {
-                  displayLabel = m.shortWithYear || `${m.monthName.slice(0, 3).toUpperCase()} '${String(m.year).slice(-2)}`;
-                } else if (m.widthPx < 140) {
-                  displayLabel = m.shortLabel || `${m.monthName.slice(0, 3).toUpperCase()} ${m.year}`;
-                }
-                return `
-                  <div class="border-r border-slate-200 text-center py-1 px-1 bg-slate-100 font-extrabold text-[11px] text-slate-700 uppercase tracking-wider shrink-0 truncate flex items-center justify-center overflow-hidden"
-                       style="width: ${m.widthPx}px;"
-                       title="${m.label} (${m.daysCount} días)">
-                    <span class="truncate">${displayLabel}</span>
-                  </div>
-                `;
-              }).join('')}
+              ${monthGroups.map(m => `
+                <div class="border-r border-slate-200 text-center py-1 px-1 bg-slate-100 font-extrabold text-[11px] text-slate-700 uppercase tracking-wider shrink-0 truncate flex items-center justify-center overflow-hidden"
+                     style="width: ${m.widthPx}px;"
+                     title="${escapeCalHtml(m.label)} (${m.daysCount} días)">
+                  <span class="truncate">${fmtHeaderMonthLabel(m)}</span>
+                </div>
+              `).join('')}
             </div>
 
-            <!-- NIVEL 2 (Abajo): Semana 1, 2, 3, 4, 5 -->
             <div class="flex border-b border-slate-200 min-w-max h-9">
               ${monthGroups.map(m => m.weeks.map(w => {
                 let weekTitle = w.label;
@@ -805,7 +947,7 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
                 return `
                   <div class="border-r border-slate-200 text-center flex flex-col justify-center shrink-0 select-none py-0.5 px-0.5 bg-slate-50 text-slate-700 overflow-hidden"
                        style="width: ${w.widthPx}px;"
-                       title="${m.label} - Semana ${w.num} (${w.daysCount} días: del ${w.rangeLabel})">
+                       title="${escapeCalHtml(m.label)} - Semana ${w.num} (${w.daysCount} días: del ${w.rangeLabel})">
                     <span class="text-[10px] font-bold leading-none text-slate-800 truncate w-full">${weekTitle}</span>
                     <span class="text-[9px] font-mono leading-none text-slate-500 mt-0.5 truncate w-full">${weekSubtitle}</span>
                   </div>
@@ -813,30 +955,15 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
               }).join('')).join('')}
             </div>
           ` : `
-            <!-- ESCALA MESES: Nombre de los Meses Abreviado con Precisión según Ancho de Celda -->
+            <!-- ESCALA MESES O VISTA PANORÁMICA ALEJADA -->
             <div class="flex border-b border-slate-200 min-w-max h-16">
               ${monthGroups.map(m => {
-                let monthTitle = `${m.monthName.toUpperCase()} ${m.year}`;
-                let monthSub = `${m.daysCount} días naturales`;
-
-                if (m.widthPx < 65) {
-                  monthTitle = m.short3 || m.monthName.slice(0, 3).toUpperCase();
-                  monthSub = `${m.daysCount}d`;
-                } else if (m.widthPx < 110) {
-                  monthTitle = m.shortWithYear || `${m.monthName.slice(0, 3).toUpperCase()} '${String(m.year).slice(-2)}`;
-                  monthSub = `${m.daysCount} días`;
-                } else if (m.widthPx < 160) {
-                  monthTitle = m.shortLabel || `${m.monthName.slice(0, 3).toUpperCase()} ${m.year}`;
-                  monthSub = `${m.daysCount} días`;
-                } else {
-                  monthTitle = `${m.monthName.toUpperCase()} ${m.year}`;
-                  monthSub = `${m.daysCount} días naturales`;
-                }
-
+                const monthTitle = fmtHeaderMonthLabel(m);
+                const monthSub = m.widthPx < 65 ? `${m.daysCount}d` : (m.widthPx < 150 ? `${m.daysCount} días` : `${m.daysCount} días naturales`);
                 return `
-                  <div class="border-r border-slate-200 text-center py-1.5 px-1 bg-slate-100 flex flex-col items-center justify-center shrink-0 overflow-hidden"
+                  <div class="border-r border-slate-200 text-center pt-1.5 pb-5 px-1 bg-slate-100 flex flex-col items-center justify-start shrink-0 overflow-hidden"
                        style="width: ${m.widthPx}px;"
-                       title="${m.label} (${m.daysCount} días naturales)">
+                       title="${escapeCalHtml(m.label)} (${m.daysCount} días naturales)">
                     <span class="text-xs font-black text-blue-700 uppercase tracking-wider truncate w-full px-1">${monthTitle}</span>
                     <span class="text-[10px] text-slate-500 font-mono mt-0.5 truncate w-full px-1">${monthSub}</span>
                   </div>
@@ -846,10 +973,10 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
           `}
         </div>
 
-        <!-- Filas con las Barras del Gantt, Flechas SVG Fin-a-Inicio y Cuadrícula de Fondo (Estilo Claro Catálogo Base) -->
-        <div class="divide-y divide-slate-100 text-xs min-w-max relative" style="width: ${totalTimelineWidth}px;">
+        <!-- Filas con las Barras del Gantt, Flechas SVG FI/II y Cuadrícula de Fondo -->
+        <div id="gantt-timeline-rows" class="divide-y divide-slate-100 text-xs min-w-max relative" style="width: ${totalTimelineWidth}px;">
           
-          <!-- Capa SVG de Flechas de Dependencia Fin-a-Inicio y Ruta Crítica -->
+          <!-- Capa SVG de Flechas de Dependencia FI (sólidas) / II en paralelo (punteadas) y Ruta Crítica -->
           <svg id="gantt-dependency-svg"
                width="${totalTimelineWidth}"
                height="${totalRowsHeightPx}"
@@ -858,23 +985,38 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
               <marker id="gantt-arrow-crit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
                 <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#e11d48"></path>
               </marker>
+              <marker id="gantt-arrow-ss" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#0284c7"></path>
+              </marker>
               <marker id="gantt-arrow-norm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
                 <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="${night ? '#94a3b8' : '#64748b'}"></path>
               </marker>
             </defs>
-            ${svgPaths.map(p => `
-              <path d="${p.d}"
-                    fill="none"
-                    stroke="${p.isCritLink ? '#e11d48' : (night ? '#94a3b8' : '#64748b')}"
-                    stroke-width="${p.isCritLink ? '2' : '1.5'}"
-                    stroke-linejoin="round"
-                    marker-end="url(#${p.isCritLink ? 'gantt-arrow-crit' : 'gantt-arrow-norm'})"
-                    opacity="${p.isCritLink ? '0.95' : '0.78'}"></path>
-            `).join('')}
+            ${svgPaths.map(p => {
+              const strokeCol = p.isCritLink ? '#e11d48' : (p.isSS ? '#0284c7' : (night ? '#94a3b8' : '#64748b'));
+              const markerId = p.isCritLink ? 'gantt-arrow-crit' : (p.isSS ? 'gantt-arrow-ss' : 'gantt-arrow-norm');
+              return `
+                <path d="${p.d}"
+                      data-gantt-svg-link="1"
+                      data-pred-id="${escapeCalHtml(p.predId)}"
+                      data-succ-id="${escapeCalHtml(p.succId)}"
+                      data-link-type="${escapeCalHtml(p.type)}"
+                      data-x1="${p.x1}"
+                      data-x2="${p.x2}"
+                      data-row-h="${p.rowH}"
+                      fill="none"
+                      stroke="${strokeCol}"
+                      stroke-width="${p.isCritLink ? '1.9' : (p.isSS ? '1.5' : '1.4')}"
+                      ${p.isSS ? 'stroke-dasharray="4 2"' : ''}
+                      stroke-linejoin="round"
+                      marker-end="url(#${markerId})"
+                      opacity="${p.isCritLink ? '0.95' : (p.isSS ? '0.88' : '0.75')}"></path>
+              `;
+            }).join('')}
           </svg>
 
           ${items.map(item => {
-            const rowH = rowHeightsMap.get(String(item.id)) || 40;
+            const rowH = rowHeightsMap.get(String(item.id)) || (compactRows ? 24 : 44);
             const isSelectedRow = String(selectedCalendarioRowId) === String(item.id);
             const sDate = parseDate(item.startDate);
             const eDate = parseDate(item.endDate);
@@ -882,19 +1024,20 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
             const barDays = Math.max(3, item.durationDays || (diffDays(sDate, eDate) + 1));
 
             const leftPx = offsetDays * pxPerDay;
-            const widthPx = Math.max(3 * pxPerDay, barDays * pxPerDay);
+            const widthPx = Math.max(6, barDays * pxPerDay);
+            const barHeightClass = (compactRows && !isSelectedRow) ? 'h-[14px]' : 'h-6';
 
             if (item.isParent) {
               const parentCrit = showCpm && item.hasCriticalChildren;
+              const showParentText = widthPx >= 64 && !(compactRows && !isSelectedRow);
               return `
-                <div data-gantt-right-row="${item.id}" onclick="selectCalendarioRow('${item.id}', event)" class="${isJustifyConcepts ? 'min-h-[40px]' : 'h-10'} py-1.5 px-1 relative ${item.rowBgColor ? '' : 'bg-slate-50/70'} ${isSelectedRow ? 'selected-row' : ''} border-y border-slate-200/80 flex items-center cursor-pointer"
-                     style="width: ${totalTimelineWidth}px; ${isJustifyConcepts ? `height: ${rowH}px;` : ''} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''} ${gridBackgroundStyle}">
-                  <div class="absolute h-6 rounded-md shadow-xs ${parentCrit ? 'bg-slate-800 border-rose-500/80' : 'bg-slate-700 border-slate-800'} hover:bg-slate-600 border hover:border-blue-500 flex items-center justify-between px-2 text-[10px] text-white font-bold truncate transition cursor-pointer select-none z-10" 
+                <div data-gantt-right-row="${escapeCalHtml(item.id)}" onclick="selectCalendarioRow('${escapeCalHtml(item.id)}', event)" class="relative ${item.rowBgColor ? '' : 'bg-slate-50/70'} ${isSelectedRow ? 'selected-row' : ''} border-y border-slate-200/80 flex items-center cursor-pointer"
+                     style="height: ${rowH}px; width: ${totalTimelineWidth}px; ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''} ${gridBackgroundStyle}">
+                  <div class="absolute ${barHeightClass} rounded-md shadow-xs ${parentCrit ? 'bg-slate-800 border-rose-500/80' : 'bg-slate-700 border-slate-800'} hover:bg-slate-600 border hover:border-blue-500 flex items-center justify-between px-2 text-[10px] text-white font-bold truncate transition cursor-pointer select-none z-10" 
                        style="left: ${leftPx}px; width: ${widthPx}px;"
-                       onclick="toggleCalendarioNodeGroup('${item.id}', event)"
-                       title="${item.descripcion}: ${item.startDate} al ${item.endDate} (${barDays} días)&#10;Total: ${formatCurrency(item.totalImporte, currencySymbol)}&#10;Clic para ${item.expanded ? 'agrupar' : 'desagrupar'}">
-                    <span class="truncate">${item.descripcion}</span>
-                    <span class="shrink-0 text-[9px] font-mono opacity-85 ml-1">${barDays}d</span>
+                       onclick="event.stopPropagation(); toggleCalendarioNodeGroup('${escapeCalHtml(item.id)}', event)"
+                       title="${escapeCalHtml(item.descripcion)}: ${escapeCalHtml(item.startDate)} al ${escapeCalHtml(item.endDate)} (${barDays} días)&#10;Total: ${formatCurrency(item.totalImporte, currencySymbol)}&#10;Clic para ${item.expanded ? 'agrupar' : 'desagrupar'}">
+                    ${showParentText ? `<span class="truncate">${escapeCalHtml(item.descripcion)}</span><span class="shrink-0 text-[9px] font-mono opacity-85 ml-1">${barDays}d</span>` : ''}
                   </div>
                 </div>
               `;
@@ -904,47 +1047,51 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
               const isCritBar = showCpm && item.isCritical;
               const effectiveBarHex = isCritBar ? '#dc2626' : baseColorHex;
               const isPendingPred = calendarioLinkClickMode && String(pendingLinkPredecessorId) === String(item.id);
-              const preds = Array.isArray(item.predecessors) ? item.predecessors : [];
-              const predClaves = preds.map(pid => conceptById.get(String(pid))?.clave).filter(Boolean);
-              const predTooltipLine = predClaves.length > 0
-                ? `&#10;🔗 Depende de terminar: ${predClaves.join(', ')} (mín. ${item.minAllowedStartDate})`
+              const barLinks = normalizeScheduleLinks(item.predecessors);
+              const predClaves = barLinks.map(lk => conceptById.get(String(lk.id))?.clave).filter(Boolean);
+              const predTooltipLine = barLinks.length > 0
+                ? `&#10;🔗 Enlaces: ${barLinks.map(lk => formatScheduleLinkTag(lk, conceptById.get(String(lk.id))?.clave || lk.id)).join(', ')} (mín. ${item.minAllowedStartDate})`
                 : '';
               const cpmTooltipLine = item.isCritical
                 ? `&#10;🔥 RUTA CRÍTICA (Holgura: 0 días)`
                 : `&#10;✓ Holgura disponible: +${item.slackDays || 0} día(s)`;
+              const showBarText = widthPx >= 46 && !(compactRows && !isSelectedRow);
+              const handleWClass = widthPx >= 28 ? 'w-2.5' : 'w-1.5';
 
               return `
-                <div data-gantt-right-row="${item.id}" onclick="selectCalendarioRow('${item.id}', event)" class="${isJustifyConcepts ? 'min-h-[40px]' : 'h-10'} py-1.5 px-1 relative ${item.rowBgColor ? '' : (isCritBar ? 'bg-rose-50/25 hover:bg-rose-50/50' : 'bg-white hover:bg-slate-50/80')} ${isSelectedRow ? 'selected-row' : ''} transition flex items-center cursor-pointer"
-                     style="width: ${totalTimelineWidth}px; ${isJustifyConcepts ? `height: ${rowH}px;` : ''} ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''} ${gridBackgroundStyle}">
-                  <div class="gantt-bar-concept ${isCritBar ? 'gantt-bar-critical ring-1 ring-rose-950/25 shadow-sm' : 'shadow-xs'} ${isPendingPred ? 'ring-2 ring-amber-400 shadow-lg' : ''} absolute h-6 rounded-md flex items-center justify-between group select-none z-10 transition-shadow"
-                       data-concept-id="${item.id}"
-                       data-start-date="${item.startDate}"
+                <div data-gantt-right-row="${escapeCalHtml(item.id)}" onclick="selectCalendarioRow('${escapeCalHtml(item.id)}', event)" class="relative ${item.rowBgColor ? '' : (isCritBar ? 'bg-rose-50/25 hover:bg-rose-50/50' : 'bg-white hover:bg-slate-50/80')} ${isSelectedRow ? 'selected-row' : ''} transition flex items-center cursor-pointer"
+                     style="height: ${rowH}px; width: ${totalTimelineWidth}px; ${item.rowBgColor ? `background-color: ${item.rowBgColor};` : ''} ${gridBackgroundStyle}">
+                  <div class="gantt-bar-concept ${isCritBar ? 'gantt-bar-critical ring-1 ring-rose-950/25 shadow-sm' : 'shadow-xs'} ${isSelectedRow ? 'ring-2 ring-blue-600/50' : ''} ${isPendingPred ? 'ring-2 ring-amber-400 shadow-lg' : ''} ${barHeightClass} absolute rounded-md flex items-center justify-between group select-none z-10 overflow-hidden transition-shadow"
+                       data-concept-id="${escapeCalHtml(item.id)}"
+                       data-start-date="${escapeCalHtml(item.startDate)}"
                        data-duration="${barDays}"
-                       data-clave="${item.clave}"
-                       data-desc="${item.descripcion}"
-                       data-min-start-date="${item.minAllowedStartDate || ''}"
-                       data-pred-claves="${predClaves.join(', ')}"
+                       data-clave="${escapeCalHtml(item.clave)}"
+                       data-desc="${escapeCalHtml(item.descripcion)}"
+                       data-min-start-date="${escapeCalHtml(item.minAllowedStartDate || '')}"
+                       data-pred-claves="${escapeCalHtml(predClaves.join(', '))}"
                        data-is-critical="${item.isCritical ? '1' : '0'}"
-                       style="left: ${leftPx}px; width: ${widthPx}px; background-color: ${effectiveBarHex}; cursor: ${calendarioLinkClickMode ? 'pointer' : 'grab'};"
-                       title="${item.clave} - ${item.descripcion}&#10;Inicio: ${item.startDate} | Fin: ${item.endDate} (${barDays} días)${predTooltipLine}${cpmTooltipLine}&#10;Monto: ${formatCurrency(item.importe, currencySymbol)}&#10;• Arrastra el centro para mover fecha&#10;• Arrastra los bordes laterales para estirar o reducir">
+                       style="left: ${leftPx}px; width: ${widthPx}px; background-color: ${effectiveBarHex}; cursor: ${calendarioLinkClickMode ? 'pointer' : (isCalLocked ? 'default' : 'grab')};"
+                       title="${escapeCalHtml(item.clave)} - ${escapeCalHtml(item.descripcion)}&#10;Inicio: ${escapeCalHtml(item.startDate)} | Fin: ${escapeCalHtml(item.endDate)} (${barDays} días)${escapeCalHtml(predTooltipLine)}${cpmTooltipLine}&#10;Monto: ${formatCurrency(item.importe, currencySymbol)}&#10;• Arrastra el centro para mover fecha&#10;• Arrastra los bordes laterales para estirar o reducir">
                     
                     <!-- Manija Izquierda: Reducir / Estirar Inicio -->
-                    <div class="gantt-handle-left absolute left-0 top-0 bottom-0 w-2.5 rounded-l-md hover:bg-white/40 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                    <div class="gantt-handle-left absolute left-0 top-0 bottom-0 ${handleWClass} rounded-l-md hover:bg-white/40 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
                          title="Arrastra para cambiar inicio (reducir o estirar)">
                       <div class="w-0.5 h-3 bg-white/80 rounded-full pointer-events-none"></div>
                     </div>
 
                     <!-- Contenido Central de la Barra (Mover) -->
-                    <div class="gantt-bar-body flex-1 flex items-center justify-between px-2 min-w-0 pointer-events-none select-none">
-                      <span class="truncate text-[10px] text-white font-bold flex items-center gap-1">
-                        ${predClaves.length > 0 ? `<i class="fa-solid fa-lock text-[8px] opacity-90 shrink-0"></i>` : ''}
-                        <span class="truncate">${item.clave}</span>
-                      </span>
-                      <span class="text-[9px] font-mono shrink-0 hidden sm:inline text-white/95 ml-1 font-bold">${barDays}d</span>
+                    <div class="gantt-bar-body flex-1 flex items-center justify-between px-2 min-w-0 pointer-events-none select-none text-white">
+                      ${showBarText ? `
+                        <span class="truncate text-[10px] font-bold flex items-center gap-1">
+                          ${predClaves.length > 0 ? `<i class="fa-solid fa-lock text-[8px] opacity-90 shrink-0"></i>` : ''}
+                          <span class="truncate">${escapeCalHtml(item.clave)}</span>
+                        </span>
+                        <span class="text-[9px] font-mono shrink-0 hidden sm:inline text-white/95 ml-1 font-bold">${barDays}d</span>
+                      ` : ''}
                     </div>
 
                     <!-- Manija Derecha: Reducir / Estirar Fin -->
-                    <div class="gantt-handle-right absolute right-0 top-0 bottom-0 w-2.5 rounded-r-md hover:bg-white/40 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                    <div class="gantt-handle-right absolute right-0 top-0 bottom-0 ${handleWClass} rounded-r-md hover:bg-white/40 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20"
                          title="Arrastra para cambiar duración (reducir o estirar)">
                       <div class="w-0.5 h-3 bg-white/80 rounded-full pointer-events-none"></div>
                     </div>
@@ -963,7 +1110,7 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
               
               <!-- Pin / Marcador Superior en el Encabezado (Arrastrable) -->
               <div id="gantt-today-pin" 
-                   class="absolute top-1 -translate-x-1/2 pointer-events-auto cursor-ew-resize z-40 select-none group flex flex-col items-center"
+                   class="absolute ${isSingleCompactHeader ? 'top-[42px]' : 'top-1'} -translate-x-1/2 pointer-events-auto cursor-ew-resize z-40 select-none group flex flex-col items-center"
                    title="Día de Hoy / Fecha de Corte: ${todayStr}&#10;• Arrastra para mover a días anteriores o futuros&#10;• Doble clic para volver al día real"
                    data-today-date="${todayStr}">
                 
@@ -1059,13 +1206,22 @@ function renderGanttTimelineView(items, periods, currencySymbol, minDate, maxDat
           <i class="fa-solid fa-chevron-right"></i>
         </button>
 
+        <!-- Toggle Lupa al pasar sobre barras alejadas / compactas -->
+        <button type="button"
+                id="btn-gantt-cursor-lens"
+                onclick="toggleCalendarioCursorLens()"
+                class="px-2 h-5 rounded border text-[10px] font-bold transition flex items-center gap-1 shadow-2xs shrink-0 cursor-pointer ${lensEnabled ? 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300' : 'bg-white hover:bg-slate-200 text-slate-500 border-slate-300'}"
+                title="${lensEnabled ? 'Lupa flotante activa al pasar sobre barras alejadas o filas compactas (clic para desactivar)' : 'Activar lupa flotante sobre barras alejadas'}">
+          <i class="fa-solid fa-magnifying-glass-plus text-[9px]"></i> <span>Lupa</span>
+        </button>
+
         <!-- Botón Ver Todo / Ajustar Proyecto (Fit Entire Project) -->
         <button type="button" 
                 id="gantt-nav-btn-fit" 
                 onclick="fitGanttTimelineEntireProject()" 
-                class="px-2 h-5 rounded bg-white hover:bg-slate-200 active:bg-blue-600 text-[10px] font-mono font-bold text-slate-700 hover:text-blue-700 active:text-white transition flex items-center gap-1 border border-slate-300 shadow-2xs shrink-0 cursor-pointer" 
+                class="px-2 h-5 rounded bg-white hover:bg-blue-600 text-[10px] font-mono font-bold text-slate-700 hover:text-white transition flex items-center gap-1 border border-slate-300 shadow-2xs shrink-0 cursor-pointer group/fit" 
                 title="Ajustar escala para ver la obra completa en pantalla (Fit Timeline)">
-          <i class="fa-solid fa-expand text-[9px] text-blue-600"></i> <span>Ajustar</span>
+          <i class="fa-solid fa-expand text-[9px] text-blue-600 group-hover/fit:text-white"></i> <span>Ajustar</span>
         </button>
 
       </div>
@@ -1726,6 +1882,20 @@ export function toggleCalendarioNodeGroup(nodeId, event) {
   renderCalendarioObra();
 }
 
+export function toggleAllCalendarioGroups() {
+  const items = extractScheduleItems(state.treeData);
+  const parents = items.filter(it => it.isParent);
+  const allCollapsed = parents.length > 0 && parents.every(p => p.expanded === false);
+  if (allCollapsed) {
+    expandAllCalendarioNodes();
+    showToast('Se desagruparon todas las partidas y conceptos de obra.');
+  } else {
+    collapseAllCalendarioNodes();
+    showToast('Se agruparon todas las partidas en niveles ejecutivos.');
+  }
+  renderCalendarioObra();
+}
+
 export function expandAllCalendarioGroups() {
   expandAllCalendarioNodes();
   showToast('Se desagruparon todas las partidas y conceptos de obra.');
@@ -1738,39 +1908,92 @@ export function collapseAllCalendarioGroups() {
   renderCalendarioObra();
 }
 
-export function toggleCalendarioJustifyText() {
+export function cycleCalendarioRowViewMode() {
   const cfg = getScheduleSettings();
-  const nextState = !Boolean(cfg.justifyConcepts);
-  saveScheduleSettings({ justifyConcepts: nextState });
+  const current = cfg.rowViewMode || (cfg.justifyConcepts ? 'justified' : 'normal');
+  const nextMode = current === 'normal' ? 'justified' : (current === 'justified' ? 'compact' : 'normal');
+  saveScheduleSettings({
+    rowViewMode: nextMode,
+    justifyConcepts: (nextMode === 'justified')
+  });
   renderCalendarioObra();
-  showToast(
-    nextState
-      ? 'Justificación de textos activada en la columna Conceptos de Obra.'
-      : 'Vista compacta en 1 línea activada para Conceptos de Obra.',
-    'info'
-  );
-  return nextState;
+  if (nextMode === 'justified') {
+    showToast('Texto completo (Justificado) activado en Conceptos de Obra.');
+  } else if (nextMode === 'compact') {
+    showToast('Filas compactas en 1 línea activadas (mayor densidad visual).');
+  } else {
+    showToast('Vista normal (2 líneas con controles inline) activada.');
+  }
+  return nextMode;
+}
+
+export function toggleCalendarioJustifyText() {
+  return cycleCalendarioRowViewMode();
+}
+
+export function toggleCalendarioCursorLens() {
+  const cfg = getScheduleSettings();
+  const nextVal = !(cfg.cursorLensEnabled !== false);
+  saveScheduleSettings({ cursorLensEnabled: nextVal });
+  if (!nextVal) hideCursorBarLens();
+  renderCalendarioObra();
+  showToast(nextVal
+    ? '🔍 Lupa flotante activada al pasar el cursor sobre barras compactas o alejadas.'
+    : 'Lupa flotante de barras desactivada.');
+  return nextVal;
 }
 
 export function syncGanttJustifiedRowHeights() {
-  const cfg = getScheduleSettings();
-  if (!cfg.justifyConcepts) return;
-  const leftPanel = document.getElementById('gantt-left-panel');
+  const leftPanel = document.getElementById('gantt-left-scroll') || document.getElementById('gantt-left-panel');
   const rightPanel = document.getElementById('gantt-timeline-panel');
   if (!leftPanel || !rightPanel || typeof leftPanel.querySelectorAll !== 'function') return;
 
   const leftRows = leftPanel.querySelectorAll('[data-gantt-left-row]');
+  if (!leftRows || leftRows.length === 0) return;
+
+  const centerYMap = new Map();
+  const rowHMap = new Map();
+  let cumY = 0;
+
   leftRows.forEach(leftEl => {
     const rowId = leftEl.getAttribute && leftEl.getAttribute('data-gantt-left-row');
     if (!rowId) return;
-    const h = leftEl.offsetHeight;
-    if (h && h >= 40) {
-      const rightEl = rightPanel.querySelector(`[data-gantt-right-row="${rowId}"]`);
-      if (rightEl && rightEl.style) {
-        rightEl.style.height = `${h}px`;
-      }
+    // Liberar height fija previa brevemente cuando el texto se expande o envuelve
+    if (leftEl.style && leftEl.style.minHeight) {
+      leftEl.style.height = 'auto';
     }
+    const baseH = parseInt(leftEl.getAttribute('data-base-h'), 10) || 40;
+    const h = Math.max(baseH, leftEl.offsetHeight || baseH);
+    if (leftEl.style) leftEl.style.height = `${h}px`;
+
+    const rightEl = rightPanel.querySelector(`[data-gantt-right-row="${CSS.escape ? CSS.escape(rowId) : rowId}"]`)
+      || rightPanel.querySelector(`[data-gantt-right-row="${rowId}"]`);
+    if (rightEl && rightEl.style) {
+      rightEl.style.height = `${h}px`;
+    }
+
+    centerYMap.set(String(rowId), cumY + (h / 2));
+    rowHMap.set(String(rowId), h);
+    cumY += h;
   });
+
+  const svgEl = document.getElementById('gantt-dependency-svg');
+  if (svgEl) {
+    svgEl.setAttribute('height', String(Math.max(40, cumY)));
+    svgEl.querySelectorAll('[data-gantt-svg-link]').forEach(pathEl => {
+      const predId = pathEl.getAttribute('data-pred-id');
+      const succId = pathEl.getAttribute('data-succ-id');
+      const lkType = pathEl.getAttribute('data-link-type') || 'FS';
+      const x1 = parseFloat(pathEl.getAttribute('data-x1')) || 0;
+      const x2 = parseFloat(pathEl.getAttribute('data-x2')) || 0;
+      const y1 = centerYMap.get(String(predId));
+      const y2 = centerYMap.get(String(succId));
+      const succRowH = rowHMap.get(String(succId)) || 44;
+      if (y1 !== undefined && y2 !== undefined) {
+        pathEl.setAttribute('d', buildGanttSvgPathD(lkType, Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2), succRowH));
+      }
+    });
+  }
 }
 
 // ------------------------------------------
@@ -1778,7 +2001,7 @@ export function syncGanttJustifiedRowHeights() {
 // ------------------------------------------
 export function changeGanttZoom(action) {
   const cfg = getScheduleSettings();
-  const ZOOM_STEPS = [18, 24, 28, 34, 44, 56, 72, 92];
+  const ZOOM_STEPS = [6, 10, 14, 18, 24, 28, 34, 44, 56, 72, 92];
   let current = cfg.dayWidth || 34;
 
   if (action === 'reset') {
@@ -1790,7 +2013,7 @@ export function changeGanttZoom(action) {
     const prev = [...ZOOM_STEPS].reverse().find(s => s < current);
     current = prev || ZOOM_STEPS[0];
   } else if (typeof action === 'number') {
-    current = Math.max(16, Math.min(120, action));
+    current = Math.max(2, Math.min(120, action));
   }
 
   saveScheduleSettings({ dayWidth: current });
@@ -1807,7 +2030,7 @@ export function initGanttResizer() {
   if (!resizer || !leftPanel || !rootContainer || !leftPanel.style) return;
 
   const cfg = getScheduleSettings();
-  const savedW = cfg.panelWidth || parseInt(localStorage.getItem('calendario_gantt_split_w'), 10) || 460;
+  const savedW = cfg.panelWidth || parseInt(localStorage.getItem('calendario_gantt_split_w'), 10) || 500;
   leftPanel.style.width = `${savedW}px`;
 
   let isDragging = false;
@@ -1827,11 +2050,12 @@ export function initGanttResizer() {
     if (!isDragging) return;
     const dx = clientX - startX;
     const containerW = rootContainer.clientWidth;
-    const minW = 260;
-    const maxW = Math.max(300, Math.floor(containerW * 0.75));
+    const minW = 240;
+    const maxW = Math.max(300, Math.floor(containerW * 0.78));
     const newW = Math.max(minW, Math.min(maxW, startW + dx));
     leftPanel.style.width = `${newW}px`;
     syncGanttJustifiedRowHeights();
+    updatePremiereZoomBarUI();
   }
 
   function onEnd() {
@@ -1844,6 +2068,7 @@ export function initGanttResizer() {
     saveScheduleSettings({ panelWidth: finalW });
     localStorage.setItem('calendario_gantt_split_w', finalW);
     syncGanttJustifiedRowHeights();
+    updatePremiereZoomBarUI();
   }
 
   // Eventos de Mouse
@@ -1880,10 +2105,10 @@ export function initGanttResizer() {
 }
 
 // ------------------------------------------
-// SCROLL SINCRONIZADO VERTICAL
+// SCROLL SINCRONIZADO VERTICAL Y HORIZONTAL
 // ------------------------------------------
 export function syncGanttScroll() {
-  const leftPanel = document.getElementById('gantt-left-panel');
+  const leftPanel = document.getElementById('gantt-left-scroll') || document.getElementById('gantt-left-panel');
   const rightPanel = document.getElementById('gantt-timeline-panel');
   if (!leftPanel || !rightPanel) return;
 
@@ -1904,6 +2129,7 @@ export function syncGanttScroll() {
       leftPanel.scrollTop = rightPanel.scrollTop;
     }
     isSyncingRight = false;
+    updatePremiereZoomBarUI();
   };
 }
 
@@ -1987,6 +2213,11 @@ export function initGanttBarDrag() {
       let finalStartDateStr = origStartStr;
       let finalDur = origDur;
       let wasBlockedByPred = false;
+      let movedCursor = false;
+
+      isDraggingGanttBar = true;
+      closeCalendarioDatePickerPopover();
+      hideCursorBarLens();
 
       if (document.body && document.body.style) {
         document.body.style.userSelect = 'none';
@@ -2007,6 +2238,7 @@ export function initGanttBarDrag() {
 
       function onMouseMove(ev) {
         const dx = (ev.clientX || 0) - startX;
+        if (Math.abs(dx) >= 3) movedCursor = true;
         const dayDelta = Math.round(dx / pxPerDay);
         currentDayDelta = dayDelta;
 
@@ -2106,6 +2338,12 @@ export function initGanttBarDrag() {
           window.removeEventListener('mouseup', onMouseUp);
         }
 
+        isDraggingGanttBar = false;
+        if (movedCursor) {
+          barDraggedRecently = true;
+          setTimeout(() => { barDraggedRecently = false; }, 120);
+        }
+
         if (document.body && document.body.style) {
           document.body.style.userSelect = '';
           document.body.style.cursor = '';
@@ -2120,12 +2358,13 @@ export function initGanttBarDrag() {
         }
 
         if (wasBlockedByPred && finalStartDateStr === origStartStr && finalDur === origDur) {
-          showToast(`🔒 ${clave} no puede iniciar antes de ${minStartStr} (depende de terminar ${predClavesStr || 'su predecesora'}).`, 'error');
+          showToast(`🔒 ${clave} no puede iniciar antes de ${minStartStr} (depende de ${predClavesStr || 'su predecesora'}).`, 'error');
           renderCalendarioObra();
           return;
         }
 
         if (currentDayDelta !== 0 || finalDur !== origDur || finalStartDateStr !== origStartStr) {
+          selectedCalendarioRowId = String(conceptId);
           const res = updateConceptDatesInModel(conceptId, finalStartDateStr, finalDur);
           if (res && res.cascadedCount > 0) {
             showToast(`Concepto ${clave} actualizado (${finalDur}d) • ${res.cascadedCount} dependiente(s) recorridos en cascada.`);
@@ -2226,13 +2465,8 @@ export function initPremiereZoomBar() {
   const thumb = document.getElementById('gantt-premiere-thumb');
   if (!timelinePanel || !track || !thumb) return;
 
-  // Actualizar tamaño y posición inicial del thumb
+  // Actualizar tamaño y posición inicial del thumb (el listener onscroll se administra en syncGanttScroll)
   updatePremiereZoomBarUI();
-
-  // Sincronizar automáticamente cuando el usuario haga scroll en el timeline
-  timelinePanel.onscroll = () => {
-    updatePremiereZoomBarUI();
-  };
 
   if (typeof window !== 'undefined' && window.addEventListener && !isPremiereResizeListenerAttached) {
     isPremiereResizeListenerAttached = true;
@@ -2246,7 +2480,7 @@ export function initPremiereZoomBar() {
       const zoomDelta = e.deltaY < 0 ? 4 : -4;
       const cfg = getScheduleSettings();
       const currentDayWidth = cfg.dayWidth || 34;
-      const newDayWidth = Math.max(14, Math.min(120, currentDayWidth + zoomDelta));
+      const newDayWidth = Math.max(2, Math.min(120, currentDayWidth + zoomDelta));
       if (newDayWidth !== currentDayWidth) {
         saveScheduleSettings({ dayWidth: newDayWidth });
         renderCalendarioObra();
@@ -2337,7 +2571,7 @@ export function initPremiereZoomBar() {
         thumb.style.width = `${newThumbW}px`;
 
         const ratio = Math.max(0.1, newThumbW / startThumbW);
-        targetDayWidth = Math.max(14, Math.min(120, Math.round(startDayWidth / ratio)));
+        targetDayWidth = Math.max(2, Math.min(120, Math.round(startDayWidth / ratio)));
         hasChangedZoom = (targetDayWidth !== startDayWidth);
 
         const zoomPct = Math.round((targetDayWidth / 34) * 100);
@@ -2354,7 +2588,7 @@ export function initPremiereZoomBar() {
         thumb.style.width = `${newThumbW}px`;
 
         const ratio = Math.max(0.1, newThumbW / startThumbW);
-        targetDayWidth = Math.max(14, Math.min(120, Math.round(startDayWidth / ratio)));
+        targetDayWidth = Math.max(2, Math.min(120, Math.round(startDayWidth / ratio)));
         hasChangedZoom = (targetDayWidth !== startDayWidth);
 
         const zoomPct = Math.round((targetDayWidth / 34) * 100);
@@ -2440,20 +2674,295 @@ export function fitGanttTimelineEntireProject() {
 
   const scaleData = generateGanttTimeScale(minDate, maxDate, cfg.scale, 34);
   const totalDays = Math.max(1, diffDays(scaleData.timelineStart, scaleData.timelineEnd) + 1);
-  const availableWidth = Math.max(400, (timelinePanel.clientWidth || 800) - 20);
+  const availableWidth = Math.max(320, (timelinePanel.clientWidth || 720) - 8);
+  const targetPxPerDay = availableWidth / totalDays;
 
   let fittedDayWidth;
   if (cfg.scale === 'dias') {
-    fittedDayWidth = Math.max(14, Math.min(120, Math.round(availableWidth / totalDays)));
+    fittedDayWidth = Math.max(2, Math.min(92, Number(targetPxPerDay.toFixed(2))));
   } else if (cfg.scale === 'semanas') {
-    fittedDayWidth = Math.max(14, Math.min(120, Math.round((availableWidth / totalDays) / 0.45)));
+    fittedDayWidth = Math.max(2.5, Math.min(92, Number((targetPxPerDay / 0.45).toFixed(2))));
   } else {
-    fittedDayWidth = Math.max(14, Math.min(120, Math.round((availableWidth / totalDays) / 0.16)));
+    fittedDayWidth = Math.max(6, Math.min(92, Number((targetPxPerDay / 0.16).toFixed(2))));
   }
 
   saveScheduleSettings({ dayWidth: fittedDayWidth });
-  showToast(`Escala ajustada a la pantalla: ${Math.round((fittedDayWidth / 34) * 100)}% (${fittedDayWidth}px/d)`);
+  showToast(`Escala ajustada a la pantalla: ${Math.round((fittedDayWidth / 34) * 100)}% (${Math.round(targetPxPerDay * 10) / 10}px/d)`);
   renderCalendarioObra();
+  const nextPanel = document.getElementById('gantt-timeline-panel');
+  if (nextPanel) nextPanel.scrollLeft = 0;
+  updatePremiereZoomBarUI();
+}
+
+// ==========================================
+// LUPA FLOTANTE AL PASAR SOBRE BARRAS ALEJADAS O COMPACTAS + HOVER SINCRONIZADO
+// ==========================================
+function hideCursorBarLens() {
+  if (typeof document === 'undefined') return;
+  const win = document.getElementById('gantt-cursor-zoom-window');
+  if (win && win.classList) win.classList.add('hidden');
+}
+
+function positionCursorBarLens(clientX, clientY) {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  const win = document.getElementById('gantt-cursor-zoom-window');
+  if (!win) return;
+  const wasHidden = win.classList.contains('hidden');
+  win.classList.remove('hidden');
+  if (wasHidden) {
+    win.classList.remove('zoom-pop-in');
+    void win.offsetWidth;
+    win.classList.add('zoom-pop-in');
+  }
+  const r = win.getBoundingClientRect();
+  const pad = 12;
+  let left = clientX + 18;
+  let top = clientY - Math.round(r.height / 2);
+  if (left + r.width > window.innerWidth - pad) left = clientX - r.width - 18;
+  if (left < pad) left = pad;
+  if (top + r.height > window.innerHeight - pad) top = window.innerHeight - r.height - pad;
+  if (top < pad) top = pad;
+  win.style.left = `${left}px`;
+  win.style.top = `${top}px`;
+}
+
+function ensureCursorBarLensContainer() {
+  if (typeof document === 'undefined') return null;
+  let win = document.getElementById('gantt-cursor-zoom-window');
+  if (!win && document.createElement && document.body) {
+    win = document.createElement('div');
+    win.id = 'gantt-cursor-zoom-window';
+    win.className = 'hidden fixed z-50 w-[460px] max-w-[92vw] bg-white/95 backdrop-blur-md border-2 border-blue-500 rounded-xl shadow-2xl overflow-hidden pointer-events-none select-none zoom-pop-in';
+    win.innerHTML = '<div id="gantt-cursor-zoom-inner"></div>';
+    document.body.appendChild(win);
+  }
+  return win;
+}
+
+function renderCursorBarLens(item, itemById, succMap, currencySymbol, showCpm) {
+  const win = ensureCursorBarLensContainer();
+  const inner = win && win.querySelector('#gantt-cursor-zoom-inner');
+  if (!inner || !item) return;
+
+  if (item.isParent) {
+    inner.innerHTML = `
+      <div class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between text-xs">
+        <span class="font-mono font-bold text-blue-400">${escapeCalHtml(item.clave || 'PART')} · PARTIDA</span>
+        <span class="font-mono text-slate-300">${escapeCalHtml(item.startDate)} → ${escapeCalHtml(item.endDate)} (${item.durationDays || 0}d)</span>
+      </div>
+      <div class="p-2.5 text-xs">
+        <div class="font-extrabold uppercase text-slate-900">${escapeCalHtml(item.descripcion)}</div>
+        <div class="text-slate-600 font-mono mt-1">Total partida: <strong class="text-emerald-700">${formatCurrency(item.totalImporte, currencySymbol)}</strong></div>
+      </div>
+    `;
+    return;
+  }
+
+  const predEdges = normalizeScheduleLinks(item.predecessors);
+  const preds = predEdges.map(lk => itemById.get(String(lk.id))).filter(Boolean);
+  const succEdges = succMap.get(String(item.id)) || [];
+  const succs = succEdges.map(edge => itemById.get(String(edge.id))).filter(Boolean);
+  const predSet = new Set(preds.map(p => String(p.id)));
+  const effectiveHex = (showCpm && item.isCritical) ? '#dc2626' : (item.customColor || item.color?.bar || '#3b82f6');
+
+  const sliceItems = [...preds.slice(0, 2), item, ...succs.slice(0, 2)].filter(x => x && x.startDate && x.endDate);
+  if (sliceItems.length === 0) return;
+
+  let minDt = parseDate(sliceItems[0].startDate);
+  let maxDt = parseDate(sliceItems[0].endDate);
+  sliceItems.forEach(x => {
+    const s = parseDate(x.startDate);
+    const e = parseDate(x.endDate);
+    if (s < minDt) minDt = s;
+    if (e > maxDt) maxDt = e;
+  });
+  minDt = addDays(minDt, -3);
+  maxDt = addDays(maxDt, 3);
+  const spanDays = Math.max(18, diffDays(minDt, maxDt) + 1);
+  const toPct = (offsetD) => Math.max(0, Math.min(100, (offsetD / spanDays) * 100));
+
+  const miniRowH = 54;
+  const trackStartPx = 8;
+  const trackSpanPx = 418;
+  const barCenterOffset = 42;
+  const toSvgX = (pct) => trackStartPx + (pct / 100) * trackSpanPx;
+  const idxById = new Map(sliceItems.map((si, idx) => [String(si.id), idx]));
+  const mainIdx = idxById.get(String(item.id));
+  const miniSvgLines = [];
+
+  if (mainIdx !== undefined) {
+    const mStartOff = Math.max(0, diffDays(minDt, parseDate(item.startDate)));
+    const mDur = Math.max(3, item.durationDays || (diffDays(item.startDate, item.endDate) + 1));
+    const mLP = toPct(mStartOff);
+    const mWP = Math.max(8, toPct(mStartOff + mDur) - mLP);
+    const mL = toSvgX(mLP);
+    const mR = toSvgX(Math.min(100, mLP + mWP));
+    const mY = mainIdx * miniRowH + barCenterOffset;
+
+    predEdges.slice(0, 2).forEach(lk => {
+      const pr = itemById.get(String(lk.id));
+      const pi = pr ? idxById.get(String(pr.id)) : undefined;
+      if (pi === undefined) return;
+      const pStartOff = Math.max(0, diffDays(minDt, parseDate(pr.startDate)));
+      const pDur = Math.max(3, pr.durationDays || (diffDays(pr.startDate, pr.endDate) + 1));
+      const pLP = toPct(pStartOff);
+      const pWP = Math.max(8, toPct(pStartOff + pDur) - pLP);
+      const pL = toSvgX(pLP);
+      const pR = toSvgX(Math.min(100, pLP + pWP));
+      const pY = pi * miniRowH + barCenterOffset;
+      const isCrit = showCpm && pr.isCritical && item.isCritical;
+      if (lk.type === 'SS') {
+        const leftX = Math.max(4, Math.min(pL, mL) - 8);
+        const pathD = `M ${pL} ${pY} L ${leftX} ${pY} L ${leftX} ${mY} L ${mL} ${mY}`;
+        miniSvgLines.push(`<path d="${pathD}" fill="none" stroke="${isCrit ? '#e11d48' : '#0284c7'}" stroke-width="1.4" stroke-dasharray="4 2" opacity="0.9" />`);
+      } else {
+        const midX = Math.max(pR + 4, Math.min(mL - 4, (pR + mL) / 2));
+        const pathD = mL >= pR + 6
+          ? `M ${pR} ${pY} L ${midX} ${pY} L ${midX} ${mY} L ${mL} ${mY}`
+          : `M ${pR} ${pY} L ${pR + 6} ${pY} L ${pR + 6} ${(pY + mY) / 2} L ${Math.max(4, mL - 6)} ${(pY + mY) / 2} L ${Math.max(4, mL - 6)} ${mY} L ${mL} ${mY}`;
+        miniSvgLines.push(`<path d="${pathD}" fill="none" stroke="${isCrit ? '#e11d48' : '#64748b'}" stroke-width="${isCrit ? '1.6' : '1.2'}" opacity="0.85" />`);
+      }
+    });
+
+    succEdges.slice(0, 2).forEach(edge => {
+      const sc = itemById.get(String(edge.id));
+      const si = sc ? idxById.get(String(sc.id)) : undefined;
+      if (si === undefined) return;
+      const sStartOff = Math.max(0, diffDays(minDt, parseDate(sc.startDate)));
+      const sLP = toPct(sStartOff);
+      const sL = toSvgX(sLP);
+      const sY = si * miniRowH + barCenterOffset;
+      const isCrit = showCpm && item.isCritical && sc.isCritical;
+      if (edge.type === 'SS') {
+        const leftX = Math.max(4, Math.min(mL, sL) - 8);
+        const pathD = `M ${mL} ${mY} L ${leftX} ${mY} L ${leftX} ${sY} L ${sL} ${sY}`;
+        miniSvgLines.push(`<path d="${pathD}" fill="none" stroke="${isCrit ? '#e11d48' : '#0284c7'}" stroke-width="1.4" stroke-dasharray="4 2" opacity="0.9" />`);
+      } else {
+        const midX = Math.max(mR + 4, Math.min(sL - 4, (mR + sL) / 2));
+        const pathD = sL >= mR + 6
+          ? `M ${mR} ${mY} L ${midX} ${mY} L ${midX} ${sY} L ${sL} ${sY}`
+          : `M ${mR} ${mY} L ${mR + 6} ${mY} L ${mR + 6} ${(mY + sY) / 2} L ${Math.max(4, sL - 6)} ${(mY + sY) / 2} L ${Math.max(4, sL - 6)} ${sY} L ${sL} ${sY}`;
+        miniSvgLines.push(`<path d="${pathD}" fill="none" stroke="${isCrit ? '#e11d48' : '#64748b'}" stroke-width="${isCrit ? '1.6' : '1.2'}" opacity="0.85" />`);
+      }
+    });
+  }
+
+  inner.innerHTML = `
+    <div class="bg-slate-900 text-white px-3 py-1.5 flex items-center justify-between gap-2 border-b border-blue-500/40 text-xs">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[11px] text-white shrink-0" style="background-color:${effectiveHex};">${escapeCalHtml(item.clave)}</span>
+        <span class="text-[11px] font-mono text-slate-300">📅 ${escapeCalHtml(item.startDate)} → ${escapeCalHtml(item.endDate)} (${item.durationDays || 3}d)</span>
+      </div>
+      ${showCpm ? `
+        <span class="text-[10.5px] font-bold shrink-0 ${item.isCritical ? 'text-rose-400' : 'text-emerald-400'}">
+          ${item.isCritical ? '🔥 Ruta Crítica' : `✓ +${item.slackDays || 0}d`}
+        </span>
+      ` : ''}
+    </div>
+    <div class="p-2.5 space-y-2 text-xs">
+      <div class="font-bold text-slate-900 leading-snug text-[12px] whitespace-normal">${escapeCalHtml(item.descripcion)}</div>
+      <div class="border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <div class="bg-slate-100 border-b border-slate-200 px-2 py-1 flex items-center justify-between text-[10px] font-bold text-slate-600 uppercase">
+          <span>🔍 Zoom de barra (sin mover el fondo)</span>
+          <span class="font-mono text-blue-700">${formatDate(minDt)} al ${formatDate(maxDt)}</span>
+        </div>
+        <div class="relative divide-y divide-slate-100 text-[10px]">
+          <svg width="434" height="${sliceItems.length * miniRowH}" viewBox="0 0 434 ${sliceItems.length * miniRowH}" class="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
+            ${miniSvgLines.join('')}
+          </svg>
+          ${sliceItems.map(si => {
+            const isMain = String(si.id) === String(item.id);
+            const siHex = (showCpm && si.isCritical) ? '#dc2626' : (si.customColor || si.color?.bar || '#3b82f6');
+            const siStartOff = Math.max(0, diffDays(minDt, parseDate(si.startDate)));
+            const siDur = Math.max(3, si.durationDays || (diffDays(si.startDate, si.endDate) + 1));
+            const leftP = toPct(siStartOff);
+            const widthP = Math.max(8, toPct(siStartOff + siDur) - leftP);
+            const tag = isMain ? 'ACTUAL' : (predSet.has(String(si.id)) ? 'PREDEC.' : 'SUCESORA');
+            return `
+              <div class="px-2 pt-1 pb-0.5 ${isMain ? 'bg-blue-50/75' : 'bg-white'} flex flex-col justify-between" style="height:${miniRowH}px;">
+                <div class="relative z-20 flex items-start justify-between gap-2 min-w-0 h-[25px] overflow-hidden rounded px-0.5 ${isMain ? 'bg-blue-50/90' : 'bg-white/90'}">
+                  <span class="font-sans leading-[12px] text-[10px] ${isMain ? 'font-bold text-slate-900' : 'text-slate-700'} whitespace-normal">
+                    <span class="font-mono text-[8.5px] px-1 py-[1px] rounded ${isMain ? 'bg-blue-600 text-white font-bold' : 'bg-slate-200 text-slate-700 font-semibold'} mr-1">${tag}</span>
+                    <strong>${escapeCalHtml(si.clave)}</strong> · ${escapeCalHtml(si.descripcion)}
+                  </span>
+                  <span class="font-mono font-bold shrink-0 text-[9.5px] text-slate-700 whitespace-nowrap">${siDur}d</span>
+                </div>
+                <div class="h-5 bg-slate-50/85 border border-slate-200/80 rounded relative flex items-center"
+                     style="background-image: linear-gradient(to right, rgba(203, 213, 225, 0.45) 1px, transparent 1px); background-size: 25% 100%;">
+                  <div class="h-4 rounded flex items-center justify-between px-1.5 text-white font-bold text-[9.5px] shadow-xs absolute z-20"
+                       style="left:${leftP}%; width:${widthP}%; background-color:${siHex};">
+                    <span class="truncate">${escapeCalHtml(si.clave)}</span>
+                    <span class="font-mono ml-1 text-[9px]">${siDur}d</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      <div class="text-[10.5px] text-slate-500 text-center">Clic en la barra o fila para seleccionarla y ampliar su texto en la tabla</div>
+    </div>
+  `;
+}
+
+export function initGanttCursorBarLens() {
+  if (typeof document === 'undefined' || !currentScheduleData?.items) return;
+  const cfg = getScheduleSettings();
+  const rowViewMode = cfg.rowViewMode || (cfg.justifyConcepts ? 'justified' : 'normal');
+  const dayWidth = cfg.dayWidth || 34;
+  const lensSettingOn = (cfg.cursorLensEnabled !== false);
+  const showCpm = isAdvancedCalendarioAllowed() && (cfg.showCriticalPath !== false);
+  const currencySymbol = state.settings?.currencySymbol || '$';
+
+  // Calcular pxPerDay activo aproximado
+  const scale = cfg.scale || 'dias';
+  const pxPerDay = scale === 'dias' ? Math.max(1.5, dayWidth) : (scale === 'semanas' ? Math.max(1.5, dayWidth * 0.45) : Math.max(1.2, dayWidth * 0.16));
+  const isLensActiveForScale = lensSettingOn && (dayWidth < 20 || pxPerDay < 18 || rowViewMode === 'compact');
+
+  const allItems = currentScheduleData.items || [];
+  const itemById = new Map(allItems.map(it => [String(it.id), it]));
+  const succMap = new Map();
+  allItems.forEach(it => {
+    if (!it.isParent) succMap.set(String(it.id), []);
+  });
+  allItems.forEach(it => {
+    if (it.isParent) return;
+    normalizeScheduleLinks(it.predecessors).forEach(lk => {
+      if (succMap.has(String(lk.id))) succMap.get(String(lk.id)).push({ id: String(it.id), type: lk.type, lag: lk.lag });
+    });
+  });
+
+  const rowsPanel = document.getElementById('gantt-timeline-rows');
+  if (rowsPanel) {
+    rowsPanel.onmouseleave = () => hideCursorBarLens();
+  }
+
+  document.querySelectorAll('#view-calendario [data-gantt-left-row], #view-calendario [data-gantt-right-row]').forEach(el => {
+    const isRight = el.hasAttribute('data-gantt-right-row');
+    const rid = el.getAttribute(isRight ? 'data-gantt-right-row' : 'data-gantt-left-row');
+    if (!rid) return;
+
+    el.onmouseenter = (ev) => {
+      document.querySelectorAll(`#view-calendario [data-gantt-left-row="${rid}"], #view-calendario [data-gantt-right-row="${rid}"]`)
+        .forEach(x => x.classList.add('gantt-row-hover'));
+      if (!isDraggingGanttBar && isRight && isLensActiveForScale) {
+        const it = itemById.get(String(rid));
+        if (it) {
+          renderCursorBarLens(it, itemById, succMap, currencySymbol, showCpm);
+          positionCursorBarLens(ev.clientX, ev.clientY);
+        }
+      }
+    };
+    el.onmousemove = (ev) => {
+      if (!isDraggingGanttBar && isRight && isLensActiveForScale) {
+        positionCursorBarLens(ev.clientX, ev.clientY);
+      }
+    };
+    el.onmouseleave = () => {
+      document.querySelectorAll(`#view-calendario [data-gantt-left-row="${rid}"], #view-calendario [data-gantt-right-row="${rid}"]`)
+        .forEach(x => x.classList.remove('gantt-row-hover'));
+    };
+  });
 }
 
 // ------------------------------------------
@@ -3384,7 +3893,7 @@ export function handleCalendarioBarLinkClick(clickedConceptId, clickedClave = ''
   if (res.action === 'removed') {
     showToast(`Enlace eliminado entre ${res.predClave} y ${res.targetClave}.`);
   } else {
-    showToast(`✓ Enlace Fin-a-Inicio creado: ${res.targetClave} iniciará al terminar ${res.predClave} (${res.startDate}).`);
+    showToast(`✓ Enlace creado: ${res.targetClave} iniciará el ${res.startDate} vinculado a ${res.predClave}.`);
   }
   renderCalendarioObra();
 }
@@ -3463,8 +3972,307 @@ function ensureModalContainer(modalId) {
   return el;
 }
 
+// ------------------------------------------------------------
+// VENTANA INTERACTIVA DE CALENDARIO EN TABLA IZQUIERDA (POPOVER)
+// ------------------------------------------------------------
+export function closeCalendarioDatePickerPopover() {
+  openDatePickerConceptId = null;
+  lastDatePickerAnchorRect = null;
+  if (typeof document === 'undefined') return;
+  const pop = document.getElementById('calendario-date-picker-popover');
+  if (pop) pop.classList.add('hidden');
+  document.querySelectorAll('#view-calendario [data-pick-date]').forEach(el => {
+    el.classList.remove('ring-2', 'ring-blue-500', 'border-blue-500');
+  });
+}
+
+function positionCalendarioDatePicker(pop, anchorRect) {
+  if (!pop || !anchorRect || typeof window === 'undefined') return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = pop.offsetWidth || 284;
+  const h = pop.offsetHeight || 348;
+  let left = anchorRect.left;
+  if (left + w > vw - 12) left = Math.max(12, vw - w - 12);
+  let top = anchorRect.bottom + 6;
+  if (top + h > vh - 12) {
+    const aboveTop = anchorRect.top - h - 6;
+    top = aboveTop >= 12 ? aboveTop : Math.max(12, vh - h - 12);
+  }
+  pop.style.left = `${Math.round(left)}px`;
+  pop.style.top = `${Math.round(top)}px`;
+}
+
+function ensureCalendarioGlobalListeners() {
+  if (isCalendarioGlobalListenersAttached || typeof document === 'undefined') return;
+  isCalendarioGlobalListenersAttached = true;
+
+  document.addEventListener('click', (ev) => {
+    if (!openDatePickerConceptId) return;
+    if (ev.target && ev.target.closest && (ev.target.closest('#calendario-date-picker-popover') || ev.target.closest('[data-pick-date]'))) return;
+    closeCalendarioDatePickerPopover();
+  });
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        if (openDatePickerConceptId) closeCalendarioDatePickerPopover();
+        if (currentDepModalConceptId) closeConceptDependenciesModal();
+        hideCursorBarLens();
+      }
+    });
+  }
+}
+
+function ensureDatePickerContainer() {
+  if (typeof document === 'undefined') return null;
+  let pop = document.getElementById('calendario-date-picker-popover');
+  if (!pop && document.createElement && document.body) {
+    pop = document.createElement('div');
+    pop.id = 'calendario-date-picker-popover';
+    pop.className = 'hidden fixed z-[60] w-[284px] bg-white border border-slate-300 rounded-xl shadow-2xl overflow-hidden text-xs select-none';
+    pop.addEventListener('click', (ev) => ev.stopPropagation());
+    document.body.appendChild(pop);
+  }
+  return pop;
+}
+
+export function openCalendarioDatePickerPopover(conceptId, triggerEl = null) {
+  if (!guardTabUnlocked('calendario')) return;
+  if (!canCurrentUserEditProject(getActiveProjectId())) {
+    showToast('Solo lectura: no tienes permisos de edición en este proyecto.', 'error');
+    return;
+  }
+  ensureCalendarioGlobalListeners();
+  const cid = String(conceptId);
+  if (openDatePickerConceptId === cid) {
+    closeCalendarioDatePickerPopover();
+    return;
+  }
+
+  closeConceptDependenciesModal();
+  closeCalendarioDatePickerPopover();
+
+  const items = currentScheduleData?.items || extractScheduleItems(state.treeData);
+  const item = items.find(it => it.tipo === 'concepto' && String(it.id) === cid);
+  if (!item) return;
+
+  const anchorBtn = triggerEl || document.querySelector(`#view-calendario [data-pick-date="${cid}"]`);
+  const anchorRect = anchorBtn && anchorBtn.getBoundingClientRect ? anchorBtn.getBoundingClientRect() : { left: 260, top: 220, bottom: 242 };
+  const curDate = parseDate(item.startDate);
+  openDatePickerConceptId = cid;
+  datePickerViewYear = curDate.getFullYear();
+  datePickerViewMonth = curDate.getMonth();
+  lastDatePickerAnchorRect = anchorRect;
+  if (anchorBtn && anchorBtn.classList) {
+    anchorBtn.classList.add('ring-2', 'ring-blue-500', 'border-blue-500');
+  }
+  renderCalendarioDatePickerPopover(cid, anchorRect);
+}
+
+function renderCalendarioDatePickerPopover(conceptId, anchorRect) {
+  const pop = ensureDatePickerContainer();
+  const items = currentScheduleData?.items || extractScheduleItems(state.treeData);
+  const concepts = items.filter(it => it.tipo === 'concepto');
+  const byId = new Map(concepts.map(c => [String(c.id), c]));
+  const item = byId.get(String(conceptId));
+  if (!pop || !item) { closeCalendarioDatePickerPopover(); return; }
+
+  const cfg = getScheduleSettings();
+  const workdaysCfg = getWorkdaysSettings();
+  const respectWorkdays = cfg.respectWorkdays !== false;
+  const predLinks = normalizeScheduleLinks(item.predecessors);
+  const hasLock = predLinks.length > 0 && Boolean(item.minAllowedStartDate);
+  const predClaves = predLinks.map(lk => byId.get(String(lk.id))?.clave).filter(Boolean);
+  const projectStartStr = cfg.startDate || getProjectCreationDate();
+  const minAllowedStr = hasLock && item.minAllowedStartDate > projectStartStr ? item.minAllowedStartDate : projectStartStr;
+  const todayStr = getGanttTodayDate();
+  const curDur = Math.max(3, item.durationDays || 3);
+
+  const firstOfMonth = new Date(datePickerViewYear, datePickerViewMonth, 1);
+  const startDow = firstOfMonth.getDay();
+  const gridStart = new Date(datePickerViewYear, datePickerViewMonth, 1 - startDow);
+
+  const cellsHtml = [];
+  for (let i = 0; i < 42; i++) {
+    const d = addDays(gridStart, i);
+    const iso = formatDate(d);
+    const inMonth = (d.getMonth() === datePickerViewMonth);
+    const isSelected = (iso === item.startDate);
+    const isToday = (iso === todayStr);
+    const isMinStart = (hasLock && iso === minAllowedStr);
+    const isBlocked = (iso < minAllowedStr);
+    const wInfo = getDateWorkdayInfo(d, workdaysCfg);
+    const isNonWork = respectWorkdays && !wInfo.isWorkingDay;
+
+    let cls = '';
+    if (isSelected) cls = 'dp-selected';
+    else if (isBlocked) cls = inMonth ? 'dp-blocked' : 'dp-blocked-out';
+    else if (isToday) cls = 'dp-today';
+    else if (isMinStart) cls = 'dp-min';
+    else if (isNonWork && inMonth) cls = 'dp-nonworking';
+    else if (inMonth) cls = 'dp-regular';
+    else cls = 'dp-out';
+
+    const titleParts = [iso];
+    if (isSelected) titleParts.push('Inicio actual');
+    if (isToday) titleParts.push('HOY');
+    if (isMinStart) titleParts.push(`Mínimo por ${predClaves.join(', ')}`);
+    if (isBlocked) titleParts.push(`Bloqueado (mínimo ${minAllowedStr})`);
+    if (wInfo.isFestivo) titleParts.push(`Festivo: ${wInfo.festivoName}`);
+    else if (wInfo.isLluvia) titleParts.push(`Lluvia: ${wInfo.lluviaReason}`);
+    else if (wInfo.isNonWorkingDayOfWeek) titleParts.push('Día inhábil semanal');
+
+    const dotHtml = !isSelected && isToday
+      ? '<span style="width:4px;height:4px;border-radius:9999px;background:#f43f5e;margin-top:2px;"></span>'
+      : (!isSelected && isMinStart ? '<span style="width:4px;height:4px;border-radius:9999px;background:#f59e0b;margin-top:2px;"></span>' : '');
+
+    cellsHtml.push(`
+      <button type="button" data-dp-day="${iso}" data-dp-blocked="${isBlocked ? '1' : '0'}"
+              class="dp-day-btn ${cls}"
+              title="${escapeCalHtml(titleParts.join(' · '))}">
+        <span>${d.getDate()}</span>
+        ${dotHtml}
+      </button>
+    `);
+  }
+
+  const canPickToday = (todayStr >= minAllowedStr);
+
+  pop.innerHTML = `
+    <div class="bg-slate-900 text-white px-3 py-2 flex items-start justify-between gap-2">
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5">
+          <i class="fa-regular fa-calendar text-blue-400 text-xs shrink-0"></i>
+          <span class="font-mono font-bold text-blue-300 text-[11px]">${escapeCalHtml(item.clave)}</span>
+          <span class="font-bold text-white text-xs">Fecha de inicio</span>
+        </div>
+        <div class="text-[10px] text-slate-300 truncate mt-0.5" title="${escapeCalHtml(item.descripcion)}">${escapeCalHtml(item.descripcion)}</div>
+      </div>
+      <button type="button" id="dp-btn-close-x"
+              class="text-slate-400 hover:text-white w-6 h-6 rounded-md hover:bg-slate-800 flex items-center justify-center text-sm leading-none shrink-0 cursor-pointer"
+              title="Cerrar calendario">✕</button>
+    </div>
+
+    <div class="px-2.5 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+      <button type="button" id="dp-prev-month" class="dp-nav-btn" title="Mes anterior">◀</button>
+      <span class="font-bold text-slate-800 text-xs tracking-tight">${MONTH_NAMES_ES[datePickerViewMonth]} ${datePickerViewYear}</span>
+      <button type="button" id="dp-next-month" class="dp-nav-btn" title="Mes siguiente">▶</button>
+    </div>
+
+    <div class="dp-grid-7 dp-grid-weekdays px-2.5 pt-2 pb-1 text-center text-[10px] font-bold bg-white">
+      <span class="text-slate-400">Dom</span>
+      <span class="text-slate-500">Lun</span>
+      <span class="text-slate-500">Mar</span>
+      <span class="text-slate-500">Mié</span>
+      <span class="text-slate-500">Jue</span>
+      <span class="text-slate-500">Vie</span>
+      <span class="text-slate-400">Sáb</span>
+    </div>
+
+    <div class="dp-grid-7 dp-grid-days px-2.5 pb-2 bg-white">
+      ${cellsHtml.join('')}
+    </div>
+
+    ${hasLock ? `
+      <div class="px-2.5 py-1.5 bg-amber-50 border-t border-amber-200 flex items-center justify-between gap-2 text-[10px]">
+        <span class="text-amber-900 font-medium truncate" title="Depende de ${escapeCalHtml(predClaves.join(', '))}">🔒 Mín. <strong class="font-mono">${minAllowedStr}</strong> (${escapeCalHtml(predClaves.join(', '))})</span>
+        ${item.startDate !== minAllowedStr ? `
+          <button type="button" id="dp-jump-min" class="shrink-0 px-1.5 py-0.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer transition">Al mín.</button>
+        ` : '<span class="shrink-0 text-amber-700 font-semibold">En mín.</span>'}
+      </div>
+    ` : `
+      <div class="px-2.5 py-1.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 text-[10px] text-slate-600">
+        <span>Inicio: <strong class="font-mono text-blue-700">${escapeCalHtml(item.startDate)}</strong> → <strong class="font-mono text-slate-800">${escapeCalHtml(item.endDate)}</strong></span>
+        <span class="font-mono font-bold text-slate-700">${curDur}d</span>
+      </div>
+    `}
+
+    <div class="px-2.5 py-1.5 bg-white border-t border-slate-200 flex items-center justify-between gap-1.5">
+      <div class="flex items-center gap-1">
+        <button type="button" id="dp-btn-today"
+                class="px-2 py-1 rounded border text-[10.5px] font-semibold transition ${canPickToday ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 cursor-pointer' : 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed'}"
+                title="${canPickToday ? `Mover inicio a HOY (${todayStr})` : `HOY (${todayStr}) es anterior al mínimo (${minAllowedStr})`}">Hoy</button>
+        <button type="button" id="dp-btn-predec"
+                class="px-2 py-1 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-[10.5px] font-semibold cursor-pointer transition"
+                title="Abrir Predecesoras de ${escapeCalHtml(item.clave)}">🔗 Predec.</button>
+      </div>
+      <button type="button" id="dp-btn-close"
+              class="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[10.5px] font-semibold cursor-pointer transition">Cerrar</button>
+    </div>
+  `;
+
+  pop.classList.remove('hidden');
+  positionCalendarioDatePicker(pop, anchorRect);
+
+  function applyPickedDate(iso) {
+    if (hasLock && iso < minAllowedStr) {
+      showToast(`🔒 ${item.clave} depende de ${predClaves.join(', ')}: mínimo ${minAllowedStr}.`, 'error');
+      return;
+    }
+    selectedCalendarioRowId = String(conceptId);
+    closeCalendarioDatePickerPopover();
+    const res = updateConceptDatesInModel(conceptId, iso, curDur);
+    if (res && res.clampedByPredecessor) {
+      showToast(`🔒 Inicio ajustado a ${res.minAllowedDate} por dependencia.`, 'error');
+    } else if (res && res.cascadedCount > 0) {
+      showToast(`📅 ${item.clave} inicia ${res.startDate} • ${res.cascadedCount} dependiente(s) actualizados.`);
+    } else {
+      showToast(`📅 ${item.clave} programado para iniciar el ${res?.startDate || iso}.`);
+    }
+    renderCalendarioObra();
+  }
+
+  document.getElementById('dp-btn-close-x').onclick = closeCalendarioDatePickerPopover;
+  document.getElementById('dp-btn-close').onclick = closeCalendarioDatePickerPopover;
+  document.getElementById('dp-prev-month').onclick = () => {
+    if (datePickerViewMonth === 0) { datePickerViewMonth = 11; datePickerViewYear -= 1; }
+    else { datePickerViewMonth -= 1; }
+    renderCalendarioDatePickerPopover(conceptId, lastDatePickerAnchorRect || anchorRect);
+  };
+  document.getElementById('dp-next-month').onclick = () => {
+    if (datePickerViewMonth === 11) { datePickerViewMonth = 0; datePickerViewYear += 1; }
+    else { datePickerViewMonth += 1; }
+    renderCalendarioDatePickerPopover(conceptId, lastDatePickerAnchorRect || anchorRect);
+  };
+  pop.querySelectorAll('[data-dp-day]').forEach(dayBtn => {
+    dayBtn.onclick = () => {
+      const iso = dayBtn.getAttribute('data-dp-day');
+      if (dayBtn.getAttribute('data-dp-blocked') === '1') {
+        showToast(`🔒 Bloqueado: depende de terminar ${predClaves.join(', ')} (mínimo ${minAllowedStr}).`, 'error');
+        return;
+      }
+      applyPickedDate(iso);
+    };
+  });
+  const jumpMinBtn = document.getElementById('dp-jump-min');
+  if (jumpMinBtn) {
+    jumpMinBtn.onclick = () => applyPickedDate(minAllowedStr);
+  }
+  document.getElementById('dp-btn-today').onclick = () => {
+    if (!canPickToday) {
+      showToast(`🔒 HOY (${todayStr}) es anterior al mínimo (${minAllowedStr}).`, 'error');
+      return;
+    }
+    applyPickedDate(todayStr);
+  };
+  document.getElementById('dp-btn-predec').onclick = () => {
+    closeCalendarioDatePickerPopover();
+    openConceptDependenciesModal(conceptId);
+  };
+}
+
+// ------------------------------------------------------------
+// MODAL DE PREDECESORAS Y TRASLAPES (FI / II / ±DÍAS / INVERTIR ORDEN)
+// ------------------------------------------------------------
 export function openConceptDependenciesModal(conceptId) {
   if (!guardTabUnlocked('calendario')) return;
+  if (!canCurrentUserEditProject(getActiveProjectId())) {
+    showToast('Solo lectura: no tienes permisos de edición en este proyecto.', 'error');
+    return;
+  }
+  closeCalendarioDatePickerPopover();
+  ensureCalendarioGlobalListeners();
   const modal = ensureModalContainer('modal-calendario-dependencias');
   if (!modal) return;
 
@@ -3476,65 +4284,334 @@ export function openConceptDependenciesModal(conceptId) {
   if (!target) return;
 
   currentDepModalConceptId = String(target.id);
-  const currentPreds = new Set((target.predecessors || []).map(String));
+  depModalDraftLinks = normalizeScheduleLinks(target.predecessors).map(lk => ({ ...lk }));
+  depModalFilterPartida = 'all';
+  depModalSearch = '';
+
+  renderConceptDependenciesModalBody();
+}
+
+function renderConceptDependenciesModalBody() {
+  const modal = document.getElementById('modal-calendario-dependencias');
+  if (!modal || !currentDepModalConceptId) return;
+
+  const cfg = getScheduleSettings();
+  const respectWorkdays = cfg.respectWorkdays !== false;
+  const workdaysCfg = getWorkdaysSettings();
+  const projectStartStr = cfg.startDate || getProjectCreationDate();
+
+  const rawItems = extractScheduleItems(state.treeData);
+  ensureInitialDates(rawItems, projectStartStr);
+  const rootPartidas = rawItems.filter(it => it.isParent && it.level === 1);
+  const allConcepts = rawItems.filter(it => it.tipo === 'concepto');
+  const byId = new Map(allConcepts.map(c => [String(c.id), c]));
+  const conceptId = String(currentDepModalConceptId);
+  const item = byId.get(conceptId);
+  if (!item) { closeConceptDependenciesModal(); return; }
+
+  const draftMap = new Map(depModalDraftLinks.map(lk => [String(lk.id), lk]));
+  const candidateConcepts = allConcepts.filter(c => String(c.id) !== conceptId);
+
+  let previewMinDt = null;
+  depModalDraftLinks.forEach(lk => {
+    const pc = byId.get(String(lk.id));
+    if (pc) {
+      const dt = computeLinkMinStartDate(pc, lk, {
+        projectStartDateStr: projectStartStr,
+        workdaysCfg,
+        respectWorkdays
+      });
+      if (!previewMinDt || dt > previewMinDt) previewMinDt = dt;
+    }
+  });
+  const previewStartStr = previewMinDt ? formatDate(previewMinDt) : (item.startDate || projectStartStr);
+
+  const q = depModalSearch.trim().toLowerCase();
+  const filteredConcepts = candidateConcepts.filter(c => {
+    if (depModalFilterPartida === '__selected__' && !draftMap.has(String(c.id))) return false;
+    if (depModalFilterPartida !== 'all' && depModalFilterPartida !== '__selected__' && c.parentPartidaName !== depModalFilterPartida) return false;
+    if (q && !String(c.clave || '').toLowerCase().includes(q) && !String(c.descripcion || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const listElPrev = document.getElementById('dep-modal-checklist');
+  const prevScroll = listElPrev ? listElPrev.scrollTop : 0;
+
+  const pillBtnCls = (active) => active
+    ? 'px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-600 text-white border border-blue-700 cursor-pointer transition shrink-0'
+    : 'px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 cursor-pointer transition shrink-0';
+
+  const selectedChipsHtml = depModalDraftLinks.length === 0
+    ? `<span class="text-[11px] text-slate-500 italic">Ninguna seleccionada — este concepto arranca libre en la fecha que indiques.</span>`
+    : depModalDraftLinks.map(lk => {
+        const pc = byId.get(String(lk.id));
+        if (!pc) return '';
+        const isSS = lk.type === 'SS';
+        return `
+          <button type="button" data-dep-remove-chip="${escapeCalHtml(pc.id)}"
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border ${isSS ? 'border-sky-300 text-sky-800' : 'border-blue-300 text-blue-800'} hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 text-[10.5px] font-mono font-bold cursor-pointer transition shadow-2xs"
+                  title="Quitar ${escapeCalHtml(pc.clave)}: ${escapeCalHtml(pc.descripcion)}">
+            <span>${isSS ? '∥' : '🔗'} ${escapeCalHtml(formatScheduleLinkTag(lk, pc.clave))}</span>
+            <span class="font-bold ml-0.5">×</span>
+          </button>
+        `;
+      }).join('');
+
+  const groupBuckets = rootPartidas.length > 0
+    ? rootPartidas.map(p => ({
+        title: `${p.clave || 'PART'} · ${p.descripcion}`,
+        items: filteredConcepts.filter(c => c.parentPartidaName === p.descripcion)
+      }))
+    : [{ title: 'Conceptos del Presupuesto', items: filteredConcepts }];
+
+  const matchedSet = new Set();
+  groupBuckets.forEach(gb => gb.items.forEach(it => matchedSet.add(String(it.id))));
+  const orphanItems = filteredConcepts.filter(c => !matchedSet.has(String(c.id)));
+  if (orphanItems.length > 0) {
+    groupBuckets.push({ title: 'Otros conceptos', items: orphanItems });
+  }
+
+  const groupedHtml = groupBuckets.map(bucket => {
+    if (bucket.items.length === 0) return '';
+    return `
+      <div class="space-y-1">
+        <div class="px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 bg-slate-100/90 border border-slate-200/80 rounded-md sticky top-0 z-10 flex items-center justify-between">
+          <span class="truncate">${escapeCalHtml(bucket.title)}</span>
+          <span class="font-mono text-slate-500 ml-2 shrink-0">${bucket.items.length}</span>
+        </div>
+        <div class="space-y-1.5">
+          ${bucket.items.map(c => {
+            const draftLink = draftMap.get(String(c.id));
+            const isChecked = Boolean(draftLink);
+            const isDownstream = !isChecked && wouldCreateScheduleCycle(conceptId, c.id, allConcepts);
+            const isDirectSuccessor = isDownstream && normalizeScheduleLinks(c.predecessors).some(x => String(x.id) === conceptId);
+            return `
+              <div class="rounded-lg border transition ${
+                isDownstream
+                  ? 'bg-slate-100/80 border-slate-200'
+                  : (isChecked
+                      ? 'bg-blue-50/90 border-blue-300 shadow-2xs'
+                      : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50')
+              }">
+                <div data-dep-toggle-pred="${escapeCalHtml(c.id)}" data-blocked="${isDownstream ? '1' : '0'}"
+                     class="w-full text-left px-3 py-2 flex items-start gap-2.5 ${isDownstream ? 'opacity-70' : 'cursor-pointer'}">
+                  <span class="mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                    isChecked
+                      ? 'bg-blue-600 border-blue-600 text-white'
+                      : 'bg-white border-slate-300 text-transparent'
+                  }">
+                    <i class="fa-solid fa-check text-[9px]"></i>
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center justify-between gap-1">
+                      <span class="font-mono font-bold text-[11px] ${isChecked ? 'text-blue-800' : 'text-blue-700'}">${escapeCalHtml(c.clave)}</span>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        ${isDownstream ? `
+                          <span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9.5px] font-semibold">
+                            Ya va después de ${escapeCalHtml(item.clave)}
+                          </span>
+                          ${isDirectSuccessor ? `
+                            <button type="button" data-dep-invert-pred="${escapeCalHtml(c.id)}"
+                                    class="px-1.5 py-0.5 rounded bg-white hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-300 text-[9.5px] font-bold cursor-pointer transition"
+                                    title="Quitar que ${escapeCalHtml(c.clave)} dependa de ${escapeCalHtml(item.clave)} para poder invertir el orden">
+                              ⇄ Invertir orden
+                            </button>
+                          ` : ''}
+                        ` : ''}
+                        <span class="font-mono text-[10px] text-slate-500">${escapeCalHtml((c.startDate || '').slice(5))} → <strong class="text-slate-700">${escapeCalHtml((c.endDate || '').slice(5))}</strong> (${c.durationDays || 3}d)</span>
+                      </div>
+                    </div>
+                    <div class="text-slate-800 text-[11.5px] leading-snug whitespace-normal mt-0.5 ${isChecked ? 'font-medium text-slate-900' : ''}">${escapeCalHtml(c.descripcion)}</div>
+                  </div>
+                </div>
+                ${isChecked ? `
+                  <div class="px-3 pb-2 pt-1.5 ml-6 mr-2 border-t border-blue-200/70 flex flex-wrap items-center justify-between gap-2 text-[10.5px]">
+                    <div class="inline-flex items-center bg-white rounded-md p-0.5 border border-blue-200">
+                      <button type="button" data-dep-link-type="${escapeCalHtml(c.id)}:FS"
+                              class="px-2 py-0.5 rounded font-semibold cursor-pointer transition ${draftLink.type === 'FS' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'}">
+                        Al terminar (FI)
+                      </button>
+                      <button type="button" data-dep-link-type="${escapeCalHtml(c.id)}:SS"
+                              class="px-2 py-0.5 rounded font-semibold cursor-pointer transition ${draftLink.type === 'SS' ? 'bg-sky-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'}"
+                              title="Ambas trabajan en paralelo arrancando al mismo tiempo (+ desfase opcional)">
+                        ∥ En paralelo (II)
+                      </button>
+                    </div>
+                    <div class="inline-flex items-center gap-1">
+                      <span class="text-slate-600 font-medium">${draftLink.type === 'SS' ? 'Desfase inicio:' : 'Traslape / espera:'}</span>
+                      <button type="button" data-dep-link-lag="${escapeCalHtml(c.id)}:-1" class="w-5 h-5 rounded border border-slate-300 bg-white hover:bg-slate-100 font-mono font-bold cursor-pointer">-</button>
+                      <span class="min-w-[40px] text-center font-mono font-bold ${draftLink.lag < 0 ? 'text-amber-700' : (draftLink.lag > 0 ? 'text-blue-700' : 'text-slate-700')}">${draftLink.lag > 0 ? `+${draftLink.lag}d` : `${draftLink.lag}d`}</span>
+                      <button type="button" data-dep-link-lag="${escapeCalHtml(c.id)}:1" class="w-5 h-5 rounded border border-slate-300 bg-white hover:bg-slate-100 font-mono font-bold cursor-pointer">+</button>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('') || '<div class="p-6 text-center text-slate-400 text-xs">No se encontraron conceptos con ese filtro.</div>';
 
   modal.className = 'fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4';
   modal.onclick = (e) => {
     if (e.target === modal) closeConceptDependenciesModal();
   };
   modal.innerHTML = `
-    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[88vh] flex flex-col overflow-hidden">
-      <div class="bg-slate-900 text-white px-4 py-3.5 flex items-center justify-between shrink-0">
-        <div class="min-w-0 pr-2">
-          <h3 class="text-sm font-bold flex items-center gap-2">
-            <i class="fa-solid fa-diagram-project text-blue-400"></i>
-            <span>Dependencias Fin-a-Inicio — <span class="font-mono text-amber-300">${target.clave}</span></span>
-          </h3>
-          <p class="text-[11px] text-slate-300 truncate mt-0.5">${target.descripcion}</p>
+    <div id="dep-modal-card" class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden text-xs">
+      <!-- Cabecera oscura estilo Cubikar -->
+      <div class="bg-slate-900 text-white px-4 py-3 flex items-start justify-between gap-3 shrink-0">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-blue-600 font-mono font-bold text-[11px] text-white">${escapeCalHtml(item.clave)}</span>
+            <span class="text-sm font-bold text-white">Predecesoras y Traslapes (Programa de Obra)</span>
+            <span class="text-[11px] font-mono text-slate-300">${escapeCalHtml(item.startDate)} → ${escapeCalHtml(item.endDate)} (${item.durationDays || 3}d)</span>
+          </div>
+          <p class="text-[11.5px] text-slate-200 leading-snug mt-1.5 whitespace-normal">${escapeCalHtml(item.descripcion)}</p>
         </div>
-        <button type="button" onclick="closeConceptDependenciesModal()" class="text-slate-400 hover:text-white p-1 rounded cursor-pointer">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+        <button type="button" onclick="closeConceptDependenciesModal()" class="w-7 h-7 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white text-base font-bold cursor-pointer shrink-0 flex items-center justify-center">×</button>
       </div>
 
-      <div class="px-4 py-2.5 bg-blue-50 border-b border-blue-100 text-[11px] text-blue-900">
-        Marca todos los conceptos que <strong>deben terminar</strong> antes de poder iniciar <strong>${target.clave}</strong>. Se bloquean automáticamente los conceptos que generarían un ciclo.
+      <!-- Cómo funciona + Resumen de seleccionadas y fecha resultante -->
+      <div class="bg-blue-50/90 border-b border-blue-200 px-4 py-2.5 space-y-2 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-blue-950">
+          <span>Elige <strong>1 o más</strong> conceptos y define si <strong>${escapeCalHtml(item.clave)}</strong> espera <strong>Al terminar (FI)</strong> o corre <strong>En paralelo (II)</strong>:</span>
+          <span class="font-mono font-bold px-2 py-0.5 rounded bg-white border border-blue-200 text-blue-800">
+            ${depModalDraftLinks.length > 0 ? `📅 Podrá iniciar desde: ${previewStartStr}` : '📅 Inicio libre'}
+          </span>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          ${selectedChipsHtml}
+        </div>
       </div>
 
-      <div class="p-3 overflow-y-auto flex-1 divide-y divide-slate-100 custom-scroll text-xs" id="dep-modal-checklist">
-        ${concepts.filter(c => String(c.id) !== String(target.id)).map(cand => {
-          const isChecked = currentPreds.has(String(cand.id));
-          const isCyclic = !isChecked && wouldCreateScheduleCycle(target.id, cand.id, concepts);
-          return `
-            <label class="py-2 px-2 flex items-center gap-2.5 rounded-lg ${isCyclic ? 'opacity-45 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'}">
-              <input type="checkbox"
-                     class="dep-pred-checkbox rounded border-slate-300 text-blue-600 cursor-pointer"
-                     value="${cand.id}"
-                     ${isChecked ? 'checked' : ''}
-                     ${isCyclic ? 'disabled' : ''}>
-              <span class="font-mono font-bold text-[11px] text-blue-700 w-16 shrink-0">${cand.clave}</span>
-              <span class="flex-1 truncate text-slate-800">${cand.descripcion}</span>
-              <span class="font-mono text-[10px] text-slate-500 shrink-0">${cand.endDate || ''} (${cand.durationDays}d)</span>
-            </label>
-          `;
-        }).join('')}
+      <!-- Buscador blanco explícito + Filtros por Partida -->
+      <div class="bg-white border-b border-slate-200 px-4 py-2.5 space-y-2 shrink-0">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input id="dep-modal-search-input" type="text" value="${escapeCalHtml(depModalSearch)}"
+                 placeholder="Buscar por clave o palabra en la descripción completa (ej. firme, cableado, muro...)"
+                 style="background-color:#ffffff; color:#1e293b;"
+                 class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-slate-300 bg-white text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+          ${depModalSearch ? '<button id="dep-modal-clear-search" type="button" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 font-bold cursor-pointer">×</button>' : ''}
+        </div>
+        <div class="flex items-center gap-1.5 overflow-x-auto custom-scroll pb-0.5">
+          <button type="button" data-dep-part-filter="all" class="${pillBtnCls(depModalFilterPartida === 'all')}">Todas (${candidateConcepts.length})</button>
+          ${rootPartidas.map(p => `<button type="button" data-dep-part-filter="${escapeCalHtml(p.descripcion)}" class="${pillBtnCls(depModalFilterPartida === p.descripcion)}" title="${escapeCalHtml(p.descripcion)}">${escapeCalHtml(p.clave || p.descripcion.slice(0, 14))}</button>`).join('')}
+          <button type="button" data-dep-part-filter="__selected__" class="${pillBtnCls(depModalFilterPartida === '__selected__')}">✓ Elegidas (${depModalDraftLinks.length})</button>
+        </div>
       </div>
 
-      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
-        <button type="button" onclick="clearConceptDependenciesFromModal()" class="text-[11px] font-semibold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer">
+      <!-- Checklist espacioso agrupado por Partida -->
+      <div id="dep-modal-checklist" class="flex-1 overflow-y-auto custom-scroll p-3 space-y-3 bg-slate-50/60" style="min-height: 220px; max-height: 44vh;">
+        ${groupedHtml}
+      </div>
+
+      <!-- Pie con acciones -->
+      <div class="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center justify-between gap-2 shrink-0">
+        <button type="button" onclick="clearConceptDependenciesFromModal()" class="text-[11px] font-semibold text-rose-700 hover:text-rose-800 hover:underline cursor-pointer">
           Dejar inicio libre (sin predecesoras)
         </button>
         <div class="flex items-center gap-2">
-          <button type="button" onclick="closeConceptDependenciesModal()" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-xs font-semibold cursor-pointer">
+          <button type="button" onclick="closeConceptDependenciesModal()" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold cursor-pointer transition">
             Cancelar
           </button>
-          <button type="button" onclick="saveConceptDependenciesModal()" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-xs cursor-pointer">
-            Guardar Enlaces
+          <button type="button" onclick="saveConceptDependenciesModal()" class="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-xs cursor-pointer transition">
+            Guardar Enlaces (${depModalDraftLinks.length})
           </button>
         </div>
       </div>
     </div>
   `;
+
+  const newListEl = document.getElementById('dep-modal-checklist');
+  if (newListEl) newListEl.scrollTop = prevScroll;
+
+  const cardEl = document.getElementById('dep-modal-card');
+  if (cardEl) cardEl.onclick = (ev) => ev.stopPropagation();
+
+  const searchInp = document.getElementById('dep-modal-search-input');
+  if (searchInp) {
+    searchInp.oninput = (ev) => {
+      depModalSearch = ev.target.value;
+      const pos = ev.target.selectionStart;
+      renderConceptDependenciesModalBody();
+      const nb = document.getElementById('dep-modal-search-input');
+      if (nb) { nb.focus(); nb.setSelectionRange(pos, pos); }
+    };
+  }
+  const clearBtn = document.getElementById('dep-modal-clear-search');
+  if (clearBtn) {
+    clearBtn.onclick = () => {
+      depModalSearch = '';
+      renderConceptDependenciesModalBody();
+      document.getElementById('dep-modal-search-input')?.focus();
+    };
+  }
+
+  modal.querySelectorAll('[data-dep-part-filter]').forEach(btn => {
+    btn.onclick = () => {
+      depModalFilterPartida = btn.getAttribute('data-dep-part-filter') || 'all';
+      renderConceptDependenciesModalBody();
+    };
+  });
+  modal.querySelectorAll('[data-dep-remove-chip]').forEach(btn => {
+    btn.onclick = () => {
+      const rid = String(btn.getAttribute('data-dep-remove-chip'));
+      depModalDraftLinks = depModalDraftLinks.filter(x => String(x.id) !== rid);
+      renderConceptDependenciesModalBody();
+    };
+  });
+  modal.querySelectorAll('[data-dep-invert-pred]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const succId = String(btn.getAttribute('data-dep-invert-pred'));
+      const succItem = byId.get(succId);
+      if (!succItem) return;
+      const nextSuccLinks = normalizeScheduleLinks(succItem.predecessors).filter(x => String(x.id) !== conceptId);
+      const resInv = setConceptPredecessorsInModel(succItem.id, nextSuccLinks);
+      if (!resInv || !resInv.ok) {
+        showToast(resInv?.error || 'No se pudo invertir la dependencia.', 'error');
+        return;
+      }
+      if (!depModalDraftLinks.some(x => String(x.id) === succId)) {
+        depModalDraftLinks = [...depModalDraftLinks, { id: succId, type: 'FS', lag: 0 }];
+      }
+      showToast(`⇄ Orden invertido: ${succItem.clave} liberado y elegido para ${item.clave}.`);
+      renderConceptDependenciesModalBody();
+      renderCalendarioObra();
+    };
+  });
+  modal.querySelectorAll('[data-dep-toggle-pred]').forEach(rowEl => {
+    rowEl.onclick = () => {
+      if (rowEl.getAttribute('data-blocked') === '1') return;
+      const pid = String(rowEl.getAttribute('data-dep-toggle-pred'));
+      if (draftMap.has(pid)) depModalDraftLinks = depModalDraftLinks.filter(x => String(x.id) !== pid);
+      else depModalDraftLinks = [...depModalDraftLinks, { id: pid, type: 'FS', lag: 0 }];
+      renderConceptDependenciesModalBody();
+    };
+  });
+  modal.querySelectorAll('[data-dep-link-type]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const [pid, nextType] = String(btn.getAttribute('data-dep-link-type')).split(':');
+      depModalDraftLinks = depModalDraftLinks.map(x => String(x.id) === pid ? { ...x, type: nextType === 'SS' ? 'SS' : 'FS' } : x);
+      renderConceptDependenciesModalBody();
+    };
+  });
+  modal.querySelectorAll('[data-dep-link-lag]').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const [pid, dStr] = String(btn.getAttribute('data-dep-link-lag')).split(':');
+      const d = parseInt(dStr, 10) || 0;
+      depModalDraftLinks = depModalDraftLinks.map(x => {
+        if (String(x.id) !== pid) return x;
+        const nextLag = Math.max(-15, Math.min(30, (parseInt(x.lag, 10) || 0) + d));
+        return { ...x, lag: nextLag };
+      });
+      renderConceptDependenciesModalBody();
+    };
+  });
 }
 
 export function closeConceptDependenciesModal() {
@@ -3542,11 +4619,15 @@ export function closeConceptDependenciesModal() {
   if (!modal) return;
   modal.className = 'hidden';
   currentDepModalConceptId = null;
+  depModalDraftLinks = [];
+  depModalFilterPartida = 'all';
+  depModalSearch = '';
 }
 
 export function clearConceptDependenciesFromModal() {
   if (!currentDepModalConceptId) return;
   const targetId = currentDepModalConceptId;
+  selectedCalendarioRowId = String(targetId);
   closeConceptDependenciesModal();
   setConceptPredecessorsInModel(targetId, []);
   showToast('Se liberaron las predecesoras del concepto.');
@@ -3554,22 +4635,21 @@ export function clearConceptDependenciesFromModal() {
 }
 
 export function saveConceptDependenciesModal() {
-  if (!currentDepModalConceptId || typeof document === 'undefined') return;
-  const container = document.getElementById('dep-modal-checklist');
-  const checkboxes = container && container.querySelectorAll
-    ? Array.from(container.querySelectorAll('.dep-pred-checkbox'))
-    : [];
-  const selectedIds = checkboxes.filter(chk => chk.checked).map(chk => String(chk.value));
+  if (!currentDepModalConceptId) return;
   const targetId = currentDepModalConceptId;
+  const linksToSave = depModalDraftLinks.map(lk => ({ ...lk }));
 
-  const res = setConceptPredecessorsInModel(targetId, selectedIds);
+  const res = setConceptPredecessorsInModel(targetId, linksToSave);
   if (!res || !res.ok) {
     showToast(res?.error || 'Error al guardar dependencias.', 'error');
     return;
   }
 
+  selectedCalendarioRowId = String(targetId);
   closeConceptDependenciesModal();
-  showToast(`✓ Dependencias actualizadas para ${res.clave} (${selectedIds.length} predecesora${selectedIds.length === 1 ? '' : 's'}).`);
+  showToast(linksToSave.length > 0
+    ? `✓ Dependencias actualizadas para ${res.clave} (${linksToSave.length} enlace${linksToSave.length === 1 ? '' : 's'}).`
+    : `${res.clave} quedó con inicio libre.`);
   renderCalendarioObra();
 }
 

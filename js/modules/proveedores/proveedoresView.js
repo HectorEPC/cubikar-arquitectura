@@ -1,12 +1,12 @@
-import { state } from '../../state/store.js?v=20261121_cf44';
-import { findNodeById } from '../catalog/treeService.js?v=20261121_cf44';
-import { formatMoney, formatQty, round2 } from '../../core/formatters.js?v=20261121_cf44';
-import { calculateParentTotal } from '../../core/calculations.js?v=20261121_cf44';
-import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
-import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf44';
-import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf44';
-import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261121_cf44';
-import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261121_cf44';
+import { state } from '../../state/store.js?v=20261121_cf45';
+import { findNodeById } from '../catalog/treeService.js?v=20261121_cf45';
+import { formatMoney, formatQty, round2 } from '../../core/formatters.js?v=20261121_cf45';
+import { calculateParentTotal } from '../../core/calculations.js?v=20261121_cf45';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf45';
+import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf45';
+import { canCurrentUserEditProject } from '../portal/projectService.js?v=20261121_cf45';
+import { guardTabUnlocked } from '../../ui/tabLockController.js?v=20261121_cf45';
+import { scheduleExpensesCloudSync } from '../../core/cloudModulesSyncService.js?v=20261121_cf45';
 import {
   cleanPhoneForWhatsApp,
   addCotizacion,
@@ -17,13 +17,13 @@ import {
   attachCotizacionFileS3,
   getCotizacionHierarchyStatus,
   getCotizacionBlockMessage
-} from './cotizacionesService.js?v=20261121_cf44';
+} from './cotizacionesService.js?v=20261121_cf45';
 import {
   uploadCotizacionAttachment,
   openCotizacionAttachmentFromS3,
   deleteCotizacionAttachmentFromS3,
   migrateInlineAttachmentsInBackground
-} from '../../services/cotizacionFilesS3.js?v=20261121_cf44';
+} from '../../services/cotizacionFilesS3.js?v=20261121_cf45';
 
 let activeSideTab = 'proveedores';
 let currentEditingCotId = null;

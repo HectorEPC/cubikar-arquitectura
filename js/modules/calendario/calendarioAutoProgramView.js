@@ -2,14 +2,14 @@
 // Modal ✨ Auto-Programar: vista previa de la propuesta por proceso constructivo antes de aplicarla al Gantt.
 // Después de aplicar, el usuario puede mover barras, fechas y predecesoras libremente; Deshacer revierte.
 
-import { showToast } from '../../ui/notifications.js?v=20261121_cf44';
+import { showToast } from '../../ui/notifications.js?v=20261121_cf45';
 import {
   TIPOS_OBRA,
   getAutoProgramTipoInicial,
   getCurrentScheduleEnd,
   previewAutoProgram,
   applyAutoProgram
-} from './calendarioAutoProgramService.js?v=20261121_cf44';
+} from './calendarioAutoProgramService.js?v=20261121_cf45';
 
 const MODAL_ID = 'modal-calendario-autoprog';
 let selectedTipoId = null;
@@ -180,7 +180,7 @@ function renderAutoProgramModal() {
       </div>
 
       <div class="px-5 py-3 bg-slate-100 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <span class="text-[10.5px] text-slate-500 max-w-[600px] leading-snug">Se conservan tus duraciones y avances. La propuesta reemplaza las predecesoras actuales. Los enlaces "en paralelo" (II) se aplican como fecha de inicio. <strong>Deshacer</strong> regresa al programa anterior.</span>
+        <span class="text-[10.5px] text-slate-500 max-w-[600px] leading-snug">Se conservan tus duraciones y avances. Los enlaces "al terminar" (FI), "en paralelo" (II) y desfases quedan vivos y editables en el Gantt. <strong>Deshacer</strong> regresa al programa anterior.</span>
         <div class="flex items-center gap-2">
           <button type="button" id="autoprog-cancel" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer">Cancelar</button>
           <button type="button" id="autoprog-apply" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-sm transition cursor-pointer flex items-center gap-1.5">

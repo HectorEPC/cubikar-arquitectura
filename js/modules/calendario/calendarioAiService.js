@@ -3,10 +3,10 @@
 // Analiza el Tipo de Obra, partidas, volúmenes, matrices APU y días inhábiles para proponer
 // duraciones realistas, dependencias Fin-a-Inicio libres de ciclos y frentes simultáneos.
 
-import { state, persistSettings } from '../../state/store.js?v=20261121_cf44';
-import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf44';
-import { getProjectById } from '../portal/projectService.js?v=20261121_cf44';
-import { extractJsonFromAiResponse } from '../ai/geminiClient.js?v=20261121_cf44';
+import { state, persistSettings } from '../../state/store.js?v=20261121_cf45';
+import { getActiveProjectId } from '../../config/constants.js?v=20261121_cf45';
+import { getProjectById } from '../portal/projectService.js?v=20261121_cf45';
+import { extractJsonFromAiResponse } from '../ai/geminiClient.js?v=20261121_cf45';
 import {
   extractScheduleItems,
   getScheduleSettings,
@@ -19,7 +19,7 @@ import {
   formatDate,
   addDays,
   diffDays
-} from './calendarioModel.js?v=20261121_cf44';
+} from './calendarioModel.js?v=20261121_cf45';
 
 export const WORK_TYPE_PROFILES = {
   edificacion: {
@@ -343,8 +343,8 @@ export function simulateProposalCPM(candidateTasks, startDateStr = null, respect
   candidateTasks.forEach(t => {
     const tid = String(t.id);
     const safe = [];
-    (t.predecessors || []).forEach(rawPid => {
-      const pid = String(rawPid);
+    (t.predecessors || []).forEach(rawPred => {
+      const pid = (rawPred && typeof rawPred === 'object') ? String(rawPred.id || '') : String(rawPred || '');
       if (byId.has(pid) && !safe.includes(pid) && !checkCycle(tid, pid)) {
         safe.push(pid);
         activeGraph.set(tid, [...safe]);
@@ -724,7 +724,7 @@ Reglas obligatorias:
           durationDays: Math.max(3, Math.min(90, parseInt(aiTask.durationDays, 10) || baseTask.durationDays)),
           stageName: aiTask.stageName || baseTask.stageName,
           predecessors: Array.isArray(aiTask.predecessors)
-            ? aiTask.predecessors.map(String)
+            ? aiTask.predecessors.map(p => (p && typeof p === 'object') ? String(p.id || '') : String(p || '')).filter(Boolean)
             : baseTask.predecessors
         });
       });

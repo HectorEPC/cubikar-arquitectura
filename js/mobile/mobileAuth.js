@@ -8,8 +8,8 @@ import {
   resetPasswordForEmail,
   resolveUserDisplayName,
   resolveUserRoleLabel
-} from '../core/authService.js?v=20261121_cf44';
-import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261121_cf44';
+} from '../core/authService.js?v=20261121_cf45';
+import { getSupabaseClient, isSupabaseConfigured } from '../core/supabaseClient.js?v=20261121_cf45';
 import {
   AVATARS_BY_SEX,
   GOOGLE_PRESET_ACCOUNTS,
@@ -22,15 +22,15 @@ import {
   getSavedUserProfile,
   markSessionOpen,
   setActiveWorkspaceData
-} from '../modules/portal/projectService.js?v=20261121_cf44';
-import { showToast } from '../ui/notifications.js?v=20261121_cf44';
-import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261121_cf44';
+} from '../modules/portal/projectService.js?v=20261121_cf45';
+import { showToast } from '../ui/notifications.js?v=20261121_cf45';
+import { escapeHtml, renderAvatarHtml, readFileAsResizedDataUrl } from './mobileBridge.js?v=20261121_cf45';
 import {
   renderInviteAuthBannerHtml,
   bindInviteAuthBannerActions,
   hasPendingInviteToken,
   showAwaitEmailConfirmationOverlay
-} from '../modules/portal/inviteTokenService.js?v=20261121_cf44';
+} from '../modules/portal/inviteTokenService.js?v=20261121_cf45';
 
 let authTab = 'login';
 let regSexo = 'Masculino';

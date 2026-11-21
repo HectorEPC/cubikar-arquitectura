@@ -1,7 +1,7 @@
 // js/mobile/mobileApp.js — Punto de entrada móvil y tablet de cubikar Arquitectura
 
-import { setActiveProjectId } from '../config/constants.js?v=20261121_cf44';
-import { initStore } from '../state/store.js?v=20261121_cf44';
+import { setActiveProjectId } from '../config/constants.js?v=20261121_cf45';
+import { initStore } from '../state/store.js?v=20261121_cf45';
 import {
   initAuthListener,
   signOut,
@@ -9,18 +9,18 @@ import {
   hydrateIncomingSsoSession,
   hasOversizedLocalJwt,
   ensureCompactAuthSession
-} from '../core/authService.js?v=20261121_cf44';
+} from '../core/authService.js?v=20261121_cf45';
 import {
   INVITE_TOKEN_STORAGE_KEY,
   captureInviteTokenFromUrl,
   hasPendingInviteToken,
   getPendingInviteToken,
   processPendingInviteFlow
-} from '../modules/portal/inviteTokenService.js?v=20261121_cf44';
-import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261121_cf44';
-import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261121_cf44';
-import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261121_cf44';
-import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261121_cf44';
+} from '../modules/portal/inviteTokenService.js?v=20261121_cf45';
+import { fetchCloudProjects } from '../core/cloudProjectService.js?v=20261121_cf45';
+import { hydrateProjectModulesFromCloud } from '../core/cloudModulesSyncService.js?v=20261121_cf45';
+import { isSupabaseConfigured } from '../core/supabaseClient.js?v=20261121_cf45';
+import { initGlobalRealtimeSync, subscribeToProjectRealtime } from '../core/realtimeSync.js?v=20261121_cf45';
 import {
   enforceGlobalSessionRevocation,
   getCurrentUser,
@@ -28,14 +28,14 @@ import {
   getProjectById,
   getProjectsList,
   saveProjectsList
-} from '../modules/portal/projectService.js?v=20261121_cf44';
-import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261121_cf44';
-import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261121_cf44';
-import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261121_cf44';
-import { showToast } from '../ui/notifications.js?v=20261121_cf44';
-import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261121_cf44';
-import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261121_cf44';
-import { openMobileProjectById } from './mobileProjects.js?v=20261121_cf44';
+} from '../modules/portal/projectService.js?v=20261121_cf45';
+import { initThemeMode, setThemeRenderCallback } from '../ui/themeController.js?v=20261121_cf45';
+import { setTabLockRenderCallback } from '../ui/tabLockController.js?v=20261121_cf45';
+import { setProjectChatRefreshCallback } from '../modules/chat/projectChat.js?v=20261121_cf45';
+import { showToast } from '../ui/notifications.js?v=20261121_cf45';
+import { registerMobileBridgeHooks, syncThemeDataset } from './mobileBridge.js?v=20261121_cf45';
+import { setMobileRoute, refreshCurrentMobileView } from './mobileShell.js?v=20261121_cf45';
+import { openMobileProjectById } from './mobileProjects.js?v=20261121_cf45';
 
 async function runMobileInviteDecision() {
   const token = captureInviteTokenFromUrl() || getPendingInviteToken();

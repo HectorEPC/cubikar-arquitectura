@@ -173,6 +173,7 @@ textarea.desc-input {
 
 /* Barras de desplazamiento institucionales para Calendario de Obra y Estimaciones (Fondo claro estilo Catálogo Base) */
 #gantt-left-panel::-webkit-scrollbar,
+#gantt-left-scroll::-webkit-scrollbar,
 #gantt-timeline-panel::-webkit-scrollbar,
 #financial-table-panel::-webkit-scrollbar,
 #curva-s-panel::-webkit-scrollbar,
@@ -182,6 +183,7 @@ textarea.desc-input {
 }
 
 #gantt-left-panel::-webkit-scrollbar-track,
+#gantt-left-scroll::-webkit-scrollbar-track,
 #gantt-timeline-panel::-webkit-scrollbar-track,
 #financial-table-panel::-webkit-scrollbar-track,
 #curva-s-panel::-webkit-scrollbar-track,
@@ -193,6 +195,7 @@ textarea.desc-input {
 }
 
 #gantt-left-panel::-webkit-scrollbar-thumb,
+#gantt-left-scroll::-webkit-scrollbar-thumb,
 #gantt-timeline-panel::-webkit-scrollbar-thumb,
 #financial-table-panel::-webkit-scrollbar-thumb,
 #curva-s-panel::-webkit-scrollbar-thumb,
@@ -205,6 +208,7 @@ textarea.desc-input {
 }
 
 #gantt-left-panel::-webkit-scrollbar-thumb:hover,
+#gantt-left-scroll::-webkit-scrollbar-thumb:hover,
 #gantt-timeline-panel::-webkit-scrollbar-thumb:hover,
 #financial-table-panel::-webkit-scrollbar-thumb:hover,
 #curva-s-panel::-webkit-scrollbar-thumb:hover,
@@ -214,6 +218,7 @@ textarea.desc-input {
 }
 
 #gantt-left-panel::-webkit-scrollbar-thumb:active,
+#gantt-left-scroll::-webkit-scrollbar-thumb:active,
 #gantt-timeline-panel::-webkit-scrollbar-thumb:active,
 #financial-table-panel::-webkit-scrollbar-thumb:active,
 #curva-s-panel::-webkit-scrollbar-thumb:active,
@@ -223,6 +228,7 @@ textarea.desc-input {
 }
 
 #gantt-left-panel,
+#gantt-left-scroll,
 #gantt-timeline-panel,
 #financial-table-panel,
 #curva-s-panel,
@@ -719,6 +725,7 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
   /* Barras de desplazamiento nativas y de paneles en modo nocturno */
   html.dark-mode ::-webkit-scrollbar-track,
   html.dark-mode #gantt-left-panel::-webkit-scrollbar-track,
+  html.dark-mode #gantt-left-scroll::-webkit-scrollbar-track,
   html.dark-mode #gantt-timeline-panel::-webkit-scrollbar-track,
   html.dark-mode #financial-table-panel::-webkit-scrollbar-track,
   html.dark-mode #curva-s-panel::-webkit-scrollbar-track,
@@ -730,6 +737,7 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
 
   html.dark-mode ::-webkit-scrollbar-thumb,
   html.dark-mode #gantt-left-panel::-webkit-scrollbar-thumb,
+  html.dark-mode #gantt-left-scroll::-webkit-scrollbar-thumb,
   html.dark-mode #gantt-timeline-panel::-webkit-scrollbar-thumb,
   html.dark-mode #financial-table-panel::-webkit-scrollbar-thumb,
   html.dark-mode #curva-s-panel::-webkit-scrollbar-thumb,
@@ -741,6 +749,7 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
 
   html.dark-mode ::-webkit-scrollbar-thumb:hover,
   html.dark-mode #gantt-left-panel::-webkit-scrollbar-thumb:hover,
+  html.dark-mode #gantt-left-scroll::-webkit-scrollbar-thumb:hover,
   html.dark-mode #gantt-timeline-panel::-webkit-scrollbar-thumb:hover,
   html.dark-mode #financial-table-panel::-webkit-scrollbar-thumb:hover,
   html.dark-mode #curva-s-panel::-webkit-scrollbar-thumb:hover,
@@ -751,6 +760,7 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
 
   html.dark-mode *,
   html.dark-mode #gantt-left-panel,
+  html.dark-mode #gantt-left-scroll,
   html.dark-mode #gantt-timeline-panel,
   html.dark-mode #financial-table-panel,
   html.dark-mode #curva-s-panel,
@@ -794,6 +804,8 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
 #view-calendario[data-tab-locked="true"] #calendario-container .calendario-date-input,
 #view-calendario[data-tab-locked="true"] #calendario-main-content input,
 #view-calendario[data-tab-locked="true"] #calendario-main-content select,
+#view-calendario[data-tab-locked="true"] #calendario-main-content [data-pick-date],
+#view-calendario[data-tab-locked="true"] #calendario-main-content [data-open-predec],
 #view-calendario[data-tab-locked="true"] #calendario-main-content .gantt-bar-concept {
   pointer-events: none !important;
   opacity: 0.78;
@@ -804,4 +816,151 @@ input[type="date"].text-rose-800::-webkit-calendar-picker-indicator:hover {
    ========================================================================== */
 #universal-import-modal {
   z-index: 100000 !important;
+}
+
+/* ==========================================================================
+   GANTT MEJORADO: INPUT SIN FLECHAS, VENTANA CALENDARIO Y LUPA DE BARRAS
+   ========================================================================== */
+.calendario-dur-input::-webkit-inner-spin-button,
+.calendario-dur-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+  display: none;
+}
+.calendario-dur-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.gantt-row-hover:not(.selected-row) {
+  background-color: #f8fafc !important;
+}
+html.dark-mode .gantt-row-hover:not(.selected-row) {
+  background-color: #172236 !important;
+}
+
+@keyframes cubikarZoomPopIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+.zoom-pop-in {
+  animation: cubikarZoomPopIn 0.12s ease-out;
+}
+
+#calendario-date-picker-popover {
+  width: 284px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgb(15 23 42 / 0.18), 0 8px 10px -6px rgb(15 23 42 / 0.12);
+  overflow: hidden;
+  z-index: 60;
+  user-select: none;
+}
+.dp-grid-7 {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.dp-nav-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.dp-nav-btn:hover { background-color: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.dp-day-btn {
+  height: 28px;
+  border-radius: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+}
+.dp-day-btn.dp-regular { color: #334155; font-weight: 500; cursor: pointer; }
+.dp-day-btn.dp-regular:hover { background-color: #eff6ff; color: #1d4ed8; }
+.dp-day-btn.dp-out { color: #94a3b8; cursor: pointer; }
+.dp-day-btn.dp-out:hover { background-color: #f1f5f9; color: #334155; }
+.dp-day-btn.dp-nonworking { color: #92400e; background-color: #fffbeb; font-weight: 500; cursor: pointer; }
+.dp-day-btn.dp-nonworking:hover { background-color: #fef3c7; }
+.dp-day-btn.dp-blocked {
+  color: #cbd5e1;
+  background-color: #f8fafc;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.dp-day-btn.dp-blocked-out {
+  color: #e2e8f0;
+  background-color: #f8fafc;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.dp-day-btn.dp-today {
+  background-color: #fff1f2;
+  color: #be123c;
+  font-weight: 700;
+  border-color: #fb7185;
+  cursor: pointer;
+}
+.dp-day-btn.dp-today:hover { background-color: #ffe4e6; }
+.dp-day-btn.dp-min {
+  background-color: #fffbeb;
+  color: #92400e;
+  font-weight: 700;
+  border-color: #f59e0b;
+  cursor: pointer;
+}
+.dp-day-btn.dp-min:hover { background-color: #fef3c7; }
+.dp-day-btn.dp-selected {
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  border-color: #1d4ed8;
+  box-shadow: 0 1px 3px rgb(37 99 235 / 0.35);
+  cursor: pointer;
+}
+.dp-day-btn.dp-selected:hover { background-color: #1d4ed8; }
+
+@media not print {
+  html.dark-mode #calendario-date-picker-popover {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+  }
+  html.dark-mode #calendario-date-picker-popover .dp-grid-weekdays,
+  html.dark-mode #calendario-date-picker-popover .dp-grid-days {
+    background-color: #0f172a !important;
+  }
+  html.dark-mode #calendario-date-picker-popover .dp-nav-btn {
+    background-color: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+  }
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-regular { color: #e2e8f0; }
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-regular:hover { background-color: #1e3a8a; color: #ffffff; }
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-out { color: #64748b; }
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-nonworking { background-color: rgba(245, 158, 11, 0.14); color: #fbbf24; }
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-blocked,
+  html.dark-mode #calendario-date-picker-popover .dp-day-btn.dp-blocked-out {
+    background-color: #090d16;
+    color: #475569;
+  }
+  html.dark-mode #gantt-cursor-zoom-window {
+    background-color: #0f172a !important;
+    border-color: #3b82f6 !important;
+    color: #e2e8f0 !important;
+  }
 }

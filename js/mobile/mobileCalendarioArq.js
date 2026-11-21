@@ -2,8 +2,8 @@
 // Calendario de Obra móvil/tablet para cubikar Arquitectura:
 // Sub-vistas Agenda | Gantt | Curva S, Dependencias FS reales, bloqueo seguro y Ruta Crítica CPM.
 
-import { state } from '../state/store.js?v=20261121_cf44';
-import { formatMoney, round2 } from '../core/formatters.js?v=20261121_cf44';
+import { state } from '../state/store.js?v=20261121_cf45';
+import { formatMoney, round2 } from '../core/formatters.js?v=20261121_cf45';
 import {
   extractScheduleItems,
   ensureInitialDates,
@@ -21,13 +21,13 @@ import {
   addDays,
   diffDays,
   formatDate
-} from '../modules/calendario/calendarioModel.js?v=20261121_cf44';
-import { getEstimacionesCalculatedData } from '../modules/estimaciones/estimacionesModel.js?v=20261121_cf44';
-import { calcularAvancePonderado } from '../modules/seguimiento/seguimientoView.js?v=20261121_cf44';
-import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261121_cf44';
-import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261121_cf44';
-import { showToast } from '../ui/notifications.js?v=20261121_cf44';
-import { escapeHtml } from './mobileBridge.js?v=20261121_cf44';
+} from '../modules/calendario/calendarioModel.js?v=20261121_cf45';
+import { getEstimacionesCalculatedData } from '../modules/estimaciones/estimacionesModel.js?v=20261121_cf45';
+import { calcularAvancePonderado } from '../modules/seguimiento/seguimientoView.js?v=20261121_cf45';
+import { canCurrentUserEditProject } from '../modules/portal/projectService.js?v=20261121_cf45';
+import { isTabLocked, setTabLocked } from '../ui/tabLockController.js?v=20261121_cf45';
+import { showToast } from '../ui/notifications.js?v=20261121_cf45';
+import { escapeHtml } from './mobileBridge.js?v=20261121_cf45';
 
 const MONTHS_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -137,17 +137,26 @@ function computeGanttWindow(concepts, todayDt) {
   return { minStart, maxEnd, totalSpanDays, cols, todayLinePct };
 }
 
+function getPredIdValue(pred) {
+  return (pred && typeof pred === 'object') ? String(pred.id || '') : String(pred || '');
+}
+
 function buildDependenciesHtml(concepts) {
   const byId = new Map(concepts.map(c => [String(c.id), c]));
   const chains = [];
   concepts.forEach(c => {
     if (!Array.isArray(c.predecessors) || c.predecessors.length === 0) return;
     const predLabels = c.predecessors
-      .map(pid => byId.get(String(pid)))
-      .filter(Boolean)
-      .map(p => getConceptShortCode(p));
+      .map(raw => {
+        const pid = getPredIdValue(raw);
+        const p = byId.get(pid);
+        if (!p) return null;
+        const isSS = raw && typeof raw === 'object' && raw.type === 'SS';
+        return `${isSS ? 'II:' : ''}${getConceptShortCode(p)}`;
+      })
+      .filter(Boolean);
     if (predLabels.length > 0) {
-      chains.push(`${getConceptShortCode(c)} inicia al terminar ${predLabels.join(' + ')}`);
+      chains.push(`${getConceptShortCode(c)} ← ${predLabels.join(' + ')}`);
     }
   });
 
@@ -286,7 +295,7 @@ function renderAgendaSubView(concepts, { pctMap, todayDt, cpm, locked, canEditRo
 
     ${visible.length === 0 ? `<div class="m-card" style="text-align:center;color:var(--muted);padding:24px;">Sin entregables en este filtro.</div>` : visible.map(c => {
       const pct = pctMap.get(String(c.id)) ?? 0;
-      const preds = (c.predecessors || []).map(pid => byId.get(String(pid))).filter(Boolean).map(p => getConceptShortCode(p));
+      const preds = (c.predecessors || []).map(p => byId.get(getPredIdValue(p))).filter(Boolean).map(p => getConceptShortCode(p));
       return `
         <div class="m-card m-ac-edit" data-id="${escapeHtml(c.id)}" style="cursor:pointer;">
           <div class="m-row-between">
@@ -482,7 +491,17 @@ function renderCurvaSSubView(items, concepts, { actualGlobalPct, todayDt }) {
 
 function openEntregableScheduleSheet({ c, concepts, items, pctMap, editable, canEditRole, locked, openSheet, closeSheet, container }) {
   const byId = new Map(concepts.map(item => [String(item.id), item]));
-  const currentPredIds = (c.predecessors || []).map(String);
+  const existingLinkMap = new Map();
+  (c.predecessors || []).forEach(p => {
+    const pid = getPredIdValue(p);
+    if (pid) {
+      existingLinkMap.set(
+        pid,
+        (p && typeof p === 'object') ? { id: pid, type: p.type === 'SS' ? 'SS' : 'FS', lag: parseInt(p.lag, 10) || 0 } : { id: pid, type: 'FS', lag: 0 }
+      );
+    }
+  });
+  const currentPredIds = Array.from(existingLinkMap.keys());
   const pct = pctMap.get(String(c.id)) ?? 0;
 
   if (!editable) {
@@ -579,7 +598,8 @@ function openEntregableScheduleSheet({ c, concepts, items, pctMap, editable, can
     let startToSave = startVal;
 
     if (predChanged) {
-      const predRes = setConceptPredecessorsInModel(c.id, checkedIds);
+      const nextLinks = checkedIds.map(id => existingLinkMap.get(String(id)) || { id: String(id), type: 'FS', lag: 0 });
+      const predRes = setConceptPredecessorsInModel(c.id, nextLinks);
       if (predRes && !predRes.ok) {
         showToast(predRes.error || 'Enlace de dependencia inválido.', 'warning');
         return;
